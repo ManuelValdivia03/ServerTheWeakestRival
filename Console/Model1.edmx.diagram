@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+ <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <edmx:Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <!-- Diagram content (shape and connector positions) -->
+    <edmx:Diagrams>
+      <Diagram DiagramId="6bfdd61bc96d430f95e8a034aa73e8ce" Name="Diagram1" ZoomLevel="58">
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Accounts" Width="1.5" PointX="0.75" PointY="21" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Answers" Width="1.5" PointX="10.5" PointY="18" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Categories" Width="1.5" PointX="6" PointY="17.25" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Eliminations" Width="1.5" PointX="9.75" PointY="30.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.FriendRequests" Width="1.5" PointX="5.25" PointY="19.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Matches" Width="1.5" PointX="5.25" PointY="24.25" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.MatchInvitations" Width="1.5" PointX="7.5" PointY="22.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.MatchPlayers" Width="1.5" PointX="10.5" PointY="22.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.MatchReactions" Width="1.5" PointX="12.75" PointY="29.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.MatchRules" Width="1.5" PointX="7.5" PointY="34.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.PlayerWildcards" Width="1.5" PointX="12.75" PointY="33.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Questions" Width="1.5" PointX="8.25" PointY="17.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.ReactionTypes" Width="1.5" PointX="10.5" PointY="39.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.RoundQuestions" Width="1.5" PointX="9.75" PointY="34.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Rounds" Width="1.5" PointX="7.5" PointY="41.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.RoundVotes" Width="1.5" PointX="9.75" PointY="26.875" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.UserFriends" Width="1.5" PointX="5.25" PointY="34.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Users" Width="1.5" PointX="3" PointY="19.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.WildcardTypes" Width="1.5" PointX="10.5" PointY="42" IsExpanded="true" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_users_account" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_a_q" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_q_cat" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_elim_dec" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_elim_round" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_elim_user" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_fr_from" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_fr_to" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_matches_host" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_matchrules_match" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mi_match" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mp_match" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mr_match" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_pw_match" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_rounds_match" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mi_from" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mi_to" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mp_user" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mr_from" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mr_round" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mr_to" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_mr_type" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_pw_round" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_pw_type" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_pw_user" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_q_user" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_rq_q" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_rq_round" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_rq_user" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_rv_round" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_rv_voted" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_rv_voter" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_uf_fu" ManuallyRouted="false" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_uf_u" ManuallyRouted="false" />
+      </Diagram>
+    </edmx:Diagrams>
+  </edmx:Designer>
+</edmx:Edmx>
