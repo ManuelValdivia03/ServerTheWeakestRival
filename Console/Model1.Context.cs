@@ -7,7 +7,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace Console
+namespace ConsoleServer
 {
     using System;
     using System.Data.Entity;
