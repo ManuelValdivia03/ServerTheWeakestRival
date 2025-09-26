@@ -7,26 +7,24 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleServer
+namespace TheWeakestRival.Data
 {
     using System;
     using System.Collections.Generic;
     
-    public partial class WildcardTypes
+    public partial class Categories
     {
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
-        public WildcardTypes()
+        public Categories()
         {
-            this.PlayerWildcards = new HashSet<PlayerWildcards>();
+            this.Questions = new HashSet<Questions>();
         }
     
-        public int wildcard_type_id { get; set; }
-        public string code { get; set; }
+        public int category_id { get; set; }
         public string name { get; set; }
-        public string description { get; set; }
-        public byte max_uses_per_match { get; set; }
+        public bool is_active { get; set; }
     
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
-        public virtual ICollection<PlayerWildcards> PlayerWildcards { get; set; }
+        public virtual ICollection<Questions> Questions { get; set; }
     }
 }

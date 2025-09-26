@@ -7,24 +7,18 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleServer
+namespace TheWeakestRival.Data
 {
     using System;
     using System.Collections.Generic;
     
-    public partial class PlayerWildcards
+    public partial class UserFriends
     {
-        public int player_wildcard_id { get; set; }
-        public int match_id { get; set; }
         public int user_id { get; set; }
-        public int wildcard_type_id { get; set; }
-        public System.DateTime granted_at { get; set; }
-        public Nullable<System.DateTime> consumed_at { get; set; }
-        public Nullable<int> consumed_in_round { get; set; }
+        public int friend_user_id { get; set; }
+        public System.DateTime since_at { get; set; }
     
-        public virtual Matches Matches { get; set; }
-        public virtual Rounds Rounds { get; set; }
-        public virtual WildcardTypes WildcardTypes { get; set; }
         public virtual Users Users { get; set; }
+        public virtual Users Users1 { get; set; }
     }
 }

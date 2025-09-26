@@ -7,19 +7,19 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleServer
+namespace TheWeakestRival.Data
 {
     using System;
     using System.Collections.Generic;
     
-    public partial class Answers
+    public partial class Accounts
     {
-        public int answer_id { get; set; }
-        public int question_id { get; set; }
-        public string answer_text { get; set; }
-        public bool is_correct { get; set; }
-        public byte display_ord { get; set; }
+        public int account_id { get; set; }
+        public string email { get; set; }
+        public byte[] password_hash { get; set; }
+        public byte status { get; set; }
+        public System.DateTime created_at { get; set; }
     
-        public virtual Questions Questions { get; set; }
+        public virtual Users Users { get; set; }
     }
 }

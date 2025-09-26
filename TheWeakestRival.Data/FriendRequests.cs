@@ -7,7 +7,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleServer
+namespace TheWeakestRival.Data
 {
     using System;
     using System.Collections.Generic;

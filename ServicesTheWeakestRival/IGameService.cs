@@ -11,7 +11,10 @@ namespace ServicesTheWeakestRival
     public interface IGameService
     {
         [OperationContract]
-        string Ping(String message);
+        string Ping(string message);
+
+        [OperationContract]
+        string Register(string email, string password ,string playerName);
 
     }
     }

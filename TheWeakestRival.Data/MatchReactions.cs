@@ -7,22 +7,25 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleServer
+namespace TheWeakestRival.Data
 {
     using System;
     using System.Collections.Generic;
     
-    public partial class MatchPlayers
+    public partial class MatchReactions
     {
+        public int reaction_id { get; set; }
         public int match_id { get; set; }
-        public int user_id { get; set; }
-        public System.DateTime joined_at { get; set; }
-        public Nullable<System.DateTime> left_at { get; set; }
-        public bool is_eliminated { get; set; }
-        public Nullable<decimal> final_score { get; set; }
-        public Nullable<int> final_rank { get; set; }
+        public int from_user_id { get; set; }
+        public Nullable<int> to_user_id { get; set; }
+        public Nullable<int> round_id { get; set; }
+        public int reaction_type_id { get; set; }
+        public System.DateTime created_at { get; set; }
     
         public virtual Matches Matches { get; set; }
         public virtual Users Users { get; set; }
+        public virtual Rounds Rounds { get; set; }
+        public virtual Users Users1 { get; set; }
+        public virtual ReactionTypes ReactionTypes { get; set; }
     }
 }

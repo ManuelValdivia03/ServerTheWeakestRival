@@ -4,7 +4,7 @@
   <edmx:Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
     <!-- Diagram content (shape and connector positions) -->
     <edmx:Diagrams>
-      <Diagram DiagramId="6bfdd61bc96d430f95e8a034aa73e8ce" Name="Diagram1" ZoomLevel="58">
+      <Diagram DiagramId="0713a401af46499193427fa4197af202" Name="Diagram1">
         <EntityTypeShape EntityType="TheWeakestRivalModel.Accounts" Width="1.5" PointX="0.75" PointY="21" IsExpanded="true" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.Answers" Width="1.5" PointX="10.5" PointY="18" IsExpanded="true" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.Categories" Width="1.5" PointX="6" PointY="17.25" IsExpanded="true" />
@@ -22,7 +22,7 @@
         <EntityTypeShape EntityType="TheWeakestRivalModel.Rounds" Width="1.5" PointX="7.5" PointY="41.5" IsExpanded="true" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.RoundVotes" Width="1.5" PointX="9.75" PointY="26.875" IsExpanded="true" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.UserFriends" Width="1.5" PointX="5.25" PointY="34.375" IsExpanded="true" />
-        <EntityTypeShape EntityType="TheWeakestRivalModel.Users" Width="1.5" PointX="3" PointY="19.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Users" Width="1.5" PointX="2.875" PointY="19.75" IsExpanded="true" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.WildcardTypes" Width="1.5" PointX="10.5" PointY="42" IsExpanded="true" />
         <AssociationConnector Association="TheWeakestRivalModel.FK_users_account" ManuallyRouted="false" />
         <AssociationConnector Association="TheWeakestRivalModel.FK_a_q" ManuallyRouted="false" />

@@ -7,20 +7,24 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleServer
+namespace TheWeakestRival.Data
 {
     using System;
     using System.Collections.Generic;
     
-    public partial class RoundVotes
+    public partial class RoundQuestions
     {
+        public int round_question_id { get; set; }
         public int round_id { get; set; }
-        public int voter_user_id { get; set; }
-        public int voted_user_id { get; set; }
-        public System.DateTime created_at { get; set; }
+        public int question_id { get; set; }
+        public int assigned_to_user { get; set; }
+        public Nullable<System.DateTime> answered_at { get; set; }
+        public Nullable<bool> is_correct { get; set; }
+        public Nullable<int> response_ms { get; set; }
+        public Nullable<decimal> points_awarded { get; set; }
     
+        public virtual Questions Questions { get; set; }
         public virtual Rounds Rounds { get; set; }
         public virtual Users Users { get; set; }
-        public virtual Users Users1 { get; set; }
     }
 }

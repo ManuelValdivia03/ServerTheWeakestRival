@@ -7,17 +7,22 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ConsoleServer
+namespace TheWeakestRival.Data
 {
     using System;
     using System.Collections.Generic;
     
-    public partial class UserFriends
+    public partial class MatchInvitations
     {
-        public int user_id { get; set; }
-        public int friend_user_id { get; set; }
-        public System.DateTime since_at { get; set; }
+        public int invitation_id { get; set; }
+        public int match_id { get; set; }
+        public int from_user_id { get; set; }
+        public int to_user_id { get; set; }
+        public byte status { get; set; }
+        public System.DateTime sent_at { get; set; }
+        public Nullable<System.DateTime> responded_at { get; set; }
     
+        public virtual Matches Matches { get; set; }
         public virtual Users Users { get; set; }
         public virtual Users Users1 { get; set; }
     }
