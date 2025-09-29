@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Serialization;
-using System.ServiceModel;
-using System.Text;
 using TheWeakestRival.Data;
 
 namespace ServicesTheWeakestRival
@@ -17,7 +13,7 @@ namespace ServicesTheWeakestRival
                 using (var db = new TheWeakestRivalEntities())
                 {
                     var count = db.Accounts.Count();
-                    return $"pong: {message} (Accounts={count})";
+                    return $"pong: {message} (Te escucho)";
                 }
             }
             catch (Exception ex)
