@@ -67,6 +67,10 @@
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\ServicesTheWeakestRival.Contracts\ServicesTheWeakestRival.Contracts.csproj">
+      <Project>{8385b87f-b6c2-4f71-9de5-37e4fd82c40d}</Project>
+      <Name>ServicesTheWeakestRival.Contracts</Name>
+    </ProjectReference>
     <ProjectReference Include="..\ServicesTheWeakestRival\ServicesTheWeakestRival.csproj">
       <Project>{08bdf348-e12c-4376-88e7-a71c168a1c0f}</Project>
       <Name>ServicesTheWeakestRival</Name>

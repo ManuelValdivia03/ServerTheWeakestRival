@@ -1,34 +1,29 @@
 ﻿using System;
 using System.ServiceModel;
-using System.ServiceModel.Description;
-using ServicesTheWeakestRival;
+using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Services;
 
-class Program
+namespace ConsoleServer
 {
-    static void Main()
+    class Program
     {
-        var baseAddress = new Uri("net.tcp://localhost:8080/WeakestRival/");
-
-        using (var host = new ServiceHost(typeof(GameService), baseAddress))
+        static void Main()
         {
-            var binding = new NetTcpBinding(SecurityMode.None)
+            using (var host = new ServiceHost(typeof(AuthService)))
+            using (var hostLobby = new ServiceHost(typeof(LobbyService)))
+            using (var hostMatchmaking = new ServiceHost(typeof(MatchmakingService)))
+            using (var hostGameplay = new ServiceHost(typeof(GameplayService)))
+            using (var hostStats = new ServiceHost(typeof(StatsService)))
             {
-                MaxReceivedMessageSize = 4 * 1024 * 1024
-            };
+                host.Open();
+                hostLobby.Open();
+                hostMatchmaking.Open();
+                hostGameplay.Open();
+                hostStats.Open();
 
-            host.AddServiceEndpoint(typeof(IGameService), binding, "GameService");
-
-            var smb = new ServiceMetadataBehavior();
-            host.Description.Behaviors.Add(smb);
-            host.AddServiceEndpoint(ServiceMetadataBehavior.MexContractName,
-                                    MetadataExchangeBindings.CreateMexTcpBinding(),
-                                    "mex");
-
-            host.Open();
-            Console.WriteLine("WCF arriba en net.tcp://localhost:8080/WeakestRival/GameService");
-            Console.WriteLine("Presiona Enter para salir.");
-            Console.ReadLine();
-            host.Close();
+                Console.WriteLine("Servicios WCF corriendo...");
+                Console.ReadLine();
+            }
         }
     }
 }
