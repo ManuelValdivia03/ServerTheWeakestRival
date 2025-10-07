@@ -8,13 +8,15 @@ namespace ServicesTheWeakestRival.Contracts.Data
     {
         [DataMember(Order = 1, IsRequired = true)] public string Email { get; set; }
         [DataMember(Order = 2, IsRequired = true)] public string Password { get; set; }
-        [DataMember(Order = 3, IsRequired = true)] public string PlayerName { get; set; }
+        [DataMember(Order = 3, IsRequired = true)] public string DisplayName { get; set; }
+        [DataMember(Order = 4, IsRequired = false)] public string ProfileImageUrl { get; set; }
     }
 
     [DataContract]
     public sealed class RegisterResponse
     {
         [DataMember(Order = 1, IsRequired = true)] public AuthToken Token { get; set; }
+        [DataMember(Order = 2, IsRequired = true)] public int UserId { get; set; }
     }
 
     [DataContract]
@@ -39,8 +41,10 @@ namespace ServicesTheWeakestRival.Contracts.Data
     [DataContract]
     public sealed class AuthToken
     {
-        [DataMember(Order = 1, IsRequired = true)] public Guid PlayerId { get; set; }
+        [DataMember(Order = 1, IsRequired = true)] public int UserId { get; set; }
         [DataMember(Order = 2, IsRequired = true)] public string Token { get; set; }
         [DataMember(Order = 3, IsRequired = true)] public DateTime ExpiresAtUtc { get; set; }
     }
+
 }
+

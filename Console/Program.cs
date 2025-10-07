@@ -2,6 +2,7 @@
 using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services;
+using ServicesTheWeakestRival.Services;
 
 namespace ConsoleServer
 {
