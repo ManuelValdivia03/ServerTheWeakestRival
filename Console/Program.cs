@@ -1,8 +1,5 @@
 ﻿using System;
 using System.ServiceModel;
-using ServicesTheWeakestRival.Contracts.Services;
-using ServicesTheWeakestRival.Server.Services;
-using ServicesTheWeakestRival.Services;
 
 namespace ConsoleServer
 {
@@ -10,21 +7,23 @@ namespace ConsoleServer
     {
         static void Main()
         {
-            using (var host = new ServiceHost(typeof(AuthService)))
-            using (var hostLobby = new ServiceHost(typeof(LobbyService)))
-            using (var hostMatchmaking = new ServiceHost(typeof(MatchmakingService)))
-            using (var hostGameplay = new ServiceHost(typeof(GameplayService)))
-            using (var hostStats = new ServiceHost(typeof(StatsService)))
+            var hosts = new ServiceHost[]
             {
-                host.Open();
-                hostLobby.Open();
-                hostMatchmaking.Open();
-                hostGameplay.Open();
-                hostStats.Open();
+                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.AuthService)),
+                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.LobbyService)),
+                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.MatchmakingService)),
+                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.GameplayService)),
+                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.StatsService)),
+            };
 
-                Console.WriteLine("Servicios WCF corriendo...");
-                Console.ReadLine();
-            }
+
+            foreach (var h in hosts) h.Open();
+            foreach (var h in hosts) Console.WriteLine(h.Description.ServiceType.FullName);
+
+            Console.WriteLine("Servicios WCF corriendo en http://localhost:8082/");
+            Console.ReadLine();
+
+            foreach (var h in hosts) h.Close();
         }
     }
 }

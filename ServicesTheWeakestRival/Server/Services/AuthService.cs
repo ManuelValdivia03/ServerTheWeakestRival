@@ -11,13 +11,13 @@ using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using BCrypt.Net;
 
-namespace ServicesTheWeakestRival.Services
+namespace ServicesTheWeakestRival.Server.Services
 {
     public sealed class AuthService : IAuthService
     {
         private static readonly ConcurrentDictionary<string, AuthToken> TokenCache = new ConcurrentDictionary<string, AuthToken>(StringComparer.Ordinal);
         private static string ConnectionString =>
-            ConfigurationManager.ConnectionStrings["GameDb"].ConnectionString;
+            ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"].ConnectionString;
 
         public PingResponse Ping(PingRequest request)
         {
