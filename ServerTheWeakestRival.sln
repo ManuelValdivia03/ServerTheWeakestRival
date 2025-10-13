@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheWeakestRival.Data", "The
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServicesTheWeakestRival.Contracts", "ServicesTheWeakestRival.Contracts\ServicesTheWeakestRival.Contracts.csproj", "{8385B87F-B6C2-4F71-9DE5-37E4FD82C40D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheWeakestRival.Logic", "TheWeakestRival.Logic\TheWeakestRival.Logic.csproj", "{D171CB00-6533-490B-9DFF-26DDD6488FE5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{8385B87F-B6C2-4F71-9DE5-37E4FD82C40D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8385B87F-B6C2-4F71-9DE5-37E4FD82C40D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8385B87F-B6C2-4F71-9DE5-37E4FD82C40D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D171CB00-6533-490B-9DFF-26DDD6488FE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D171CB00-6533-490B-9DFF-26DDD6488FE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D171CB00-6533-490B-9DFF-26DDD6488FE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D171CB00-6533-490B-9DFF-26DDD6488FE5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -15,10 +15,11 @@ namespace ServicesTheWeakestRival.Server.Services
 {
     public sealed class AuthService : IAuthService
     {
-        private static readonly ConcurrentDictionary<string, AuthToken> TokenCache = new ConcurrentDictionary<string, AuthToken>(StringComparer.Ordinal);
-        private static string ConnectionString =>
-            ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"].ConnectionString;
+        private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache; private static string ConnectionString =>
 
+
+            ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"].ConnectionString;
+        
         public PingResponse Ping(PingRequest request)
         {
             return new PingResponse
