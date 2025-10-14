@@ -11,6 +11,14 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
+        BeginRegisterResponse BeginRegister(BeginRegisterRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        RegisterResponse CompleteRegister(CompleteRegisterRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
         RegisterResponse Register(RegisterRequest request);
 
         [OperationContract]

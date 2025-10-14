@@ -61,6 +61,7 @@
   <ItemGroup>
     <Compile Include="Class1.cs" />
     <Compile Include="Data\AuthDtos.cs" />
+    <Compile Include="Data\EmailVerificationDtos.cs" />
     <Compile Include="Data\GameplayDtos.cs" />
     <Compile Include="Data\LobbyDtos.cs" />
     <Compile Include="Data\MatchDtos.cs" />
