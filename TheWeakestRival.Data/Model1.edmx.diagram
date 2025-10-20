@@ -58,6 +58,7 @@
         <AssociationConnector Association="TheWeakestRivalModel.FK_rv_voter" ManuallyRouted="false" />
         <AssociationConnector Association="TheWeakestRivalModel.FK_uf_fu" ManuallyRouted="false" />
         <AssociationConnector Association="TheWeakestRivalModel.FK_uf_u" ManuallyRouted="false" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.EmailVerifications" Width="1.5" PointX="0.75" PointY="0.75" />
       </Diagram>
     </edmx:Diagrams>
   </edmx:Designer>

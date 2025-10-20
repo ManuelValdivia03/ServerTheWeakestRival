@@ -14,6 +14,7 @@ namespace ConsoleServer
                 new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.MatchmakingService)),
                 new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.GameplayService)),
                 new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.StatsService)),
+                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.FriendService)),
             };
 
 

@@ -60,19 +60,25 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Class1.cs" />
+    <Compile Include="Data\AccountMini.cs" />
     <Compile Include="Data\AuthDtos.cs" />
     <Compile Include="Data\EmailVerificationDtos.cs" />
+    <Compile Include="Data\FriendRequestStatus.cs" />
+    <Compile Include="Data\FriendSummary.cs" />
     <Compile Include="Data\GameplayDtos.cs" />
     <Compile Include="Data\LobbyDtos.cs" />
     <Compile Include="Data\MatchDtos.cs" />
     <Compile Include="Data\PingDtos.cs" />
     <Compile Include="Data\PlayerSummary.cs" />
     <Compile Include="Data\Question.cs" />
+    <Compile Include="Data\SearchAccountsRequest.cs" />
+    <Compile Include="Data\SendFriendRequestRequest.cs" />
     <Compile Include="Data\ServiceFault.cs" />
     <Compile Include="Data\StatsDtos.cs" />
     <Compile Include="Data\UpdateAccountDtos.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\IAuthService.cs" />
+    <Compile Include="Services\IFriendService.cs" />
     <Compile Include="Services\IGameplayService.cs" />
     <Compile Include="Services\ILobbyService.cs" />
     <Compile Include="Services\IMatchmakingService.cs" />

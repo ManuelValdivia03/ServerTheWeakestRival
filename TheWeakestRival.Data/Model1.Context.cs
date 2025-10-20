@@ -44,5 +44,6 @@ namespace TheWeakestRival.Data
         public virtual DbSet<UserFriends> UserFriends { get; set; }
         public virtual DbSet<Users> Users { get; set; }
         public virtual DbSet<WildcardTypes> WildcardTypes { get; set; }
+        public virtual DbSet<EmailVerifications> EmailVerifications { get; set; }
     }
 }

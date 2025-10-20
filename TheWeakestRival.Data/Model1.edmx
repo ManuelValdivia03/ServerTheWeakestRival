@@ -11,7 +11,7 @@
           </Key>
           <Property Name="account_id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
           <Property Name="email" Type="nvarchar" MaxLength="320" Nullable="false" />
-          <Property Name="password_hash" Type="varbinary" MaxLength="256" Nullable="false" />
+          <Property Name="password_hash" Type="nvarchar" MaxLength="128" Nullable="false" />
           <Property Name="status" Type="tinyint" Nullable="false" />
           <Property Name="created_at" Type="datetime2" Precision="3" Nullable="false" />
         </EntityType>
@@ -45,6 +45,19 @@
           <Property Name="tiebreak_method" Type="nvarchar" MaxLength="40" />
           <Property Name="decided_by_user_id" Type="int" />
           <Property Name="created_at" Type="datetime2" Precision="3" Nullable="false" />
+        </EntityType>
+        <EntityType Name="EmailVerifications">
+          <Key>
+            <PropertyRef Name="verification_id" />
+          </Key>
+          <Property Name="verification_id" Type="int" StoreGeneratedPattern="Identity" Nullable="false" />
+          <Property Name="email" Type="nvarchar" MaxLength="320" Nullable="false" />
+          <Property Name="code_hash" Type="varbinary" MaxLength="32" Nullable="false" />
+          <Property Name="expires_at_utc" Type="datetime2" Precision="0" Nullable="false" />
+          <Property Name="used" Type="bit" Nullable="false" />
+          <Property Name="created_at_utc" Type="datetime2" Precision="0" Nullable="false" />
+          <Property Name="used_at_utc" Type="datetime2" Precision="0" />
+          <Property Name="attempts" Type="tinyint" Nullable="false" />
         </EntityType>
         <EntityType Name="FriendRequests">
           <Key>
@@ -627,6 +640,7 @@
           <EntitySet Name="Answers" EntityType="Self.Answers" Schema="dbo" store:Type="Tables" />
           <EntitySet Name="Categories" EntityType="Self.Categories" Schema="dbo" store:Type="Tables" />
           <EntitySet Name="Eliminations" EntityType="Self.Eliminations" Schema="dbo" store:Type="Tables" />
+          <EntitySet Name="EmailVerifications" EntityType="Self.EmailVerifications" Schema="dbo" store:Type="Tables" />
           <EntitySet Name="FriendRequests" EntityType="Self.FriendRequests" Schema="dbo" store:Type="Tables" />
           <EntitySet Name="Matches" EntityType="Self.Matches" Schema="dbo" store:Type="Tables" />
           <EntitySet Name="MatchInvitations" EntityType="Self.MatchInvitations" Schema="dbo" store:Type="Tables" />
@@ -789,7 +803,7 @@
           </Key>
           <Property Name="account_id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
           <Property Name="email" Type="String" MaxLength="320" FixedLength="false" Unicode="true" Nullable="false" />
-          <Property Name="password_hash" Type="Binary" MaxLength="256" FixedLength="false" Nullable="false" />
+          <Property Name="password_hash" Type="Binary" MaxLength="128" FixedLength="false" Nullable="false" />
           <Property Name="status" Type="Byte" Nullable="false" />
           <Property Name="created_at" Type="DateTime" Nullable="false" Precision="3" />
           <NavigationProperty Name="Users" Relationship="Self.FK_users_account" FromRole="Accounts" ToRole="Users" />
@@ -1624,7 +1638,21 @@
             <End Role="Users" EntitySet="Users" />
             <End Role="UserFriends" EntitySet="UserFriends" />
           </AssociationSet>
+          <EntitySet Name="EmailVerifications" EntityType="TheWeakestRivalModel.EmailVerifications" />
         </EntityContainer>
+        <EntityType Name="EmailVerifications">
+          <Key>
+            <PropertyRef Name="verification_id" />
+          </Key>
+          <Property Name="verification_id" Type="Int32" Nullable="false" annotation:StoreGeneratedPattern="Identity" />
+          <Property Name="email" Type="String" Nullable="false" MaxLength="320" FixedLength="false" Unicode="true" />
+          <Property Name="code_hash" Type="Binary" Nullable="false" MaxLength="32" FixedLength="false" />
+          <Property Name="expires_at_utc" Type="DateTime" Nullable="false" Precision="0" />
+          <Property Name="used" Type="Boolean" Nullable="false" />
+          <Property Name="created_at_utc" Type="DateTime" Nullable="false" Precision="0" />
+          <Property Name="used_at_utc" Type="DateTime" Precision="0" />
+          <Property Name="attempts" Type="Byte" Nullable="false" />
+        </EntityType>
       </Schema>
     </edmx:ConceptualModels>
     <!-- C-S mapping content -->
@@ -1853,6 +1881,20 @@
                 <ScalarProperty Name="name" ColumnName="name" />
                 <ScalarProperty Name="description" ColumnName="description" />
                 <ScalarProperty Name="max_uses_per_match" ColumnName="max_uses_per_match" />
+              </MappingFragment>
+            </EntityTypeMapping>
+          </EntitySetMapping>
+          <EntitySetMapping Name="EmailVerifications">
+            <EntityTypeMapping TypeName="TheWeakestRivalModel.EmailVerifications">
+              <MappingFragment StoreEntitySet="EmailVerifications">
+                <ScalarProperty Name="attempts" ColumnName="attempts" />
+                <ScalarProperty Name="used_at_utc" ColumnName="used_at_utc" />
+                <ScalarProperty Name="created_at_utc" ColumnName="created_at_utc" />
+                <ScalarProperty Name="used" ColumnName="used" />
+                <ScalarProperty Name="expires_at_utc" ColumnName="expires_at_utc" />
+                <ScalarProperty Name="code_hash" ColumnName="code_hash" />
+                <ScalarProperty Name="email" ColumnName="email" />
+                <ScalarProperty Name="verification_id" ColumnName="verification_id" />
               </MappingFragment>
             </EntityTypeMapping>
           </EntitySetMapping>

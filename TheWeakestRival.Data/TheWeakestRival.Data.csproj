@@ -66,6 +66,9 @@
     <Compile Include="Eliminations.cs">
       <DependentUpon>Model1.tt</DependentUpon>
     </Compile>
+    <Compile Include="EmailVerifications.cs">
+      <DependentUpon>Model1.tt</DependentUpon>
+    </Compile>
     <Compile Include="FriendRequests.cs">
       <DependentUpon>Model1.tt</DependentUpon>
     </Compile>

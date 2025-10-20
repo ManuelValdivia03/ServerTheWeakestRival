@@ -75,6 +75,7 @@
     <Compile Include="Server\Infraestructure\EmailSender.cs" />
     <Compile Include="Server\Infraestructure\SecurityUtil.cs" />
     <Compile Include="Server\Services\AuthService.cs" />
+    <Compile Include="Server\Services\FriendService.cs" />
     <Compile Include="Server\Services\GameplayService.cs" />
     <Compile Include="Server\Services\LobbyService.cs" />
     <Compile Include="Server\Services\MatchmakingService.cs" />
