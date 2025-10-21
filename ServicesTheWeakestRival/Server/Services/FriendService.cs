@@ -14,8 +14,8 @@ namespace ServicesTheWeakestRival.Server.Services
     [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerCall)]
     public sealed class FriendService : IFriendService
     {
-        // ===== Infra (igual estilo que AuthService) =====
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
+        private const int ONLINE_WINDOW_SECONDS = 75;
 
         private static string ConnectionString
         {
@@ -44,15 +44,10 @@ namespace ServicesTheWeakestRival.Server.Services
             return at.UserId;
         }
 
-        // ===== Constantes de estado (coinciden con tu tabla) =====
         private const byte ST_PENDING = 0;
         private const byte ST_ACCEPTED = 1;
         private const byte ST_DECLINED = 2;
         private const byte ST_CANCELLED = 3;
-
-        // =========================================================
-        //                   Public API (IFriendService)
-        // =========================================================
 
         public SendFriendRequestResponse SendFriendRequest(SendFriendRequestRequest request)
         {
@@ -89,7 +84,6 @@ namespace ServicesTheWeakestRival.Server.Services
                   OUTPUT INSERTED.friend_request_id
                   VALUES(@Me, @Target, @Pending, SYSUTCDATETIME(), NULL);";
 
-            // Reapertura: si existe registro cancelado/declinado en la misma dirección, lo reusamos (por tu UQ)
             const string Q_REOPEN =
                 @"UPDATE dbo.FriendRequests
                   SET status = @Pending, sent_at = SYSUTCDATETIME(), responded_at = NULL
@@ -101,7 +95,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 cn.Open();
                 using (var tx = cn.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
-                    // ¿ya son amigos?
                     using (var cmd = new SqlCommand(Q_EXISTS_FRIEND, cn, tx))
                     {
                         cmd.Parameters.Add("@Me", SqlDbType.Int).Value = me;
@@ -111,7 +104,6 @@ namespace ServicesTheWeakestRival.Server.Services
                         if (exists != null) ThrowFault("FR_ALREADY", "Ya existe una amistad entre estas cuentas.");
                     }
 
-                    // ¿ya tengo pendiente saliente?
                     int? existingOutId = null;
                     using (var cmd = new SqlCommand(Q_PENDING_OUT, cn, tx))
                     {
@@ -131,7 +123,6 @@ namespace ServicesTheWeakestRival.Server.Services
                         };
                     }
 
-                    // ¿hay pendiente ENTRANTE del target hacia mí? -> auto-aceptar
                     int? incomingId = null;
                     using (var cmd = new SqlCommand(Q_PENDING_IN, cn, tx))
                     {
@@ -159,7 +150,6 @@ namespace ServicesTheWeakestRival.Server.Services
                         };
                     }
 
-                    // Insertar nueva o reabrir cancelada/declinada
                     try
                     {
                         int newId;
@@ -179,7 +169,6 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                     catch (SqlException ex) when (IsUniqueViolation(ex))
                     {
-                        // Reabrir (por UQ from->to)
                         int reopenedId;
                         using (var cmd = new SqlCommand(Q_REOPEN, cn, tx))
                         {
@@ -230,7 +219,6 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 cn.Open();
 
-                // 1) Validar que existe y me corresponde aceptarla
                 using (var cmd = new SqlCommand(qCheck, cn))
                 {
                     cmd.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
@@ -250,7 +238,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 if (status != PENDING)
                     ThrowFault("FR_NOT_PENDING", "La solicitud ya fue procesada.");
 
-                // 2) Aceptar
                 using (var cmd = new SqlCommand(qAccept, cn))
                 {
                     cmd.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = ACCEPTED;
@@ -259,18 +246,17 @@ namespace ServicesTheWeakestRival.Server.Services
                     cmd.Parameters.Add("@Me", SqlDbType.Int).Value = me;
 
                     int rows = cmd.ExecuteNonQuery();
-                    if (rows == 0) // carrera: alguien la tocó entre el check y el update
+                    if (rows == 0)
                         ThrowFault("FR_RACE", "El estado cambió. Refresca.");
                 }
             }
 
-            // Si devuelves un FriendSummary, constrúyelo aquí (o reúsalo de tu ListFriends):
             return new AcceptFriendRequestResponse
             {
                 NewFriend = new FriendSummary
                 {
                     AccountId = fromId,
-                    DisplayName = null, // si quieres, cárgalo con otro SELECT
+                    DisplayName = null,
                     AvatarUrl = null,
                     SinceUtc = DateTime.UtcNow,
                     IsOnline = false
@@ -288,7 +274,6 @@ namespace ServicesTheWeakestRival.Server.Services
         FROM dbo.FriendRequests
         WHERE friend_request_id = @Id;";
 
-            // Rechaza si soy el destinatario (to_user_id)
             const string Q_REJECT = @"
         UPDATE dbo.FriendRequests
         SET status = @Rejected, responded_at = SYSUTCDATETIME()
@@ -296,7 +281,6 @@ namespace ServicesTheWeakestRival.Server.Services
           AND to_user_id = @Me
           AND status = @Pending;";
 
-            // Cancela si soy quien la envió (from_user_id)
             const string Q_CANCEL = @"
         UPDATE dbo.FriendRequests
         SET status = @Cancelled, responded_at = SYSUTCDATETIME()
@@ -312,7 +296,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 cn.Open();
                 using (var tx = cn.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
-                    // 1) Obtener y validar estado actual
                     using (var cmd = new SqlCommand(Q_GET, cn, tx))
                     {
                         cmd.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
@@ -328,10 +311,8 @@ namespace ServicesTheWeakestRival.Server.Services
                     if (status != ST_PENDING)
                         ThrowFault("FR_NOT_PENDING", "La solicitud ya fue resuelta.");
 
-                    // 2) Rechazar o cancelar según quién soy
                     if (toId == me)
                     {
-                        // Rechazar
                         using (var cmd = new SqlCommand(Q_REJECT, cn, tx))
                         {
                             cmd.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
@@ -348,7 +329,6 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                     else if (fromId == me)
                     {
-                        // Cancelar
                         using (var cmd = new SqlCommand(Q_CANCEL, cn, tx))
                         {
                             cmd.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
@@ -450,7 +430,6 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 cn.Open();
 
-                // Amigos
                 var friends = new System.Collections.Generic.List<FriendSummary>();
                 using (var cmd = new SqlCommand(Q_FRIENDS, cn))
                 {
@@ -471,7 +450,6 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                // Pendientes
                 FriendRequestSummary[] incoming;
                 using (var cmd = new SqlCommand(Q_PENDING_IN, cn))
                 {
@@ -487,7 +465,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 FriendRequestId = rd.GetInt32(0),
                                 FromAccountId = rd.GetInt32(1),
                                 ToAccountId = rd.GetInt32(2),
-                                Message = null, // tu tabla no tiene mensaje
+                                Message = null,
                                 Status = FriendRequestStatus.Pending,
                                 CreatedUtc = rd.GetDateTime(3),
                                 ResolvedUtc = null
@@ -531,22 +509,106 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        // =========================================================
-        //                         Helpers
-        // =========================================================
+        public HeartbeatResponse PresenceHeartbeat(HeartbeatRequest request)
+        {
+            var me = Authenticate(request.Token);
+            using (var cn = new SqlConnection(ConnectionString))
+            {
+                cn.Open();
+
+                // UPDATE… si no afectó filas, INSERT
+                const string Q_UPD = @"
+            UPDATE dbo.UserPresence
+            SET last_seen_utc = SYSUTCDATETIME(), device = @Dev
+            WHERE user_id = @Me;";
+
+                using (var cmd = new SqlCommand(Q_UPD, cn))
+                {
+                    cmd.Parameters.Add("@Me", SqlDbType.Int).Value = me;
+                    cmd.Parameters.Add("@Dev", SqlDbType.NVarChar, 64).Value =
+                        string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
+                    var rows = cmd.ExecuteNonQuery();
+
+                    if (rows == 0)
+                    {
+                        const string Q_INS = @"
+                    INSERT INTO dbo.UserPresence(user_id, last_seen_utc, device)
+                    VALUES(@Me, SYSUTCDATETIME(), @Dev);";
+                        using (var ins = new SqlCommand(Q_INS, cn))
+                        {
+                            ins.Parameters.Add("@Me", SqlDbType.Int).Value = me;
+                            ins.Parameters.Add("@Dev", SqlDbType.NVarChar, 64).Value =
+                                string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
+                            ins.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+            return new HeartbeatResponse { Utc = DateTime.UtcNow };
+        }
+
+        public GetFriendsPresenceResponse GetFriendsPresence(GetFriendsPresenceRequest request)
+        {
+            var me = Authenticate(request.Token);
+
+            const string SQL = @"
+                DECLARE @now DATETIME2(3) = SYSUTCDATETIME();
+                SELECT F.friend_id,
+                       CASE WHEN P.last_seen_utc IS NOT NULL
+                                 AND P.last_seen_utc >= DATEADD(SECOND, -@Window, @now)
+                            THEN 1 ELSE 0 END AS is_online,
+                       P.last_seen_utc
+                FROM (
+                    SELECT CASE WHEN fr.from_user_id = @Me THEN fr.to_user_id ELSE fr.from_user_id END AS friend_id
+                    FROM dbo.FriendRequests fr
+                    WHERE fr.status = @Accepted AND (fr.from_user_id = @Me OR fr.to_user_id = @Me)
+                ) F
+                LEFT JOIN dbo.UserPresence P ON P.user_id = F.friend_id
+                ORDER BY F.friend_id;";
+
+            var list = new System.Collections.Generic.List<FriendPresence>();
+
+            using (var cn = new SqlConnection(ConnectionString))
+            using (var cmd = new SqlCommand(SQL, cn))
+            {
+                cn.Open();
+                cmd.Parameters.Add("@Me", SqlDbType.Int).Value = me;
+                cmd.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = ST_ACCEPTED;
+                cmd.Parameters.Add("@Window", SqlDbType.Int).Value = ONLINE_WINDOW_SECONDS;
+
+                using (var rd = cmd.ExecuteReader())
+                {
+                    while (rd.Read())
+                    {
+                        list.Add(new FriendPresence
+                        {
+                            AccountId = rd.GetInt32(0),
+                            IsOnline = rd.GetInt32(1) == 1,
+                            LastSeenUtc = rd.IsDBNull(2) ? (DateTime?)null : rd.GetDateTime(2)
+                        });
+                    }
+                }
+            }
+
+            return new GetFriendsPresenceResponse { Friends = list.ToArray() };
+        }
+
 
         private FriendSummary LoadFriendSummary(SqlConnection cn, SqlTransaction tx, int friendId, DateTime sinceUtc)
         {
-            const string Q =
-                @"SELECT a.account_id, a.email, u.display_name, u.profile_image_url
-                  FROM dbo.Accounts a
-                  LEFT JOIN dbo.Users u ON u.user_id = a.account_id
-                  WHERE a.account_id = @Id;";
+            const string Q = @"
+                SELECT a.account_id, a.email, u.display_name, u.profile_image_url,
+                       p.last_seen_utc
+                FROM dbo.Accounts a
+                LEFT JOIN dbo.Users u ON u.user_id = a.account_id
+                LEFT JOIN dbo.UserPresence p ON p.user_id = a.account_id
+                WHERE a.account_id = @Id;";
 
             int accountId;
             string email = string.Empty;
             string display = string.Empty;
             string avatar = null;
+            DateTime? lastSeen = null;
 
             using (var cmd = new SqlCommand(Q, cn, tx))
             {
@@ -555,12 +617,11 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     if (!rd.Read())
                     {
-                        // Usuario borrado o inconsistente: devolvemos mínimos
                         return new FriendSummary
                         {
                             AccountId = friendId,
-                            Username = $"user:{friendId}",
-                            DisplayName = $"user:{friendId}",
+                            Username = "user:" + friendId,
+                            DisplayName = "user:" + friendId,
                             AvatarUrl = null,
                             SinceUtc = sinceUtc,
                             IsOnline = false
@@ -571,19 +632,24 @@ namespace ServicesTheWeakestRival.Server.Services
                     if (!rd.IsDBNull(1)) email = rd.GetString(1);
                     if (!rd.IsDBNull(2)) display = rd.GetString(2);
                     if (!rd.IsDBNull(3)) avatar = rd.GetString(3);
+                    if (!rd.IsDBNull(4)) lastSeen = rd.GetDateTime(4);
                 }
             }
+
+            bool online = lastSeen.HasValue &&
+                          lastSeen.Value >= DateTime.UtcNow.AddSeconds(-ONLINE_WINDOW_SECONDS);
 
             return new FriendSummary
             {
                 AccountId = accountId,
-                Username = string.IsNullOrWhiteSpace(email) ? $"user:{accountId}" : email, // no tienes 'username' real
+                Username = string.IsNullOrWhiteSpace(email) ? ("user:" + accountId) : email,
                 DisplayName = string.IsNullOrWhiteSpace(display) ? email : display,
                 AvatarUrl = avatar,
                 SinceUtc = sinceUtc,
-                IsOnline = false // si luego metes presencia, cámbialo aquí
+                IsOnline = online
             };
         }
+
 
         public SearchAccountsResponse SearchAccounts(SearchAccountsRequest request)
         {
@@ -636,7 +702,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 cmd.Parameters.Add("@Me", SqlDbType.Int).Value = me;
                 cmd.Parameters.Add("@Max", SqlDbType.Int).Value = max;
 
-                // Búsqueda: si parece correo, busca parecido en email; siempre busca por nombre parcial
                 var like = "%" + q + "%";
                 cmd.Parameters.Add("@Qemail", SqlDbType.NVarChar, 320).Value = like;
                 cmd.Parameters.Add("@Qname", SqlDbType.NVarChar, 100).Value = like;
@@ -672,7 +737,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             var list = new System.Collections.Generic.List<AccountMini>();
 
-            // Armar "IN" seguro con params
             var inParams = new System.Text.StringBuilder();
             for (int i = 0; i < ids.Length; i++)
             {

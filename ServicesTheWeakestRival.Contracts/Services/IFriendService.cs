@@ -32,6 +32,14 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
+        HeartbeatResponse PresenceHeartbeat(HeartbeatRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        GetFriendsPresenceResponse GetFriendsPresence(GetFriendsPresenceRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
         GetAccountsByIdsResponse GetAccountsByIds(GetAccountsByIdsRequest request);
     }
 }
