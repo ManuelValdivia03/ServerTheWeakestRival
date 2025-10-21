@@ -28,7 +28,6 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract(IsOneWay = true)]
         void SendChatMessage(SendLobbyMessageRequest request);
 
-        // Perfil
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
         UpdateAccountResponse GetMyProfile(string token);
@@ -36,5 +35,11 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
         UpdateAccountResponse UpdateAccount(UpdateAccountRequest request);
+
+        [OperationContract, FaultContract(typeof(ServiceFault))]
+        CreateLobbyResponse CreateLobby(CreateLobbyRequest request);
+
+        [OperationContract, FaultContract(typeof(ServiceFault))]
+        JoinByCodeResponse JoinByCode(JoinByCodeRequest request);
     }
 }

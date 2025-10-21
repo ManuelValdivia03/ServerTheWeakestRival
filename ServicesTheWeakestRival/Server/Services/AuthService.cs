@@ -397,14 +397,34 @@ namespace ServicesTheWeakestRival.Server.Services
         }
 
         // ======= LOGOUT =======
+        // dentro de AuthService
         public void Logout(LogoutRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Token))
                 return;
 
             AuthToken removed;
-            TokenCache.TryRemove(request.Token, out removed);
+            if (TokenCache.TryRemove(request.Token, out removed))
+            {
+                // Limpieza best-effort; no lances fault si falla
+                try
+                {
+                    using (var cn = new SqlConnection(ConnectionString))
+                    using (var cmd = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", cn))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = removed.UserId;
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+                catch
+                {
+                    //TODO Ingresar Log 
+                }
+            }
         }
+
 
         // ======= Helpers =======
         private static AuthToken IssueToken(int userId)

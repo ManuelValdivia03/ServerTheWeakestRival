@@ -11,6 +11,8 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 2)] public string LobbyName { get; set; }
         [DataMember(Order = 3)] public int MaxPlayers { get; set; }
         [DataMember(Order = 4)] public List<PlayerSummary> Players { get; set; } = new List<PlayerSummary>();
+        [DataMember(Order = 5)] public string AccessCode { get; set; }
+
     }
 
     [DataContract]
@@ -62,4 +64,32 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 3)] public string Message { get; set; }
         [DataMember(Order = 4)] public DateTime SentAtUtc { get; set; }
     }
+
+    [DataContract]
+    public sealed class CreateLobbyRequest
+    {
+        [DataMember(Order = 1, IsRequired = true)] public string Token { get; set; }
+        [DataMember(Order = 2)] public string LobbyName { get; set; }
+        [DataMember(Order = 3)] public byte? MaxPlayers { get; set; }
+    }
+
+    [DataContract]
+    public sealed class CreateLobbyResponse
+    {
+        [DataMember(Order = 1, IsRequired = true)] public LobbyInfo Lobby { get; set; }
+    }
+
+    [DataContract]
+    public sealed class JoinByCodeRequest
+    {
+        [DataMember(Order = 1, IsRequired = true)] public string Token { get; set; }
+        [DataMember(Order = 2, IsRequired = true)] public string AccessCode { get; set; }
+    }
+
+    [DataContract]
+    public sealed class JoinByCodeResponse
+    {
+        [DataMember(Order = 1, IsRequired = true)] public LobbyInfo Lobby { get; set; }
+    }
+
 }
