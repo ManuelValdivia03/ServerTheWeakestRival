@@ -16,7 +16,6 @@ namespace ServicesTheWeakestRival.Server.Services
         private static string Cnx =>
             ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"].ConnectionString;
 
-        // ====== CALLBACKS: bucket por lobby (varias sesiones por lobby) ======
         private static readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, ILobbyClientCallback>> CallbackBuckets
             = new ConcurrentDictionary<Guid, ConcurrentDictionary<string, ILobbyClientCallback>>();
 
@@ -54,15 +53,9 @@ namespace ServicesTheWeakestRival.Server.Services
             foreach (var kv in bucket)
             {
                 try { send(kv.Value); }
-                catch { /* canal caído, ignorar */ }
+                catch { /* canal caído, ignorar */ } //TODO NO IGNORAR MANEJARLA SI ES POSIBLE CON EL LOGGER O LANZARLA
             }
         }
-
-        // ===============================
-        //   MÉTODOS YA EXISTENTES (UI)
-        // ===============================
-
-        // JoinLobby “simple” para tu flujo previo (no persistente)
         public JoinLobbyResponse JoinLobby(JoinLobbyRequest request)
         {
             var cb = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
@@ -82,7 +75,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public void LeaveLobby(LeaveLobbyRequest request)
         {
-            // Intenta salir en BD si el LobbyId corresponde a uno real
             try
             {
                 if (request != null && !string.IsNullOrWhiteSpace(request.Token) && request.LobbyId != Guid.Empty)
@@ -105,7 +97,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch
             {
-                // best effort: no propagamos errores aquí
+                //TODO: manejar error con logger si es posible
             }
             finally
             {
@@ -116,8 +108,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public ListLobbiesResponse ListLobbies(ListLobbiesRequest request) =>
             new ListLobbiesResponse { Lobbies = new List<LobbyInfo>() };
-
-        // ===== Chat: ahora con broadcast y nombre del emisor =====
         public void SendChatMessage(SendLobbyMessageRequest request)
         {
             if (request == null || request.LobbyId == Guid.Empty || string.IsNullOrWhiteSpace(request.Token))
@@ -125,24 +115,20 @@ namespace ServicesTheWeakestRival.Server.Services
 
             int userId;
             if (!TokenStore.TryGetUserId(request.Token, out userId))
-                return; // o ThrowFault("UNAUTHORIZED", "...")
+                return; 
 
             var senderName = GetUserDisplayName(userId);
 
             var msg = new ChatMessage
             {
-                FromPlayerId = Guid.Empty,           // tu DTO usa Guid; no asignamos el int userId aquí
-                FromPlayerName = senderName,         // mostramos nombre legible
+                FromPlayerId = Guid.Empty,           
+                FromPlayerName = senderName,         
                 Message = request.Message ?? string.Empty,
                 SentAtUtc = DateTime.UtcNow
             };
 
             BroadcastToLobby(request.LobbyId, cb => cb.OnChatMessageReceived(msg));
         }
-
-        // ===============================
-        //          PERFIL (YA)
-        // ===============================
         public UpdateAccountResponse GetMyProfile(string token)
         {
             if (!TokenStore.TryGetUserId(token, out var userId))
@@ -244,11 +230,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return GetMyProfile(req.Token);
         }
-
-        // ===============================
-        //     NUEVO: CREATE / JOIN CODE
-        // ===============================
-
         public CreateLobbyResponse CreateLobby(CreateLobbyRequest request)
         {
             if (request == null) ThrowFault("INVALID_REQUEST", "Request nulo.");
@@ -262,15 +243,12 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 cn.Open();
 
-                // Limpieza preventiva: deja inactivas todas las membresías previas del usuario (si las hay)
                 using (var clean = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", cn))
                 {
                     clean.CommandType = System.Data.CommandType.StoredProcedure;
                     clean.Parameters.Add("@UserId", SqlDbType.Int).Value = ownerId;
                     clean.ExecuteNonQuery();
                 }
-
-                // Crear lobby
                 using (var cmd = new SqlCommand("dbo.usp_Lobby_Create", cn))
                 {
                     cmd.CommandType = CommandType.StoredProcedure;
@@ -291,7 +269,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
             }
 
-            // Registrar callback del creador (no pisamos a nadie)
             var cb = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
             AddCallbackForLobby(lobbyUid, cb);
 
@@ -340,8 +317,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return new JoinByCodeResponse { Lobby = info };
         }
-
-        // ===== Helpers internos =====
         private static int EnsureAuthorizedAndGetUserId(string token)
         {
             if (!TokenStore.TryGetUserId(token, out var userId))
@@ -388,7 +363,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         LobbyId = uid,
                         LobbyName = name,
                         MaxPlayers = maxPlayers,
-                        Players = new List<PlayerSummary>(), // mantengo acorde a tu contrato actual
+                        Players = new List<PlayerSummary>(), 
                         AccessCode = accessCode
                     };
                 }
