@@ -12,12 +12,32 @@ using ServicesTheWeakestRival.Server.Infrastructure;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    /// <summary>
-    /// WCF service that persists and retrieves global lobby chat messages (pre-match).
-    /// </summary>
     [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerCall)]
     public sealed class ChatService : IChatService
     {
+        private const int MaxMessageLength = 500;
+        private const int MaxDisplayNameLength = 80;
+        private const int DefaultPageSize = 50;
+        private const int MaxPageSize = 200;
+
+        private const string SqlSelectDisplayName =
+            "SELECT display_name FROM dbo.Users WHERE user_id = @id;";
+
+        private const string SqlInsertChatMessage = @"
+            INSERT INTO dbo.ChatMessages (user_id, display_name, message_text)
+            VALUES (@user_id, @display_name, @message_text);";
+
+        private const string SqlSelectMessagesPaged = @"
+            SELECT TOP (@max)
+                chat_message_id,
+                user_id,
+                display_name,
+                message_text,
+                sent_utc
+            FROM dbo.ChatMessages
+            WHERE chat_message_id > @since_id
+            ORDER BY chat_message_id ASC;";
+
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
         private static string ConnectionString
@@ -37,9 +57,6 @@ namespace ServicesTheWeakestRival.Server.Services
             throw new FaultException<ServiceFault>(fault, message);
         }
 
-        /// <summary>
-        /// Validates the auth token and returns the associated user id.
-        /// </summary>
         private static int EnsureAuthorizedAndGetUserId(string authToken)
         {
             if (string.IsNullOrWhiteSpace(authToken))
@@ -48,39 +65,27 @@ namespace ServicesTheWeakestRival.Server.Services
             if (!TokenCache.TryGetValue(authToken, out var token) || token == null)
                 ThrowFault("UNAUTHORIZED", "Auth token is invalid.");
 
-            // Fix: usamos ExpiresAtUtc en vez de IsExpired
             if (token.ExpiresAtUtc <= DateTime.UtcNow)
                 ThrowFault("UNAUTHORIZED", "Auth token has expired.");
 
             return token.UserId;
         }
 
-        /// <summary>
-        /// Retrieves the user's display name; falls back to "User{userId}" on missing/DB error.
-        /// </summary>
         private static string GetUserDisplayName(int userId)
         {
-            try
+            using (var conn = new SqlConnection(ConnectionString))
+            using (var cmd = new SqlCommand(SqlSelectDisplayName, conn))
             {
-                using (var conn = new SqlConnection(ConnectionString))
-                using (var cmd = new SqlCommand("SELECT display_name FROM dbo.Users WHERE user_id = @id;", conn))
-                {
-                    cmd.Parameters.Add("@id", SqlDbType.Int).Value = userId;
-                    conn.Open();
-                    var obj = cmd.ExecuteScalar();
-                    var name = (obj == null || obj == DBNull.Value) ? null : Convert.ToString(obj);
-                    return string.IsNullOrWhiteSpace(name) ? $"User{userId}" : name.Trim();
-                }
-            }
-            catch
-            {
-                return $"User{userId}";
+                cmd.Parameters.Add("@id", SqlDbType.Int).Value = userId;
+                conn.Open();
+
+                var obj = cmd.ExecuteScalar();
+                var name = (obj == null || obj == DBNull.Value) ? null : Convert.ToString(obj);
+
+                return string.IsNullOrWhiteSpace(name) ? $"User{userId}" : name.Trim();
             }
         }
 
-        // === Operations ===
-
-        /// <inheritdoc />
         public BasicResponse SendChatMessage(SendChatMessageRequest request)
         {
             if (request == null)
@@ -89,8 +94,8 @@ namespace ServicesTheWeakestRival.Server.Services
             var messageText = (request.MessageText ?? string.Empty).Trim();
             if (messageText.Length == 0)
                 ThrowFault("VALIDATION_ERROR", "MessageText cannot be empty.");
-            if (messageText.Length > 500)
-                ThrowFault("VALIDATION_ERROR", "MessageText exceeds 500 characters.");
+            if (messageText.Length > MaxMessageLength)
+                ThrowFault("VALIDATION_ERROR", $"MessageText exceeds {MaxMessageLength} characters.");
 
             var userId = EnsureAuthorizedAndGetUserId(request.AuthToken);
             var displayName = GetUserDisplayName(userId);
@@ -98,13 +103,11 @@ namespace ServicesTheWeakestRival.Server.Services
             try
             {
                 using (var conn = new SqlConnection(ConnectionString))
-                using (var cmd = new SqlCommand(@"
-INSERT INTO dbo.ChatMessages (user_id, display_name, message_text)
-VALUES (@user_id, @display_name, @message_text);", conn))
+                using (var cmd = new SqlCommand(SqlInsertChatMessage, conn))
                 {
                     cmd.Parameters.Add("@user_id", SqlDbType.Int).Value = userId;
-                    cmd.Parameters.Add("@display_name", SqlDbType.NVarChar, 80).Value = displayName;
-                    cmd.Parameters.Add("@message_text", SqlDbType.NVarChar, 500).Value = messageText;
+                    cmd.Parameters.Add("@display_name", SqlDbType.NVarChar, MaxDisplayNameLength).Value = displayName;
+                    cmd.Parameters.Add("@message_text", SqlDbType.NVarChar, MaxMessageLength).Value = messageText;
 
                     conn.Open();
                     var affected = cmd.ExecuteNonQuery();
@@ -116,43 +119,41 @@ VALUES (@user_id, @display_name, @message_text);", conn))
             }
             catch (SqlException ex)
             {
-                ThrowFault("DB_ERROR", $"SQL error: {ex.Number}");
-                throw; // unreachable
+                Console.Error.WriteLine($"[SqlException] Number={ex.Number}, Message={ex.Message}\n{ex}");
+                throw; // no enmascarar
             }
-            catch (Exception)
+            catch (TimeoutException ex)
             {
-                ThrowFault("UNEXPECTED", "Unexpected server error.");
-                throw; // unreachable
+                Console.Error.WriteLine($"[TimeoutException] {ex.Message}\n{ex}");
+                throw;
+            }
+            catch (OperationCanceledException ex)
+            {
+                Console.Error.WriteLine($"[OperationCanceled] {ex.Message}\n{ex}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[Unexpected] {ex.GetType().Name}: {ex.Message}\n{ex}");
+                throw;
             }
         }
 
-        /// <inheritdoc />
         public GetChatMessagesResponse GetChatMessages(GetChatMessagesRequest request)
         {
             if (request == null)
                 ThrowFault("INVALID_REQUEST", "Request cannot be null.");
 
-            // Validar token solamente
             EnsureAuthorizedAndGetUserId(request.AuthToken);
 
             var sinceId = request.SinceChatMessageId ?? 0;
-            var maxCount = request.MaxCount.HasValue && request.MaxCount.Value > 0
-                ? Math.Min(request.MaxCount.Value, 200)
-                : 50;
+            var requestedMax = request.MaxCount.GetValueOrDefault(DefaultPageSize);
+            var maxCount = Math.Min(Math.Max(requestedMax, 1), MaxPageSize);
 
             try
             {
                 using (var conn = new SqlConnection(ConnectionString))
-                using (var cmd = new SqlCommand(@"
-SELECT TOP (@max)
-       chat_message_id,
-       user_id,
-       display_name,
-       message_text,
-       sent_utc
-FROM dbo.ChatMessages
-WHERE chat_message_id > @since_id
-ORDER BY chat_message_id ASC;", conn))
+                using (var cmd = new SqlCommand(SqlSelectMessagesPaged, conn))
                 {
                     cmd.Parameters.Add("@max", SqlDbType.Int).Value = maxCount;
                     cmd.Parameters.Add("@since_id", SqlDbType.Int).Value = sinceId;
@@ -184,13 +185,23 @@ ORDER BY chat_message_id ASC;", conn))
             }
             catch (SqlException ex)
             {
-                ThrowFault("DB_ERROR", $"SQL error: {ex.Number}");
-                throw; 
+                Console.Error.WriteLine($"[SqlException] Number={ex.Number}, Message={ex.Message}\n{ex}");
+                throw;
             }
-            catch (Exception)
+            catch (TimeoutException ex)
             {
-                ThrowFault("UNEXPECTED", "Unexpected server error.");
-                throw; 
+                Console.Error.WriteLine($"[TimeoutException] {ex.Message}\n{ex}");
+                throw;
+            }
+            catch (OperationCanceledException ex)
+            {
+                Console.Error.WriteLine($"[OperationCanceled] {ex.Message}\n{ex}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[Unexpected] {ex.GetType().Name}: {ex.Message}\n{ex}");
+                throw;
             }
         }
     }
