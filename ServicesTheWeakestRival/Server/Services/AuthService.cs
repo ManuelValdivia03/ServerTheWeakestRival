@@ -451,7 +451,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static bool IsUniqueViolation(SqlException ex)
         {
-            // 2627 = PK/UK violation; 2601 = dup key
             return (ex != null) && (ex.Number == 2627 || ex.Number == 2601);
         }
 
