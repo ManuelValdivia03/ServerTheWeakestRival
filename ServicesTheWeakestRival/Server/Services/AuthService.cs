@@ -95,7 +95,6 @@ namespace ServicesTheWeakestRival.Server.Services
             public static bool Log(Exception ex, string context = null)
             {
                 // TODO: reemplazar por logger real (Serilog/NLog/AppInsights). No lanzar desde aquí.
-                // AppLogger.Error(ex, context);
                 return false; // NO manejar: deja que la excepción siga su curso
             }
         }
