@@ -81,6 +81,7 @@
     <Compile Include="Server\Services\LobbyService.cs" />
     <Compile Include="Server\Services\Logic\AuthSql.cs" />
     <Compile Include="Server\Services\Logic\FriendSql.cs" />
+    <Compile Include="Server\Services\Logic\LobbySql.cs" />
     <Compile Include="Server\Services\MatchmakingService.cs" />
     <Compile Include="Server\Services\StatsService.cs" />
     <Compile Include="Server\Services\TokenStore.cs" />

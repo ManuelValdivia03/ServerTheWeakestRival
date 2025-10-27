@@ -7,6 +7,7 @@ using System.Data.SqlClient;
 using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Services.Logic; // <-- usar LobbySql
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -32,14 +33,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static void RemoveCallbackForLobby(Guid lobbyUid)
         {
-            ConcurrentDictionary<string, ILobbyClientCallback> bucket;
-            if (CallbackBuckets.TryGetValue(lobbyUid, out bucket))
+            if (CallbackBuckets.TryGetValue(lobbyUid, out var bucket))
             {
-                ILobbyClientCallback _discard;
-                bucket.TryRemove(CurrentSessionId, out _discard);
+                bucket.TryRemove(CurrentSessionId, out _);
                 if (bucket.Count == 0)
                 {
-                    ConcurrentDictionary<string, ILobbyClientCallback> _;
                     CallbackBuckets.TryRemove(lobbyUid, out _);
                 }
             }
@@ -47,15 +45,15 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static void BroadcastToLobby(Guid lobbyUid, Action<ILobbyClientCallback> send)
         {
-            ConcurrentDictionary<string, ILobbyClientCallback> bucket;
-            if (!CallbackBuckets.TryGetValue(lobbyUid, out bucket)) return;
+            if (!CallbackBuckets.TryGetValue(lobbyUid, out var bucket)) return;
 
             foreach (var kv in bucket)
             {
                 try { send(kv.Value); }
-                catch { /* canal caído, ignorar */ } //TODO NO IGNORAR MANEJARLA SI ES POSIBLE CON EL LOGGER O LANZARLA
+                catch { /* canal caído, ignorar o loggear */ }
             }
         }
+
         public JoinLobbyResponse JoinLobby(JoinLobbyRequest request)
         {
             var cb = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
@@ -79,12 +77,11 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 if (request != null && !string.IsNullOrWhiteSpace(request.Token) && request.LobbyId != Guid.Empty)
                 {
-                    int userId;
-                    if (TokenStore.TryGetUserId(request.Token, out userId))
+                    if (TokenStore.TryGetUserId(request.Token, out var userId))
                     {
                         var intId = GetLobbyIdFromUid(request.LobbyId);
                         using (var cn = new SqlConnection(Cnx))
-                        using (var cmd = new SqlCommand("dbo.usp_Lobby_Leave", cn))
+                        using (var cmd = new SqlCommand(LobbySql.Text.SP_LOBBY_LEAVE, cn))
                         {
                             cmd.CommandType = CommandType.StoredProcedure;
                             cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
@@ -97,7 +94,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch
             {
-                //TODO: manejar error con logger si es posible
+                // TODO: logger
             }
             finally
             {
@@ -108,40 +105,35 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public ListLobbiesResponse ListLobbies(ListLobbiesRequest request) =>
             new ListLobbiesResponse { Lobbies = new List<LobbyInfo>() };
+
         public void SendChatMessage(SendLobbyMessageRequest request)
         {
             if (request == null || request.LobbyId == Guid.Empty || string.IsNullOrWhiteSpace(request.Token))
                 return;
 
-            int userId;
-            if (!TokenStore.TryGetUserId(request.Token, out userId))
-                return; 
+            if (!TokenStore.TryGetUserId(request.Token, out var userId))
+                return;
 
             var senderName = GetUserDisplayName(userId);
 
             var msg = new ChatMessage
             {
-                FromPlayerId = Guid.Empty,           
-                FromPlayerName = senderName,         
+                FromPlayerId = Guid.Empty,
+                FromPlayerName = senderName,
                 Message = request.Message ?? string.Empty,
                 SentAtUtc = DateTime.UtcNow
             };
 
             BroadcastToLobby(request.LobbyId, cb => cb.OnChatMessageReceived(msg));
         }
+
         public UpdateAccountResponse GetMyProfile(string token)
         {
             if (!TokenStore.TryGetUserId(token, out var userId))
                 ThrowFault("UNAUTHORIZED", "Token inválido o expirado.");
 
-            const string q = @"
-                SELECT u.user_id, u.display_name, u.profile_image_url, u.created_at, a.email
-                FROM dbo.Users u
-                JOIN dbo.Accounts a ON a.account_id = u.user_id
-                WHERE u.user_id = @Id;";
-
             using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand(q, cn))
+            using (var cmd = new SqlCommand(LobbySql.Text.GET_MY_PROFILE, cn))
             {
                 cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
                 cn.Open();
@@ -177,15 +169,15 @@ namespace ServicesTheWeakestRival.Server.Services
                 ThrowFault("VALIDATION_ERROR", "DisplayName máximo 80.");
             if (setImg && req.ProfileImageUrl.Trim().Length > 500)
                 ThrowFault("VALIDATION_ERROR", "ProfileImageUrl máximo 500.");
+
             if (setEmail)
             {
                 var email = req.Email.Trim();
                 if (!IsValidEmail(email))
                     ThrowFault("VALIDATION_ERROR", "Email inválido.");
 
-                const string qExists = "SELECT 1 FROM dbo.Accounts WHERE email = @E AND account_id <> @Id;";
                 using (var cn = new SqlConnection(Cnx))
-                using (var cmd = new SqlCommand(qExists, cn))
+                using (var cmd = new SqlCommand(LobbySql.Text.EMAIL_EXISTS_EXCEPT_ID, cn))
                 {
                     cmd.Parameters.Add("@E", SqlDbType.NVarChar, 320).Value = email;
                     cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
@@ -197,11 +189,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (setName || setImg)
             {
-                var sql = "UPDATE dbo.Users SET ";
-                if (setName) sql += "display_name = @DisplayName";
-                if (setImg) sql += (setName ? ", " : "") + "profile_image_url = @ImageUrl";
-                sql += " WHERE user_id = @Id;";
-
+                var sql = LobbySql.BuildUpdateUser(setName, setImg);
                 using (var cn = new SqlConnection(Cnx))
                 using (var cmd = new SqlCommand(sql, cn))
                 {
@@ -216,9 +204,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (setEmail)
             {
-                const string qUpd = "UPDATE dbo.Accounts SET email = @E WHERE account_id = @Id;";
                 using (var cn = new SqlConnection(Cnx))
-                using (var cmd = new SqlCommand(qUpd, cn))
+                using (var cmd = new SqlCommand(LobbySql.Text.UPDATE_ACCOUNT_EMAIL, cn))
                 {
                     cmd.Parameters.Add("@E", SqlDbType.NVarChar, 320).Value = req.Email.Trim();
                     cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
@@ -230,6 +217,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return GetMyProfile(req.Token);
         }
+
         public CreateLobbyResponse CreateLobby(CreateLobbyRequest request)
         {
             if (request == null) ThrowFault("INVALID_REQUEST", "Request nulo.");
@@ -243,13 +231,14 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 cn.Open();
 
-                using (var clean = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", cn))
+                using (var clean = new SqlCommand(LobbySql.Text.SP_LOBBY_LEAVE_ALL_BY_USER, cn))
                 {
-                    clean.CommandType = System.Data.CommandType.StoredProcedure;
+                    clean.CommandType = CommandType.StoredProcedure;
                     clean.Parameters.Add("@UserId", SqlDbType.Int).Value = ownerId;
                     clean.ExecuteNonQuery();
                 }
-                using (var cmd = new SqlCommand("dbo.usp_Lobby_Create", cn))
+
+                using (var cmd = new SqlCommand(LobbySql.Text.SP_LOBBY_CREATE, cn))
                 {
                     cmd.CommandType = CommandType.StoredProcedure;
                     cmd.Parameters.Add("@OwnerUserId", SqlDbType.Int).Value = ownerId;
@@ -293,7 +282,7 @@ namespace ServicesTheWeakestRival.Server.Services
             Guid lobbyUid;
 
             using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand("dbo.usp_Lobby_JoinByCode", cn))
+            using (var cmd = new SqlCommand(LobbySql.Text.SP_LOBBY_JOIN_BY_CODE, cn))
             {
                 cmd.CommandType = CommandType.StoredProcedure;
                 cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
@@ -317,6 +306,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return new JoinByCodeResponse { Lobby = info };
         }
+
         private static int EnsureAuthorizedAndGetUserId(string token)
         {
             if (!TokenStore.TryGetUserId(token, out var userId))
@@ -327,7 +317,7 @@ namespace ServicesTheWeakestRival.Server.Services
         private static int GetLobbyIdFromUid(Guid lobbyUid)
         {
             using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand("SELECT lobby_id FROM dbo.Lobbies WHERE lobby_uid = @u;", cn))
+            using (var cmd = new SqlCommand(LobbySql.Text.GET_LOBBY_ID_FROM_UID, cn))
             {
                 cmd.Parameters.Add("@u", SqlDbType.UniqueIdentifier).Value = lobbyUid;
                 cn.Open();
@@ -339,13 +329,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static LobbyInfo LoadLobbyInfoByIntId(int lobbyId)
         {
-            const string qLobby = @"
-                SELECT lobby_uid, name, max_players, access_code
-                FROM dbo.Lobbies
-                WHERE lobby_id = @id;";
-
             using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand(qLobby, cn))
+            using (var cmd = new SqlCommand(LobbySql.Text.GET_LOBBY_BY_ID, cn))
             {
                 cmd.Parameters.Add("@id", SqlDbType.Int).Value = lobbyId;
                 cn.Open();
@@ -363,7 +348,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         LobbyId = uid,
                         LobbyName = name,
                         MaxPlayers = maxPlayers,
-                        Players = new List<PlayerSummary>(), 
+                        Players = new List<PlayerSummary>(),
                         AccessCode = accessCode
                     };
                 }
@@ -372,9 +357,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static string GetUserDisplayName(int userId)
         {
-            const string sql = "SELECT display_name FROM dbo.Users WHERE user_id = @Id;";
             using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand(sql, cn))
+            using (var cmd = new SqlCommand(LobbySql.Text.GET_USER_DISPLAY_NAME, cn))
             {
                 cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
                 cn.Open();
