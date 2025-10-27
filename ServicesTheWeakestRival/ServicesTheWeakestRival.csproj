@@ -79,6 +79,7 @@
     <Compile Include="Server\Services\FriendService.cs" />
     <Compile Include="Server\Services\GameplayService.cs" />
     <Compile Include="Server\Services\LobbyService.cs" />
+    <Compile Include="Server\Services\Logic\FriendSql.cs" />
     <Compile Include="Server\Services\MatchmakingService.cs" />
     <Compile Include="Server\Services\StatsService.cs" />
     <Compile Include="Server\Services\TokenStore.cs" />
@@ -100,6 +101,7 @@
       <Name>TheWeakestRival.Data</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <VSToolsPath Condition="'$(VSToolsPath)' == '' and '$(VisualStudioVersion)' != '' and '$(VisualStudioVersion)' != '11.0'">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
