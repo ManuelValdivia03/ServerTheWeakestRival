@@ -8,6 +8,7 @@ using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services.Logic; // <-- para AuthSql
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -38,6 +39,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 return connection.ConnectionString;
             }
         }
+
         private static readonly int CodeTtlMinutes = ParseIntAppSetting("EmailCodeTtlMinutes", DEFAULT_CODE_TTL_MINUTES);
         private static readonly int ResendCooldownSeconds = ParseIntAppSetting("EmailResendCooldownSeconds", DEFAULT_RESEND_COOLDOWN_SECONDS);
 
@@ -45,50 +47,6 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             return int.TryParse(ConfigurationManager.AppSettings[key], out int value) ? value : @default;
         }
-
-        private const string SqlExistsAccountByEmail = @"SELECT 1 FROM dbo.Accounts WHERE email = @Email;";
-        private const string SqlLastVerification = @"
-            SELECT TOP(1) created_at_utc
-            FROM dbo.EmailVerifications
-            WHERE email = @Email AND used = 0
-            ORDER BY created_at_utc DESC;";
-        private const string SqlInvalidatePendingVerifications = @"
-            UPDATE dbo.EmailVerifications
-            SET used = 1, used_at_utc = SYSUTCDATETIME()
-            WHERE email = @Email AND used = 0;";
-        private const string SqlInsertVerification = @"
-            INSERT INTO dbo.EmailVerifications(email, code_hash, expires_at_utc)
-            VALUES(@Email, @CodeHash, @ExpiresAtUtc);";
-
-        private const string SqlPickLatestVerification = @"
-            SELECT TOP(1) verification_id, expires_at_utc, used
-            FROM dbo.EmailVerifications
-            WHERE email = @Email AND used = 0
-            ORDER BY created_at_utc DESC;";
-        private const string SqlValidateVerification = @"
-            SELECT CASE WHEN code_hash = @Hash THEN 1 ELSE 0 END
-            FROM dbo.EmailVerifications
-            WHERE verification_id = @Id;";
-        private const string SqlMarkVerificationUsed = @"
-            UPDATE dbo.EmailVerifications
-            SET used = 1, used_at_utc = SYSUTCDATETIME()
-            WHERE verification_id = @Id;";
-        private const string SqlIncrementAttempts = @"
-            UPDATE dbo.EmailVerifications
-            SET attempts = attempts + 1
-            WHERE verification_id = @Id;";
-
-        private const string SqlInsertAccount = @"
-            INSERT INTO dbo.Accounts (email, password_hash, status, created_at)
-            OUTPUT INSERTED.account_id
-            VALUES (@Email, @PasswordHash, @Status, SYSUTCDATETIME());";
-        private const string SqlInsertUser = @"
-            INSERT INTO dbo.Users (user_id, display_name, profile_image_url, created_at)
-            VALUES (@UserId, @DisplayName, @ProfileImageUrl, SYSUTCDATETIME());";
-        private const string SqlGetAccountByEmail = @"
-            SELECT account_id, password_hash, status
-            FROM dbo.Accounts
-            WHERE email = @Email;";
 
         private static class ErrorFilters
         {
@@ -98,6 +56,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false; // NO manejar: deja que la excepción siga su curso
             }
         }
+
         public PingResponse Ping(PingRequest request)
         {
             return new PingResponse
@@ -125,7 +84,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
-                    using (var exists = new SqlCommand(SqlExistsAccountByEmail, connection, transaction))
+                    using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
                     {
                         exists.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         var found = exists.ExecuteScalar();
@@ -135,7 +94,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
                     }
 
-                    using (var last = new SqlCommand(SqlLastVerification, connection, transaction))
+                    using (var last = new SqlCommand(AuthSql.Text.LAST_VERIFICATION, connection, transaction))
                     {
                         last.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         object lastObj = last.ExecuteScalar();
@@ -149,13 +108,13 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
                     }
 
-                    using (var invalidate = new SqlCommand(SqlInvalidatePendingVerifications, connection, transaction))
+                    using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_VERIFICATIONS, connection, transaction))
                     {
                         invalidate.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         invalidate.ExecuteNonQuery();
                     }
 
-                    using (var insert = new SqlCommand(SqlInsertVerification, connection, transaction))
+                    using (var insert = new SqlCommand(AuthSql.Text.INSERT_VERIFICATION, connection, transaction))
                     {
                         insert.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
@@ -173,7 +132,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SmtpException ex) when (ErrorFilters.Log(ex, "BeginRegister.EmailSender"))
             {
-                //TODO solo se registra, pero no hay logger aun
+                // TODO: solo se registra
             }
             catch (SmtpException ex)
             {
@@ -215,7 +174,7 @@ namespace ServicesTheWeakestRival.Server.Services
             byte[] codeHash = SecurityUtil.Sha256(code);
 
             using (var connection = new SqlConnection(ConnectionString))
-            using (var pick = new SqlCommand(SqlPickLatestVerification, connection))
+            using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_VERIFICATION, connection))
             {
                 pick.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                 connection.Open();
@@ -244,7 +203,7 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 connection.Open();
 
-                using (var validate = new SqlCommand(SqlValidateVerification, connection))
+                using (var validate = new SqlCommand(AuthSql.Text.VALIDATE_VERIFICATION, connection))
                 {
                     validate.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
                     validate.Parameters.Add("@Hash", SqlDbType.VarBinary, 32).Value = codeHash;
@@ -252,7 +211,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     bool ok = Convert.ToInt32(validate.ExecuteScalar()) == 1;
                     if (!ok)
                     {
-                        using (var inc = new SqlCommand(SqlIncrementAttempts, connection))
+                        using (var inc = new SqlCommand(AuthSql.Text.INCREMENT_ATTEMPTS, connection))
                         {
                             inc.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
                             inc.ExecuteNonQuery();
@@ -266,7 +225,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     try
                     {
-                        using (var check = new SqlCommand(SqlExistsAccountByEmail, connection, transaction))
+                        using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
                         {
                             check.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                             var exists = check.ExecuteScalar();
@@ -278,7 +237,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         string passwordHash = HashPasswordBc(password);
 
-                        using (var insertAcc = new SqlCommand(SqlInsertAccount, connection, transaction))
+                        using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
                         {
                             insertAcc.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                             insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
@@ -286,7 +245,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
                         }
 
-                        using (var insertUser = new SqlCommand(SqlInsertUser, connection, transaction))
+                        using (var insertUser = new SqlCommand(AuthSql.Text.INSERT_USER, connection, transaction))
                         {
                             insertUser.Parameters.Add("@UserId", SqlDbType.Int).Value = newAccountId;
                             insertUser.Parameters.Add("@DisplayName", SqlDbType.NVarChar, DISPLAY_NAME_MAX_LENGTH).Value = displayName;
@@ -297,7 +256,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             insertUser.ExecuteNonQuery();
                         }
 
-                        using (var mark = new SqlCommand(SqlMarkVerificationUsed, connection, transaction))
+                        using (var mark = new SqlCommand(AuthSql.Text.MARK_VERIFICATION_USED, connection, transaction))
                         {
                             mark.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
                             mark.ExecuteNonQuery();
@@ -307,12 +266,10 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                     catch (SqlException ex) when (ErrorFilters.Log(ex, "CompleteRegister.Tx"))
                     {
-                        //TODO se registraria en el log pero aun no lo hay
                         throw;
                     }
                     catch (SqlException)
                     {
-                        //TODO se registraria en el log pero aun no lo hay
                         throw;
                     }
                 }
@@ -335,7 +292,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             using (var connection = new SqlConnection(ConnectionString))
-            using (var check = new SqlCommand(SqlExistsAccountByEmail, connection))
+            using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection))
             {
                 check.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
                 connection.Open();
@@ -358,7 +315,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     try
                     {
-                        using (var insertAcc = new SqlCommand(SqlInsertAccount, connection, transaction))
+                        using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
                         {
                             insertAcc.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
                             insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
@@ -366,7 +323,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
                         }
 
-                        using (var insertUser = new SqlCommand(SqlInsertUser, connection, transaction))
+                        using (var insertUser = new SqlCommand(AuthSql.Text.INSERT_USER, connection, transaction))
                         {
                             insertUser.Parameters.Add("@UserId", SqlDbType.Int).Value = newAccountId;
                             insertUser.Parameters.Add("@DisplayName", SqlDbType.NVarChar, DISPLAY_NAME_MAX_LENGTH).Value =
@@ -405,7 +362,7 @@ namespace ServicesTheWeakestRival.Server.Services
             byte status;
 
             using (var connection = new SqlConnection(ConnectionString))
-            using (var get = new SqlCommand(SqlGetAccountByEmail, connection))
+            using (var get = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
             {
                 get.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
                 connection.Open();
