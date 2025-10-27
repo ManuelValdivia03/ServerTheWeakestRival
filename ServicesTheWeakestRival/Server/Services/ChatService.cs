@@ -9,6 +9,7 @@ using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services.Logic; 
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -26,24 +27,6 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string COL_DISPLAY_NAME = "display_name";
         private const string COL_MESSAGE_TEXT = "message_text";
         private const string COL_SENT_UTC = "sent_utc";
-
-        private const string SQL_SELECT_DISPLAY_NAME =
-            "SELECT display_name FROM dbo.Users WHERE user_id = @user_id;";
-
-        private const string SQL_INSERT_CHAT_MESSAGE = @"
-            INSERT INTO dbo.ChatMessages (user_id, display_name, message_text)
-            VALUES (@user_id, @display_name, @message_text);";
-
-        private const string SQL_SELECT_MESSAGES_PAGED = @"
-            SELECT TOP (@max_count)
-                chat_message_id,
-                user_id,
-                display_name,
-                message_text,
-                sent_utc
-            FROM dbo.ChatMessages
-            WHERE chat_message_id > @since_id
-            ORDER BY chat_message_id ASC;";
 
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
@@ -83,7 +66,7 @@ namespace ServicesTheWeakestRival.Server.Services
         private static string GetUserDisplayName(int userId)
         {
             using (var sqlConnection = new SqlConnection(ConnectionString))
-            using (var getDisplayNameCommand = new SqlCommand(SQL_SELECT_DISPLAY_NAME, sqlConnection))
+            using (var getDisplayNameCommand = new SqlCommand(ChatSql.Text.SELECT_DISPLAY_NAME, sqlConnection))
             {
                 getDisplayNameCommand.CommandType = CommandType.Text;
                 getDisplayNameCommand.CommandTimeout = DEFAULT_COMMAND_TIMEOUT_SECONDS;
@@ -115,7 +98,7 @@ namespace ServicesTheWeakestRival.Server.Services
             try
             {
                 using (var sqlConnection = new SqlConnection(ConnectionString))
-                using (var insertMessageCommand = new SqlCommand(SQL_INSERT_CHAT_MESSAGE, sqlConnection))
+                using (var insertMessageCommand = new SqlCommand(ChatSql.Text.INSERT_CHAT_MESSAGE, sqlConnection))
                 {
                     insertMessageCommand.CommandType = CommandType.Text;
                     insertMessageCommand.CommandTimeout = DEFAULT_COMMAND_TIMEOUT_SECONDS;
@@ -135,7 +118,7 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 Console.Error.WriteLine($"[SqlException] Number={ex.Number}, Message={ex.Message}\n{ex}");
-                throw; 
+                throw;
             }
             catch (TimeoutException ex)
             {
@@ -173,7 +156,7 @@ namespace ServicesTheWeakestRival.Server.Services
             try
             {
                 using (var sqlConnection = new SqlConnection(ConnectionString))
-                using (var getMessagesCommand = new SqlCommand(SQL_SELECT_MESSAGES_PAGED, sqlConnection))
+                using (var getMessagesCommand = new SqlCommand(ChatSql.Text.SELECT_MESSAGES_PAGED, sqlConnection))
                 {
                     getMessagesCommand.CommandType = CommandType.Text;
                     getMessagesCommand.CommandTimeout = DEFAULT_COMMAND_TIMEOUT_SECONDS;
