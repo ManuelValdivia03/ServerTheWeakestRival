@@ -3,7 +3,7 @@ using System.ServiceModel;
 
 namespace ConsoleServer
 {
-    class Program
+    public static class Program
     {
         static void Main()
         {

@@ -7,7 +7,7 @@ using System.Data.SqlClient;
 using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
-using ServicesTheWeakestRival.Server.Services.Logic; // <-- usar LobbySql
+using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
