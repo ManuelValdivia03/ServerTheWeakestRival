@@ -364,3 +364,8 @@ FodyWeavers.xsd
 
 App.Secrets.config
 ConnectionStrings.secrets.config
+
+# Logs en cualquier proyecto
+*.log
+Logs/
+**/Logs/
