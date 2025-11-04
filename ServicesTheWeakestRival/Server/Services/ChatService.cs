@@ -9,7 +9,7 @@ using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
-using ServicesTheWeakestRival.Server.Services.Logic; 
+using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -39,6 +39,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     ThrowFault("CONFIG_ERROR", "Missing connection string 'TheWeakestRivalDb'.");
                 }
+
                 return connectionString.ConnectionString;
             }
         }
@@ -52,13 +53,19 @@ namespace ServicesTheWeakestRival.Server.Services
         private static int EnsureAuthorizedAndGetUserId(string authToken)
         {
             if (string.IsNullOrWhiteSpace(authToken))
+            {
                 ThrowFault("UNAUTHORIZED", "Auth token is required.");
+            }
 
             if (!TokenCache.TryGetValue(authToken, out var token) || token == null)
+            {
                 ThrowFault("UNAUTHORIZED", "Auth token is invalid.");
+            }
 
             if (token.ExpiresAtUtc <= DateTime.UtcNow)
+            {
                 ThrowFault("UNAUTHORIZED", "Auth token has expired.");
+            }
 
             return token.UserId;
         }
@@ -81,16 +88,38 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
+        private static int GetInt32OrDefault(SqlDataReader reader, int ordinal, int defaultValue)
+        {
+            return reader.IsDBNull(ordinal) ? defaultValue : reader.GetInt32(ordinal);
+        }
+
+        private static string GetStringOrDefault(SqlDataReader reader, int ordinal, string defaultValue)
+        {
+            return reader.IsDBNull(ordinal) ? defaultValue : reader.GetString(ordinal);
+        }
+
+        private static DateTime GetDateTimeOrDefault(SqlDataReader reader, int ordinal, DateTime defaultValue)
+        {
+            return reader.IsDBNull(ordinal) ? defaultValue : reader.GetDateTime(ordinal);
+        }
+
         public BasicResponse SendChatMessage(SendChatMessageRequest request)
         {
             if (request == null)
+            {
                 ThrowFault("INVALID_REQUEST", "Request cannot be null.");
+            }
 
             var messageText = (request.MessageText ?? string.Empty).Trim();
             if (messageText.Length == 0)
+            {
                 ThrowFault("VALIDATION_ERROR", "MessageText cannot be empty.");
+            }
+
             if (messageText.Length > MAX_MESSAGE_LENGTH)
+            {
                 ThrowFault("VALIDATION_ERROR", $"MessageText exceeds {MAX_MESSAGE_LENGTH} characters.");
+            }
 
             var userId = EnsureAuthorizedAndGetUserId(request.AuthToken);
             var displayName = GetUserDisplayName(userId);
@@ -110,7 +139,9 @@ namespace ServicesTheWeakestRival.Server.Services
                     sqlConnection.Open();
                     var affectedRows = insertMessageCommand.ExecuteNonQuery();
                     if (affectedRows != 1)
+                    {
                         ThrowFault("DB_ERROR", "Failed to insert chat message.");
+                    }
                 }
 
                 return new BasicResponse { IsSuccess = true, Message = "Message sent." };
@@ -145,7 +176,9 @@ namespace ServicesTheWeakestRival.Server.Services
         public GetChatMessagesResponse GetChatMessages(GetChatMessagesRequest request)
         {
             if (request == null)
+            {
                 ThrowFault("INVALID_REQUEST", "Request cannot be null.");
+            }
 
             EnsureAuthorizedAndGetUserId(request.AuthToken);
 
@@ -168,11 +201,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     using (var reader = getMessagesCommand.ExecuteReader(CommandBehavior.SequentialAccess))
                     {
-                        int ordId = reader.GetOrdinal(COL_CHAT_MESSAGE_ID);
-                        int ordUserId = reader.GetOrdinal(COL_USER_ID);
-                        int ordDisplayName = reader.GetOrdinal(COL_DISPLAY_NAME);
-                        int ordText = reader.GetOrdinal(COL_MESSAGE_TEXT);
-                        int ordSentUtc = reader.GetOrdinal(COL_SENT_UTC);
+                        var ordId = reader.GetOrdinal(COL_CHAT_MESSAGE_ID);
+                        var ordUserId = reader.GetOrdinal(COL_USER_ID);
+                        var ordDisplayName = reader.GetOrdinal(COL_DISPLAY_NAME);
+                        var ordText = reader.GetOrdinal(COL_MESSAGE_TEXT);
+                        var ordSentUtc = reader.GetOrdinal(COL_SENT_UTC);
 
                         var messages = new List<ChatMessageDto>();
 
@@ -180,11 +213,11 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             var message = new ChatMessageDto
                             {
-                                ChatMessageId = reader.IsDBNull(ordId) ? 0 : reader.GetInt32(ordId),
-                                UserId = reader.IsDBNull(ordUserId) ? 0 : reader.GetInt32(ordUserId),
-                                DisplayName = reader.IsDBNull(ordDisplayName) ? string.Empty : reader.GetString(ordDisplayName),
-                                MessageText = reader.IsDBNull(ordText) ? string.Empty : reader.GetString(ordText),
-                                SentUtc = reader.IsDBNull(ordSentUtc) ? DateTime.MinValue : reader.GetDateTime(ordSentUtc)
+                                ChatMessageId = GetInt32OrDefault(reader, ordId, 0),
+                                UserId = GetInt32OrDefault(reader, ordUserId, 0),
+                                DisplayName = GetStringOrDefault(reader, ordDisplayName, string.Empty),
+                                MessageText = GetStringOrDefault(reader, ordText, string.Empty),
+                                SentUtc = GetDateTimeOrDefault(reader, ordSentUtc, DateTime.MinValue)
                             };
 
                             messages.Add(message);
