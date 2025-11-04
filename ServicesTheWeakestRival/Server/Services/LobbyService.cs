@@ -152,27 +152,27 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        public UpdateAccountResponse UpdateAccount(UpdateAccountRequest req)
+        public UpdateAccountResponse UpdateAccount(UpdateAccountRequest request)
         {
-            if (req == null) ThrowFault("INVALID_REQUEST", "Request nulo.");
-            if (!TokenStore.TryGetUserId(req.Token, out var userId))
+            if (request == null) ThrowFault("INVALID_REQUEST", "Request nulo.");
+            if (!TokenStore.TryGetUserId(request.Token, out var userId))
                 ThrowFault("UNAUTHORIZED", "Token inválido o expirado.");
 
-            var setName = !string.IsNullOrWhiteSpace(req.DisplayName);
-            var setImg = !string.IsNullOrWhiteSpace(req.ProfileImageUrl);
-            var setEmail = !string.IsNullOrWhiteSpace(req.Email);
+            var setName = !string.IsNullOrWhiteSpace(request.DisplayName);
+            var setImg = !string.IsNullOrWhiteSpace(request.ProfileImageUrl);
+            var setEmail = !string.IsNullOrWhiteSpace(request.Email);
 
             if (!setName && !setImg && !setEmail)
-                return GetMyProfile(req.Token);
+                return GetMyProfile(request.Token);
 
-            if (setName && req.DisplayName.Trim().Length > 80)
+            if (setName && request.DisplayName.Trim().Length > 80)
                 ThrowFault("VALIDATION_ERROR", "DisplayName máximo 80.");
-            if (setImg && req.ProfileImageUrl.Trim().Length > 500)
+            if (setImg && request.ProfileImageUrl.Trim().Length > 500)
                 ThrowFault("VALIDATION_ERROR", "ProfileImageUrl máximo 500.");
 
             if (setEmail)
             {
-                var email = req.Email.Trim();
+                var email = request.Email.Trim();
                 if (!IsValidEmail(email))
                     ThrowFault("VALIDATION_ERROR", "Email inválido.");
 
@@ -194,8 +194,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (var cmd = new SqlCommand(sql, cn))
                 {
                     cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
-                    if (setName) cmd.Parameters.Add("@DisplayName", SqlDbType.NVarChar, 80).Value = req.DisplayName.Trim();
-                    if (setImg) cmd.Parameters.Add("@ImageUrl", SqlDbType.NVarChar, 500).Value = req.ProfileImageUrl.Trim();
+                    if (setName) cmd.Parameters.Add("@DisplayName", SqlDbType.NVarChar, 80).Value = request.DisplayName.Trim();
+                    if (setImg) cmd.Parameters.Add("@ImageUrl", SqlDbType.NVarChar, 500).Value = request.ProfileImageUrl.Trim();
                     cn.Open();
                     var rows = cmd.ExecuteNonQuery();
                     if (rows == 0) ThrowFault("NOT_FOUND", "Usuario no encontrado.");
@@ -207,7 +207,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (var cn = new SqlConnection(Cnx))
                 using (var cmd = new SqlCommand(LobbySql.Text.UPDATE_ACCOUNT_EMAIL, cn))
                 {
-                    cmd.Parameters.Add("@E", SqlDbType.NVarChar, 320).Value = req.Email.Trim();
+                    cmd.Parameters.Add("@E", SqlDbType.NVarChar, 320).Value = request.Email.Trim();
                     cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
                     cn.Open();
                     var rows = cmd.ExecuteNonQuery();
@@ -215,7 +215,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
             }
 
-            return GetMyProfile(req.Token);
+            return GetMyProfile(request.Token);
         }
 
         public CreateLobbyResponse CreateLobby(CreateLobbyRequest request)
