@@ -7,13 +7,23 @@ using System.Data.SqlClient;
 using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Services.Logic;
+using log4net;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
     [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerSession, ConcurrencyMode = ConcurrencyMode.Multiple)]
     public class LobbyService : ILobbyService
     {
-        private static string Cnx =>
+        private const int MAX_DISPLAY_NAME_LENGTH = 80;
+        private const int MAX_PROFILE_IMAGE_URL_LENGTH = 500;
+        private const int MAX_EMAIL_LENGTH = 320;
+        private const int DEFAULT_MAX_PLAYERS = 8;
+        private const int ACCESS_CODE_MAX_LENGTH = 12;
+
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(LobbyService));
+
+        private static string Connection =>
             ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"].ConnectionString;
 
         private static readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, ILobbyClientCallback>> CallbackBuckets
@@ -21,133 +31,191 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static string CurrentSessionId
         {
-            get { return OperationContext.Current != null ? OperationContext.Current.SessionId : Guid.NewGuid().ToString("N"); }
+            get
+            {
+                return OperationContext.Current != null
+                    ? OperationContext.Current.SessionId
+                    : Guid.NewGuid().ToString("N");
+            }
         }
 
         private static void AddCallbackForLobby(Guid lobbyUid, ILobbyClientCallback cb)
         {
             var bucket = CallbackBuckets.GetOrAdd(lobbyUid, _ => new ConcurrentDictionary<string, ILobbyClientCallback>());
             bucket[CurrentSessionId] = cb;
+
+            Logger.DebugFormat("AddCallbackForLobby: LobbyUid={0}, SessionId={1}, BucketCount={2}",
+                lobbyUid,
+                CurrentSessionId,
+                bucket.Count);
         }
 
         private static void RemoveCallbackForLobby(Guid lobbyUid)
         {
-            ConcurrentDictionary<string, ILobbyClientCallback> bucket;
-            if (CallbackBuckets.TryGetValue(lobbyUid, out bucket))
+            if (CallbackBuckets.TryGetValue(lobbyUid, out var bucket))
             {
-                ILobbyClientCallback _discard;
-                bucket.TryRemove(CurrentSessionId, out _discard);
+                bucket.TryRemove(CurrentSessionId, out _);
                 if (bucket.Count == 0)
                 {
-                    ConcurrentDictionary<string, ILobbyClientCallback> _;
                     CallbackBuckets.TryRemove(lobbyUid, out _);
                 }
+
+                Logger.DebugFormat("RemoveCallbackForLobby: LobbyUid={0}, SessionId={1}, RemainingInBucket={2}",
+                    lobbyUid,
+                    CurrentSessionId,
+                    bucket.Count);
             }
         }
 
         private static void BroadcastToLobby(Guid lobbyUid, Action<ILobbyClientCallback> send)
         {
-            ConcurrentDictionary<string, ILobbyClientCallback> bucket;
-            if (!CallbackBuckets.TryGetValue(lobbyUid, out bucket)) return;
+            if (!CallbackBuckets.TryGetValue(lobbyUid, out var bucket))
+            {
+                Logger.DebugFormat("BroadcastToLobby: no callbacks for LobbyUid={0}", lobbyUid);
+                return;
+            }
 
             foreach (var kv in bucket)
             {
-                try { send(kv.Value); }
-                catch { /* canal caído, ignorar */ } //TODO NO IGNORAR MANEJARLA SI ES POSIBLE CON EL LOGGER O LANZARLA
+                try
+                {
+                    send(kv.Value);
+                }
+                catch (Exception ex)
+                {
+                    Logger.WarnFormat("BroadcastToLobby: callback failed. LobbyUid={0}, SessionId={1}", lobbyUid, kv.Key);
+                    Logger.Warn("BroadcastToLobby callback exception.", ex);
+                    // canal caído, se ignora la excepción como antes
+                }
             }
         }
+
         public JoinLobbyResponse JoinLobby(JoinLobbyRequest request)
         {
-            var cb = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
-            var lobby = new LobbyInfo
+            var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
+            var lobbyInfo = new LobbyInfo
             {
                 LobbyId = Guid.NewGuid(),
                 LobbyName = request != null ? request.LobbyName : "Lobby",
-                MaxPlayers = 8,
+                MaxPlayers = DEFAULT_MAX_PLAYERS,
                 Players = new List<PlayerSummary>(),
                 AccessCode = null
             };
 
-            AddCallbackForLobby(lobby.LobbyId, cb);
-            cb.OnLobbyUpdated(lobby);
-            return new JoinLobbyResponse { Lobby = lobby };
+            Logger.InfoFormat("JoinLobby: New in-memory lobby created. LobbyId={0}, LobbyName={1}",
+                lobbyInfo.LobbyId,
+                lobbyInfo.LobbyName);
+
+            AddCallbackForLobby(lobbyInfo.LobbyId, callback);
+            callback.OnLobbyUpdated(lobbyInfo);
+            return new JoinLobbyResponse { Lobby = lobbyInfo };
         }
 
         public void LeaveLobby(LeaveLobbyRequest request)
         {
             try
             {
-                if (request != null && !string.IsNullOrWhiteSpace(request.Token) && request.LobbyId != Guid.Empty)
+                if (request == null
+                    || string.IsNullOrWhiteSpace(request.Token)
+                    || request.LobbyId == Guid.Empty)
                 {
-                    int userId;
-                    if (TokenStore.TryGetUserId(request.Token, out userId))
-                    {
-                        var intId = GetLobbyIdFromUid(request.LobbyId);
-                        using (var cn = new SqlConnection(Cnx))
-                        using (var cmd = new SqlCommand("dbo.usp_Lobby_Leave", cn))
-                        {
-                            cmd.CommandType = CommandType.StoredProcedure;
-                            cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
-                            cmd.Parameters.Add("@LobbyId", SqlDbType.Int).Value = intId;
-                            cn.Open();
-                            cmd.ExecuteNonQuery();
-                        }
-                    }
+                    Logger.Debug("LeaveLobby: invalid request (null, empty token or empty LobbyId).");
+                    return;
                 }
+
+                if (!TokenStore.TryGetUserId(request.Token, out var userId))
+                {
+                    Logger.WarnFormat("LeaveLobby: invalid token. LobbyId={0}", request.LobbyId);
+                    return;
+                }
+
+                var intId = GetLobbyIdFromUid(request.LobbyId);
+
+                using (var sqlConnection = new SqlConnection(Connection))
+                using (var sqlCommand = new SqlCommand(LobbySql.Text.SP_LOBBY_LEAVE, sqlConnection))
+                {
+                    sqlCommand.CommandType = CommandType.StoredProcedure;
+                    sqlCommand.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                    sqlCommand.Parameters.Add("@LobbyId", SqlDbType.Int).Value = intId;
+                    sqlConnection.Open();
+                    sqlCommand.ExecuteNonQuery();
+                }
+
+                Logger.InfoFormat("LeaveLobby: user left lobby. UserId={0}, LobbyUid={1}, LobbyId={2}",
+                    userId,
+                    request.LobbyId,
+                    intId);
             }
-            catch
+            catch (Exception ex)
             {
-                //TODO: manejar error con logger si es posible
+                Logger.Error("Unexpected error at LeaveLobby.", ex);
+                // se mantiene el mismo comportamiento: se traga la excepción
             }
             finally
             {
                 if (request != null && request.LobbyId != Guid.Empty)
+                {
                     RemoveCallbackForLobby(request.LobbyId);
+                }
             }
         }
 
-        public ListLobbiesResponse ListLobbies(ListLobbiesRequest request) =>
-            new ListLobbiesResponse { Lobbies = new List<LobbyInfo>() };
+        public ListLobbiesResponse ListLobbies(ListLobbiesRequest request)
+        {
+            Logger.Debug("ListLobbies called (currently returns empty list).");
+            return new ListLobbiesResponse { Lobbies = new List<LobbyInfo>() };
+        }
+
         public void SendChatMessage(SendLobbyMessageRequest request)
         {
             if (request == null || request.LobbyId == Guid.Empty || string.IsNullOrWhiteSpace(request.Token))
+            {
+                Logger.Debug("SendChatMessage: invalid request (null, empty LobbyId or token).");
                 return;
+            }
 
-            int userId;
-            if (!TokenStore.TryGetUserId(request.Token, out userId))
-                return; 
+            if (!TokenStore.TryGetUserId(request.Token, out var userId))
+            {
+                Logger.WarnFormat("SendChatMessage: invalid token. LobbyId={0}", request.LobbyId);
+                return;
+            }
 
             var senderName = GetUserDisplayName(userId);
 
-            var msg = new ChatMessage
+            var chatMessage = new ChatMessage
             {
-                FromPlayerId = Guid.Empty,           
-                FromPlayerName = senderName,         
+                FromPlayerId = Guid.Empty,
+                FromPlayerName = senderName,
                 Message = request.Message ?? string.Empty,
                 SentAtUtc = DateTime.UtcNow
             };
 
-            BroadcastToLobby(request.LobbyId, cb => cb.OnChatMessageReceived(msg));
+            Logger.InfoFormat("SendChatMessage: LobbyId={0}, UserId={1}, SenderName={2}",
+                request.LobbyId,
+                userId,
+                senderName);
+
+            BroadcastToLobby(request.LobbyId, cb => cb.OnChatMessageReceived(chatMessage));
         }
+
         public UpdateAccountResponse GetMyProfile(string token)
         {
-            if (!TokenStore.TryGetUserId(token, out var userId))
-                ThrowFault("UNAUTHORIZED", "Token inválido o expirado.");
+            var userId = EnsureAuthorizedAndGetUserId(token);
 
-            const string q = @"
-                SELECT u.user_id, u.display_name, u.profile_image_url, u.created_at, a.email
-                FROM dbo.Users u
-                JOIN dbo.Accounts a ON a.account_id = u.user_id
-                WHERE u.user_id = @Id;";
-
-            using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand(q, cn))
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.GET_MY_PROFILE, sqlConnection))
             {
-                cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
-                cn.Open();
-                using (var rd = cmd.ExecuteReader(CommandBehavior.SingleRow))
+                sqlCommand.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
+                sqlConnection.Open();
+                using (var rd = sqlCommand.ExecuteReader(CommandBehavior.SingleRow))
                 {
-                    if (!rd.Read()) ThrowFault("NOT_FOUND", "Usuario no encontrado.");
+                    if (!rd.Read())
+                    {
+                        throw ThrowFault("NOT_FOUND", "Usuario no encontrado.");
+                    }
+
+                    Logger.DebugFormat("GetMyProfile: UserId={0} found.", userId);
+
                     return new UpdateAccountResponse
                     {
                         UserId = rd.GetInt32(0),
@@ -160,108 +228,95 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        public UpdateAccountResponse UpdateAccount(UpdateAccountRequest req)
+        public UpdateAccountResponse UpdateAccount(UpdateAccountRequest request)
         {
-            if (req == null) ThrowFault("INVALID_REQUEST", "Request nulo.");
-            if (!TokenStore.TryGetUserId(req.Token, out var userId))
-                ThrowFault("UNAUTHORIZED", "Token inválido o expirado.");
-
-            var setName = !string.IsNullOrWhiteSpace(req.DisplayName);
-            var setImg = !string.IsNullOrWhiteSpace(req.ProfileImageUrl);
-            var setEmail = !string.IsNullOrWhiteSpace(req.Email);
-
-            if (!setName && !setImg && !setEmail)
-                return GetMyProfile(req.Token);
-
-            if (setName && req.DisplayName.Trim().Length > 80)
-                ThrowFault("VALIDATION_ERROR", "DisplayName máximo 80.");
-            if (setImg && req.ProfileImageUrl.Trim().Length > 500)
-                ThrowFault("VALIDATION_ERROR", "ProfileImageUrl máximo 500.");
-            if (setEmail)
+            if (request == null)
             {
-                var email = req.Email.Trim();
-                if (!IsValidEmail(email))
-                    ThrowFault("VALIDATION_ERROR", "Email inválido.");
-
-                const string qExists = "SELECT 1 FROM dbo.Accounts WHERE email = @E AND account_id <> @Id;";
-                using (var cn = new SqlConnection(Cnx))
-                using (var cmd = new SqlCommand(qExists, cn))
-                {
-                    cmd.Parameters.Add("@E", SqlDbType.NVarChar, 320).Value = email;
-                    cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
-                    cn.Open();
-                    var exists = cmd.ExecuteScalar();
-                    if (exists != null) ThrowFault("EMAIL_TAKEN", "Ese email ya está en uso.");
-                }
+                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
             }
 
-            if (setName || setImg)
-            {
-                var sql = "UPDATE dbo.Users SET ";
-                if (setName) sql += "display_name = @DisplayName";
-                if (setImg) sql += (setName ? ", " : "") + "profile_image_url = @ImageUrl";
-                sql += " WHERE user_id = @Id;";
+            var userId = EnsureAuthorizedAndGetUserId(request.Token);
 
-                using (var cn = new SqlConnection(Cnx))
-                using (var cmd = new SqlCommand(sql, cn))
-                {
-                    cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
-                    if (setName) cmd.Parameters.Add("@DisplayName", SqlDbType.NVarChar, 80).Value = req.DisplayName.Trim();
-                    if (setImg) cmd.Parameters.Add("@ImageUrl", SqlDbType.NVarChar, 500).Value = req.ProfileImageUrl.Trim();
-                    cn.Open();
-                    var rows = cmd.ExecuteNonQuery();
-                    if (rows == 0) ThrowFault("NOT_FOUND", "Usuario no encontrado.");
-                }
+            var hasDisplayNameChange = !string.IsNullOrWhiteSpace(request.DisplayName);
+            var hasProfileImageChange = !string.IsNullOrWhiteSpace(request.ProfileImageUrl);
+            var hasEmailChange = !string.IsNullOrWhiteSpace(request.Email);
+
+            if (!hasDisplayNameChange && !hasProfileImageChange && !hasEmailChange)
+            {
+                Logger.DebugFormat("UpdateAccount: no changes detected. UserId={0}", userId);
+                return GetMyProfile(request.Token);
             }
 
-            if (setEmail)
+            ValidateProfileChanges(request, hasDisplayNameChange, hasProfileImageChange);
+
+            string normalizedEmail = null;
+            if (hasEmailChange)
             {
-                const string qUpd = "UPDATE dbo.Accounts SET email = @E WHERE account_id = @Id;";
-                using (var cn = new SqlConnection(Cnx))
-                using (var cmd = new SqlCommand(qUpd, cn))
-                {
-                    cmd.Parameters.Add("@E", SqlDbType.NVarChar, 320).Value = req.Email.Trim();
-                    cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
-                    cn.Open();
-                    var rows = cmd.ExecuteNonQuery();
-                    if (rows == 0) ThrowFault("NOT_FOUND", "Cuenta no encontrada.");
-                }
+                normalizedEmail = ValidateAndNormalizeEmail(request.Email);
+                EnsureEmailIsNotTaken(normalizedEmail, userId);
             }
 
-            return GetMyProfile(req.Token);
+            if (hasDisplayNameChange || hasProfileImageChange)
+            {
+                UpdateUserProfile(request, userId, hasDisplayNameChange, hasProfileImageChange);
+            }
+
+            if (hasEmailChange)
+            {
+                UpdateUserEmail(normalizedEmail, userId);
+            }
+
+            Logger.InfoFormat(
+                "UpdateAccount: UserId={0}, DisplayNameChange={1}, ProfileImageChange={2}, EmailChange={3}",
+                userId,
+                hasDisplayNameChange,
+                hasProfileImageChange,
+                hasEmailChange);
+
+            return GetMyProfile(request.Token);
         }
+
         public CreateLobbyResponse CreateLobby(CreateLobbyRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request nulo.");
+            if (request == null)
+            {
+                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+            }
+
             var ownerId = EnsureAuthorizedAndGetUserId(request.Token);
 
             int lobbyId;
             Guid lobbyUid;
             string accessCode;
 
-            using (var cn = new SqlConnection(Cnx))
+            using (var sqlConnection = new SqlConnection(Connection))
             {
-                cn.Open();
+                sqlConnection.Open();
 
-                using (var clean = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", cn))
+                using (var clean = new SqlCommand(LobbySql.Text.SP_LOBBY_LEAVE_ALL_BY_USER, sqlConnection))
                 {
-                    clean.CommandType = System.Data.CommandType.StoredProcedure;
+                    clean.CommandType = CommandType.StoredProcedure;
                     clean.Parameters.Add("@UserId", SqlDbType.Int).Value = ownerId;
                     clean.ExecuteNonQuery();
                 }
-                using (var cmd = new SqlCommand("dbo.usp_Lobby_Create", cn))
+
+                using (var sqlCommand = new SqlCommand(LobbySql.Text.SP_LOBBY_CREATE, sqlConnection))
                 {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.Add("@OwnerUserId", SqlDbType.Int).Value = ownerId;
-                    cmd.Parameters.Add("@Name", SqlDbType.NVarChar, 80).Value =
+                    sqlCommand.CommandType = CommandType.StoredProcedure;
+                    sqlCommand.Parameters.Add("@OwnerUserId", SqlDbType.Int).Value = ownerId;
+                    sqlCommand.Parameters.Add("@Name", SqlDbType.NVarChar, MAX_DISPLAY_NAME_LENGTH).Value =
                         string.IsNullOrWhiteSpace(request.LobbyName) ? (object)DBNull.Value : request.LobbyName.Trim();
-                    cmd.Parameters.Add("@MaxPlayers", SqlDbType.TinyInt).Value = request.MaxPlayers > 0 ? request.MaxPlayers : 8;
+                    sqlCommand.Parameters.Add("@MaxPlayers", SqlDbType.TinyInt).Value =
+                        request.MaxPlayers > 0 ? request.MaxPlayers : DEFAULT_MAX_PLAYERS;
 
-                    var pId = cmd.Parameters.Add("@LobbyId", SqlDbType.Int); pId.Direction = ParameterDirection.Output;
-                    var pUid = cmd.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier); pUid.Direction = ParameterDirection.Output;
-                    var pCode = cmd.Parameters.Add("@AccessCode", SqlDbType.NVarChar, 12); pCode.Direction = ParameterDirection.Output;
+                    var pId = sqlCommand.Parameters.Add("@LobbyId", SqlDbType.Int);
+                    pId.Direction = ParameterDirection.Output;
+                    var pUid = sqlCommand.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier);
+                    pUid.Direction = ParameterDirection.Output;
+                    var pCode = sqlCommand.Parameters.Add("@AccessCode", SqlDbType.NVarChar, ACCESS_CODE_MAX_LENGTH);
+                    pCode.Direction = ParameterDirection.Output;
 
-                    cmd.ExecuteNonQuery();
+                    sqlCommand.ExecuteNonQuery();
 
                     lobbyId = (int)pId.Value;
                     lobbyUid = (Guid)pUid.Value;
@@ -269,89 +324,218 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
             }
 
-            var cb = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
-            AddCallbackForLobby(lobbyUid, cb);
+            Logger.InfoFormat(
+                "CreateLobby: Lobby created. LobbyIdInt={0}, LobbyUid={1}, OwnerUserId={2}",
+                lobbyId,
+                lobbyUid,
+                ownerId);
+
+            var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
+            AddCallbackForLobby(lobbyUid, callback);
 
             var info = LoadLobbyInfoByIntId(lobbyId);
             if (string.IsNullOrWhiteSpace(info.AccessCode))
+            {
                 info.AccessCode = accessCode;
+            }
 
-            cb.OnLobbyUpdated(info);
+            callback.OnLobbyUpdated(info);
 
             return new CreateLobbyResponse { Lobby = info };
         }
 
         public JoinByCodeResponse JoinByCode(JoinByCodeRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request nulo.");
+            if (request == null)
+            {
+                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+            }
+
             if (string.IsNullOrWhiteSpace(request.AccessCode))
-                ThrowFault("INVALID_REQUEST", "AccessCode requerido.");
+            {
+                throw ThrowFault("INVALID_REQUEST", "AccessCode requerido.");
+            }
 
             var userId = EnsureAuthorizedAndGetUserId(request.Token);
 
             int lobbyId;
             Guid lobbyUid;
 
-            using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand("dbo.usp_Lobby_JoinByCode", cn))
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.SP_LOBBY_JOIN_BY_CODE, sqlConnection))
             {
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
-                cmd.Parameters.Add("@AccessCode", SqlDbType.NVarChar, 12).Value = request.AccessCode.Trim().ToUpperInvariant();
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                sqlCommand.Parameters.Add("@AccessCode", SqlDbType.NVarChar, ACCESS_CODE_MAX_LENGTH).Value =
+                    request.AccessCode.Trim().ToUpperInvariant();
 
-                var pId = cmd.Parameters.Add("@LobbyId", SqlDbType.Int); pId.Direction = ParameterDirection.Output;
-                var pUid = cmd.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier); pUid.Direction = ParameterDirection.Output;
+                var pId = sqlCommand.Parameters.Add("@LobbyId", SqlDbType.Int);
+                pId.Direction = ParameterDirection.Output;
+                var pUid = sqlCommand.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier);
+                pUid.Direction = ParameterDirection.Output;
 
-                cn.Open();
-                cmd.ExecuteNonQuery();
+                sqlConnection.Open();
+                sqlCommand.ExecuteNonQuery();
 
                 lobbyId = (int)pId.Value;
                 lobbyUid = (Guid)pUid.Value;
             }
 
-            var cb = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
-            AddCallbackForLobby(lobbyUid, cb);
+            Logger.InfoFormat(
+                "JoinByCode: UserId={0} joined lobby. LobbyIdInt={1}, LobbyUid={2}, AccessCode={3}",
+                userId,
+                lobbyId,
+                lobbyUid,
+                request.AccessCode);
+
+            var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
+            AddCallbackForLobby(lobbyUid, callback);
 
             var info = LoadLobbyInfoByIntId(lobbyId);
-            cb.OnLobbyUpdated(info);
+            callback.OnLobbyUpdated(info);
 
             return new JoinByCodeResponse { Lobby = info };
         }
+
         private static int EnsureAuthorizedAndGetUserId(string token)
         {
             if (!TokenStore.TryGetUserId(token, out var userId))
-                ThrowFault("UNAUTHORIZED", "Token inválido o expirado.");
+            {
+                throw ThrowFault("UNAUTHORIZED", "Token inválido o expirado.");
+            }
+
             return userId;
+        }
+
+        private static void ValidateProfileChanges(
+            UpdateAccountRequest request,
+            bool hasDisplayNameChange,
+            bool hasProfileImageChange)
+        {
+            if (hasDisplayNameChange && request.DisplayName.Trim().Length > MAX_DISPLAY_NAME_LENGTH)
+            {
+                throw ThrowFault("VALIDATION_ERROR", $"DisplayName máximo {MAX_DISPLAY_NAME_LENGTH}.");
+            }
+
+            if (hasProfileImageChange && request.ProfileImageUrl.Trim().Length > MAX_PROFILE_IMAGE_URL_LENGTH)
+            {
+                throw ThrowFault("VALIDATION_ERROR", $"ProfileImageUrl máximo {MAX_PROFILE_IMAGE_URL_LENGTH}.");
+            }
+        }
+
+        private static string ValidateAndNormalizeEmail(string email)
+        {
+            var trimmedEmail = (email ?? string.Empty).Trim();
+
+            if (!IsValidEmail(trimmedEmail))
+            {
+                throw ThrowFault("VALIDATION_ERROR", "Email inválido.");
+            }
+
+            if (trimmedEmail.Length > MAX_EMAIL_LENGTH)
+            {
+                throw ThrowFault("VALIDATION_ERROR", $"Email máximo {MAX_EMAIL_LENGTH}.");
+            }
+
+            return trimmedEmail;
+        }
+
+        private static void EnsureEmailIsNotTaken(string email, int userId)
+        {
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.EMAIL_EXISTS_EXCEPT_ID, sqlConnection))
+            {
+                sqlCommand.Parameters.Add("@E", SqlDbType.NVarChar, MAX_EMAIL_LENGTH).Value = email;
+                sqlCommand.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
+                sqlConnection.Open();
+                var exists = sqlCommand.ExecuteScalar();
+                if (exists != null)
+                {
+                    throw ThrowFault("EMAIL_TAKEN", "Ese email ya está en uso.");
+                }
+            }
+        }
+
+        private static void UpdateUserProfile(
+            UpdateAccountRequest request,
+            int userId,
+            bool hasDisplayNameChange,
+            bool hasProfileImageChange)
+        {
+            var sqlLobby = LobbySql.BuildUpdateUser(hasDisplayNameChange, hasProfileImageChange);
+
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(sqlLobby, sqlConnection))
+            {
+                sqlCommand.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
+
+                if (hasDisplayNameChange)
+                {
+                    sqlCommand.Parameters.Add("@DisplayName", SqlDbType.NVarChar, MAX_DISPLAY_NAME_LENGTH)
+                        .Value = request.DisplayName.Trim();
+                }
+
+                if (hasProfileImageChange)
+                {
+                    sqlCommand.Parameters.Add("@ImageUrl", SqlDbType.NVarChar, MAX_PROFILE_IMAGE_URL_LENGTH)
+                        .Value = request.ProfileImageUrl.Trim();
+                }
+
+                sqlConnection.Open();
+                var rows = sqlCommand.ExecuteNonQuery();
+                if (rows == 0)
+                {
+                    throw ThrowFault("NOT_FOUND", "Usuario no encontrado.");
+                }
+            }
+        }
+
+        private static void UpdateUserEmail(string email, int userId)
+        {
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.UPDATE_ACCOUNT_EMAIL, sqlConnection))
+            {
+                sqlCommand.Parameters.Add("@E", SqlDbType.NVarChar, MAX_EMAIL_LENGTH).Value = email;
+                sqlCommand.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
+                sqlConnection.Open();
+                var rows = sqlCommand.ExecuteNonQuery();
+                if (rows == 0)
+                {
+                    throw ThrowFault("NOT_FOUND", "Cuenta no encontrada.");
+                }
+            }
         }
 
         private static int GetLobbyIdFromUid(Guid lobbyUid)
         {
-            using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand("SELECT lobby_id FROM dbo.Lobbies WHERE lobby_uid = @u;", cn))
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.GET_LOBBY_ID_FROM_UID, sqlConnection))
             {
-                cmd.Parameters.Add("@u", SqlDbType.UniqueIdentifier).Value = lobbyUid;
-                cn.Open();
-                var obj = cmd.ExecuteScalar();
-                if (obj == null) ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                sqlCommand.Parameters.Add("@u", SqlDbType.UniqueIdentifier).Value = lobbyUid;
+                sqlConnection.Open();
+                var obj = sqlCommand.ExecuteScalar();
+                if (obj == null)
+                {
+                    throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                }
+
                 return Convert.ToInt32(obj);
             }
         }
 
         private static LobbyInfo LoadLobbyInfoByIntId(int lobbyId)
         {
-            const string qLobby = @"
-                SELECT lobby_uid, name, max_players, access_code
-                FROM dbo.Lobbies
-                WHERE lobby_id = @id;";
-
-            using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand(qLobby, cn))
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.GET_LOBBY_BY_ID, sqlConnection))
             {
-                cmd.Parameters.Add("@id", SqlDbType.Int).Value = lobbyId;
-                cn.Open();
-                using (var rd = cmd.ExecuteReader(CommandBehavior.SingleRow))
+                sqlCommand.Parameters.Add("@id", SqlDbType.Int).Value = lobbyId;
+                sqlConnection.Open();
+                using (var rd = sqlCommand.ExecuteReader(CommandBehavior.SingleRow))
                 {
-                    if (!rd.Read()) ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                    if (!rd.Read())
+                    {
+                        throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                    }
 
                     var uid = rd.GetGuid(0);
                     var name = rd.IsDBNull(1) ? null : rd.GetString(1);
@@ -363,7 +547,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         LobbyId = uid,
                         LobbyName = name,
                         MaxPlayers = maxPlayers,
-                        Players = new List<PlayerSummary>(), 
+                        Players = new List<PlayerSummary>(),
                         AccessCode = accessCode
                     };
                 }
@@ -372,28 +556,45 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static string GetUserDisplayName(int userId)
         {
-            const string sql = "SELECT display_name FROM dbo.Users WHERE user_id = @Id;";
-            using (var cn = new SqlConnection(Cnx))
-            using (var cmd = new SqlCommand(sql, cn))
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.GET_USER_DISPLAY_NAME, sqlConnection))
             {
-                cmd.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
-                cn.Open();
-                var obj = cmd.ExecuteScalar();
+                sqlCommand.Parameters.Add("@Id", SqlDbType.Int).Value = userId;
+                sqlConnection.Open();
+                var obj = sqlCommand.ExecuteScalar();
                 var name = (obj == null || obj == DBNull.Value) ? null : Convert.ToString(obj);
-                return string.IsNullOrWhiteSpace(name) ? ("Jugador " + userId) : name.Trim();
+                var finalName = string.IsNullOrWhiteSpace(name) ? "Jugador " + userId : name.Trim();
+
+                Logger.DebugFormat("GetUserDisplayName: UserId={0}, DisplayName={1}", userId, finalName);
+
+                return finalName;
             }
         }
 
         private static bool IsValidEmail(string email)
         {
-            try { var _ = new System.Net.Mail.MailAddress(email); return true; }
-            catch { return false; }
+            try
+            {
+                var _ = new System.Net.Mail.MailAddress(email);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
-        private static void ThrowFault(string code, string message)
+        private static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
-            var fault = new ServiceFault { Code = code, Message = message };
-            throw new FaultException<ServiceFault>(fault, new FaultReason(message));
+            Logger.WarnFormat("LobbyService fault. Code='{0}', Message='{1}'", code, message);
+
+            var fault = new ServiceFault
+            {
+                Code = code,
+                Message = message
+            };
+
+            return new FaultException<ServiceFault>(fault, new FaultReason(message));
         }
     }
 }

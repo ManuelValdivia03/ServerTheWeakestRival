@@ -4,6 +4,7 @@ using ServicesTheWeakestRival.Contracts.Data;
 
 namespace ServicesTheWeakestRival.Contracts.Services
 {
+    [ServiceContract]
     public interface ILobbyClientCallback
     {
         [OperationContract(IsOneWay = true)] void OnLobbyUpdated(LobbyInfo lobby);

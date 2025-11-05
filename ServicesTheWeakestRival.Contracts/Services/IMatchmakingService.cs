@@ -4,6 +4,7 @@ using ServicesTheWeakestRival.Contracts.Data;
 
 namespace ServicesTheWeakestRival.Contracts.Services
 {
+    [ServiceContract]
     public interface IMatchmakingClientCallback
     {
         [OperationContract(IsOneWay = true)] void OnMatchCreated(MatchInfo match);

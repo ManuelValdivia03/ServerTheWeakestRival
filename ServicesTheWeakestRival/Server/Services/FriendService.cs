@@ -5,25 +5,25 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.ServiceModel;
-using System.Text;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
-using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services.Logic;
+using log4net;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
     [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerCall)]
     public sealed class FriendService : IFriendService
     {
-        // ====== Config y límites (sin números mágicos) ======
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(FriendService));
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
-        private const int OnlineWindowSeconds = 75;
-        private const int MaxEmailLength = 320;
-        private const int MaxDisplayNameLength = 100;
-        private const int DeviceMaxLength = 64;
-        private const int DefaultMaxResults = 20;
-        private const int MaxResultsLimit = 100;
+        private const int ONLINE_WINDOW_SECONDS = 75;
+        private const int MAX_EMAIL_LENGTH = 320;
+        private const int MAX_DISPLAY_NAME_LENGTH = 100;
+        private const int DEVICE_MAX_LENGTH = 64;
+        private const int DEFAULT_MAX_RESULTS = 20;
+        private const int MAX_RESULTS_LIMIT = 100;
 
         private enum FriendRequestState : byte
         {
@@ -37,17 +37,41 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             get
             {
-                var cs = ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"];
-                if (cs == null || string.IsNullOrWhiteSpace(cs.ConnectionString))
+                var configurationString = ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"];
+                if (configurationString == null || string.IsNullOrWhiteSpace(configurationString.ConnectionString))
+                {
+                    Logger.Error("Missing connection string 'TheWeakestRivalDb'.");
                     ThrowFault("CONFIG_ERROR", "Missing connection string 'TheWeakestRivalDb'.");
-                return cs.ConnectionString;
+                }
+
+                return configurationString.ConnectionString;
             }
         }
 
         private static void ThrowFault(string code, string message)
         {
-            var fault = new ServiceFault { Code = code, Message = message };
+            Logger.WarnFormat("Service fault. Code='{0}', Message='{1}'", code, message);
+
+            var fault = new ServiceFault
+            {
+                Code = code,
+                Message = message
+            };
+
             throw new FaultException<ServiceFault>(fault, new FaultReason(message));
+        }
+
+        private static void ThrowTechnicalFault(string code, string userMessage, string context, Exception ex)
+        {
+            Logger.Error(context, ex);
+
+            var fault = new ServiceFault
+            {
+                Code = code,
+                Message = userMessage
+            };
+
+            throw new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
         }
 
         private static bool IsUniqueViolation(SqlException ex) =>
@@ -55,193 +79,38 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static int Authenticate(string token)
         {
-            if (string.IsNullOrWhiteSpace(token)) ThrowFault("AUTH_REQUIRED", "Missing token.");
-            if (!TokenCache.TryGetValue(token, out var authToken)) ThrowFault("AUTH_INVALID", "Invalid token.");
-            if (authToken.ExpiresAtUtc <= DateTime.UtcNow) ThrowFault("AUTH_EXPIRED", "Token expired.");
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                ThrowFault("AUTH_REQUIRED", "Missing token.");
+            }
+
+            if (!TokenCache.TryGetValue(token, out var authToken))
+            {
+                ThrowFault("AUTH_INVALID", "Invalid token.");
+            }
+
+            if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
+            {
+                ThrowFault("AUTH_EXPIRED", "Token expired.");
+            }
+
             return authToken.UserId;
         }
 
-        // ====== SQL ======
-        private static class SqlText
-        {
-            public const string ExistsFriend = @"
-                SELECT 1 
-                FROM dbo.FriendRequests 
-                WHERE ((from_user_id = @Me AND to_user_id = @Target) OR (from_user_id = @Target AND to_user_id = @Me))
-                  AND status = @Accepted;";
-
-            public const string PendingOut = @"
-                SELECT friend_request_id 
-                FROM dbo.FriendRequests 
-                WHERE from_user_id = @Me AND to_user_id = @Target AND status = @Pending;";
-
-            public const string PendingIn = @"
-                SELECT friend_request_id 
-                FROM dbo.FriendRequests 
-                WHERE from_user_id = @Target AND to_user_id = @Me AND status = @Pending;";
-
-            public const string AcceptIncoming = @"
-                UPDATE dbo.FriendRequests
-                SET status = @Accepted, responded_at = SYSUTCDATETIME()
-                OUTPUT INSERTED.friend_request_id
-                WHERE friend_request_id = @ReqId;";
-
-            public const string InsertRequest = @"
-                INSERT INTO dbo.FriendRequests (from_user_id, to_user_id, status, sent_at, responded_at)
-                OUTPUT INSERTED.friend_request_id
-                VALUES (@Me, @Target, @Pending, SYSUTCDATETIME(), NULL);";
-
-            public const string ReopenRequest = @"
-                UPDATE dbo.FriendRequests
-                SET status = @Pending, sent_at = SYSUTCDATETIME(), responded_at = NULL
-                OUTPUT INSERTED.friend_request_id
-                WHERE from_user_id = @Me AND to_user_id = @Target AND status IN (@Declined, @Cancelled);";
-
-            public const string CheckRequest = @"
-                SELECT friend_request_id, from_user_id, to_user_id, status
-                FROM dbo.FriendRequests
-                WHERE friend_request_id = @Id;";
-
-            public const string AcceptRequest = @"
-                UPDATE dbo.FriendRequests
-                SET status = @Accepted, responded_at = SYSUTCDATETIME()
-                WHERE friend_request_id = @Id
-                  AND to_user_id = @Me
-                  AND status = @Pending;";
-
-            public const string GetRequest = CheckRequest;
-
-            public const string RejectRequest = @"
-                UPDATE dbo.FriendRequests
-                SET status = @Rejected, responded_at = SYSUTCDATETIME()
-                WHERE friend_request_id = @Id
-                  AND to_user_id = @Me
-                  AND status = @Pending;";
-
-            public const string CancelRequest = @"
-                UPDATE dbo.FriendRequests
-                SET status = @Cancelled, responded_at = SYSUTCDATETIME()
-                WHERE friend_request_id = @Id
-                  AND from_user_id = @Me
-                  AND status = @Pending;";
-
-            public const string LatestAccepted = @"
-                SELECT TOP(1) friend_request_id
-                FROM dbo.FriendRequests
-                WHERE status = @Accepted
-                  AND ((from_user_id = @Me AND to_user_id = @Other) OR (from_user_id = @Other AND to_user_id = @Me))
-                ORDER BY responded_at DESC;";
-
-            public const string MarkCancelled = @"
-                UPDATE dbo.FriendRequests
-                SET status = @Cancelled, responded_at = SYSUTCDATETIME()
-                WHERE friend_request_id = @Id;";
-
-            public const string Friends = @"
-                SELECT from_user_id, to_user_id, responded_at
-                FROM dbo.FriendRequests
-                WHERE status = @Accepted
-                  AND (from_user_id = @Me OR to_user_id = @Me);";
-
-            public const string PendingIncoming = @"
-                SELECT friend_request_id, from_user_id, to_user_id, sent_at
-                FROM dbo.FriendRequests
-                WHERE to_user_id = @Me AND status = @Pending
-                ORDER BY sent_at DESC;";
-
-            public const string PendingOutgoing = @"
-                SELECT friend_request_id, from_user_id, to_user_id, sent_at
-                FROM dbo.FriendRequests
-                WHERE from_user_id = @Me AND status = @Pending
-                ORDER BY sent_at DESC;";
-
-            public const string PresenceUpdate = @"
-                UPDATE dbo.UserPresence
-                SET last_seen_utc = SYSUTCDATETIME(), device = @Dev
-                WHERE user_id = @Me;";
-
-            public const string PresenceInsert = @"
-                INSERT INTO dbo.UserPresence (user_id, last_seen_utc, device)
-                VALUES (@Me, SYSUTCDATETIME(), @Dev);";
-
-            public const string FriendsPresence = @"
-                DECLARE @now DATETIME2(3) = SYSUTCDATETIME();
-                SELECT F.friend_id,
-                       CASE WHEN P.last_seen_utc IS NOT NULL
-                                 AND P.last_seen_utc >= DATEADD(SECOND, -@Window, @now)
-                            THEN 1 ELSE 0 END AS is_online,
-                       P.last_seen_utc
-                FROM (
-                    SELECT CASE WHEN fr.from_user_id = @Me THEN fr.to_user_id ELSE fr.from_user_id END AS friend_id
-                    FROM dbo.FriendRequests fr
-                    WHERE fr.status = @Accepted AND (fr.from_user_id = @Me OR fr.to_user_id = @Me)
-                ) F
-                LEFT JOIN dbo.UserPresence P ON P.user_id = F.friend_id
-                ORDER BY F.friend_id;";
-
-            public const string FriendSummary = @"
-                SELECT a.account_id, a.email, u.display_name, u.profile_image_url, p.last_seen_utc
-                FROM dbo.Accounts a
-                LEFT JOIN dbo.Users u ON u.user_id = a.account_id
-                LEFT JOIN dbo.UserPresence p ON p.user_id = a.account_id
-                WHERE a.account_id = @Id;";
-
-            public const string SearchAccounts = @"
-                SELECT TOP(@Max)
-                    a.account_id,
-                    ISNULL(u.display_name, a.email) AS display_name,
-                    a.email,
-                    u.profile_image_url,
-                    -- flags
-                    CASE WHEN EXISTS (
-                        SELECT 1 FROM dbo.FriendRequests fr
-                        WHERE fr.status = 1
-                          AND ((fr.from_user_id = @Me AND fr.to_user_id = a.account_id)
-                            OR (fr.from_user_id = a.account_id AND fr.to_user_id = @Me))
-                    ) THEN 1 ELSE 0 END AS is_friend,
-                    CASE WHEN EXISTS (
-                        SELECT 1 FROM dbo.FriendRequests fr
-                        WHERE fr.status = 0 AND fr.from_user_id = @Me AND fr.to_user_id = a.account_id
-                    ) THEN 1 ELSE 0 END AS has_outgoing,
-                    CASE WHEN EXISTS (
-                        SELECT 1 FROM dbo.FriendRequests fr
-                        WHERE fr.status = 0 AND fr.from_user_id = a.account_id AND fr.to_user_id = @Me
-                    ) THEN 1 ELSE 0 END AS has_incoming,
-                    (
-                        SELECT TOP(1) fr.friend_request_id
-                        FROM dbo.FriendRequests fr
-                        WHERE fr.status = 0 AND fr.from_user_id = a.account_id AND fr.to_user_id = @Me
-                        ORDER BY fr.sent_at DESC
-                    ) AS incoming_id
-                FROM dbo.Accounts a
-                LEFT JOIN dbo.Users u ON u.user_id = a.account_id
-                WHERE a.account_id <> @Me
-                  AND (a.email LIKE @Qemail OR ISNULL(u.display_name, '') LIKE @Qname)
-                ORDER BY display_name;";
-        }
-
-        // ====== Logger provisional (consola) ======
-        private static class AppLogger
-        {
-            public static void Info(string message) =>
-                Console.WriteLine($"[INFO ] {DateTime.UtcNow:o} {message}");
-
-            public static void Warn(Exception ex, string message) =>
-                Console.WriteLine($"[WARN ] {DateTime.UtcNow:o} {message} | {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
-
-            public static void Error(Exception ex, string message) =>
-                Console.WriteLine($"[ERROR] {DateTime.UtcNow:o} {message} | {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
-        }
-
-        // ====== API ======
         public SendFriendRequestResponse SendFriendRequest(SendFriendRequestRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
             var targetAccountId = request.TargetAccountId;
 
-            if (myAccountId == targetAccountId) ThrowFault("FR_SELF", "No puedes enviarte solicitud a ti mismo.");
+            if (myAccountId == targetAccountId)
+            {
+                ThrowFault("FR_SELF", "No puedes enviarte solicitud a ti mismo.");
+            }
 
             try
             {
@@ -250,32 +119,43 @@ namespace ServicesTheWeakestRival.Server.Services
                     connection.Open();
                     using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
-                        // ¿Ya son amigos?
-                        using (var command = new SqlCommand(SqlText.ExistsFriend, connection, transaction))
+                        using (var command = new SqlCommand(FriendSql.Text.EXISTS_FRIEND, connection, transaction))
                         {
                             command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                             command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
                             command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
 
                             var scalarValue = command.ExecuteScalar();
-                            if (scalarValue != null) ThrowFault("FR_ALREADY", "Ya existe una amistad entre estas cuentas.");
+                            if (scalarValue != null)
+                            {
+                                ThrowFault("FR_ALREADY", "Ya existe una amistad entre estas cuentas.");
+                            }
                         }
 
-                        // ¿Ya tengo una saliente pendiente?
                         int? existingOutgoingId = null;
-                        using (var command = new SqlCommand(SqlText.PendingOut, connection, transaction))
+                        using (var command = new SqlCommand(FriendSql.Text.PENDING_OUT, connection, transaction))
                         {
                             command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                             command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
                             command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                             var scalarValue = command.ExecuteScalar();
-                            if (scalarValue != null) existingOutgoingId = Convert.ToInt32(scalarValue);
+                            if (scalarValue != null)
+                            {
+                                existingOutgoingId = Convert.ToInt32(scalarValue);
+                            }
                         }
 
                         if (existingOutgoingId.HasValue)
                         {
                             transaction.Commit();
+
+                            Logger.InfoFormat(
+                                "SendFriendRequest: existing outgoing request reused. Me={0}, Target={1}, RequestId={2}",
+                                myAccountId,
+                                targetAccountId,
+                                existingOutgoingId.Value);
+
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = existingOutgoingId.Value,
@@ -283,22 +163,24 @@ namespace ServicesTheWeakestRival.Server.Services
                             };
                         }
 
-                        // ¿El otro ya me envió una y está pendiente? -> aceptar
                         int? incomingId = null;
-                        using (var command = new SqlCommand(SqlText.PendingIn, connection, transaction))
+                        using (var command = new SqlCommand(FriendSql.Text.PENDING_IN, connection, transaction))
                         {
                             command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                             command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
                             command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                             var scalarValue = command.ExecuteScalar();
-                            if (scalarValue != null) incomingId = Convert.ToInt32(scalarValue);
+                            if (scalarValue != null)
+                            {
+                                incomingId = Convert.ToInt32(scalarValue);
+                            }
                         }
 
                         if (incomingId.HasValue)
                         {
                             int acceptedId;
-                            using (var command = new SqlCommand(SqlText.AcceptIncoming, connection, transaction))
+                            using (var command = new SqlCommand(FriendSql.Text.ACCEPT_INCOMING, connection, transaction))
                             {
                                 command.Parameters.Add("@ReqId", SqlDbType.Int).Value = incomingId.Value;
                                 command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
@@ -306,6 +188,13 @@ namespace ServicesTheWeakestRival.Server.Services
                             }
 
                             transaction.Commit();
+
+                            Logger.InfoFormat(
+                                "SendFriendRequest: converted incoming request to accepted. Me={0}, Target={1}, RequestId={2}",
+                                myAccountId,
+                                targetAccountId,
+                                acceptedId);
+
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = acceptedId,
@@ -313,11 +202,10 @@ namespace ServicesTheWeakestRival.Server.Services
                             };
                         }
 
-                        // Crear solicitud; si choca por unique, reabrir
                         try
                         {
                             int newId;
-                            using (var command = new SqlCommand(SqlText.InsertRequest, connection, transaction))
+                            using (var command = new SqlCommand(FriendSql.Text.INSERT_REQUEST, connection, transaction))
                             {
                                 command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                                 command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
@@ -326,6 +214,13 @@ namespace ServicesTheWeakestRival.Server.Services
                             }
 
                             transaction.Commit();
+
+                            Logger.InfoFormat(
+                                "SendFriendRequest: new request created. Me={0}, Target={1}, RequestId={2}",
+                                myAccountId,
+                                targetAccountId,
+                                newId);
+
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = newId,
@@ -335,7 +230,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         catch (SqlException ex) when (IsUniqueViolation(ex))
                         {
                             int reopenedId;
-                            using (var command = new SqlCommand(SqlText.ReopenRequest, connection, transaction))
+                            using (var command = new SqlCommand(FriendSql.Text.REOPEN_REQUEST, connection, transaction))
                             {
                                 command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                                 command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
@@ -344,11 +239,27 @@ namespace ServicesTheWeakestRival.Server.Services
                                 command.Parameters.Add("@Cancelled", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
 
                                 var scalarValue = command.ExecuteScalar();
-                                if (scalarValue == null) ThrowFault("FR_RACE", "No se pudo crear ni reabrir la solicitud (carrera).");
+                                if (scalarValue == null)
+                                {
+                                    Logger.WarnFormat(
+                                        "SendFriendRequest: unique violation but REOPEN_REQUEST returned null. Me={0}, Target={1}",
+                                        myAccountId,
+                                        targetAccountId);
+
+                                    ThrowFault("FR_RACE", "No se pudo crear ni reabrir la solicitud (carrera).");
+                                }
+
                                 reopenedId = Convert.ToInt32(scalarValue);
                             }
 
                             transaction.Commit();
+
+                            Logger.InfoFormat(
+                                "SendFriendRequest: duplicate handled by reopening request. Me={0}, Target={1}, RequestId={2}",
+                                myAccountId,
+                                targetAccountId,
+                                reopenedId);
+
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = reopenedId,
@@ -358,33 +269,56 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at SendFriendRequest"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at SendFriendRequest"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at SendFriendRequest"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at SendFriendRequest.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at SendFriendRequest.",
+                    ex);
+            }
+
+            // Inalcanzable, pero requerido por el compilador.
+            return new SendFriendRequestResponse();
         }
 
         public AcceptFriendRequestResponse AcceptFriendRequest(AcceptFriendRequestRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
 
             try
             {
-                int fromAccountId = -1, toAccountId = -1;
-                byte currentStatus = (byte)FriendRequestState.Pending;
+                int fromAccountId;
+                int toAccountId;
+                byte currentStatus;
 
                 using (var connection = new SqlConnection(ConnectionString))
                 {
                     connection.Open();
 
-                    using (var command = new SqlCommand(SqlText.CheckRequest, connection))
+                    using (var command = new SqlCommand(FriendSql.Text.CHECK_REQUEST, connection))
                     {
                         command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
 
                         using (var reader = command.ExecuteReader(CommandBehavior.SingleRow))
                         {
-                            if (!reader.Read()) ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
+                            if (!reader.Read())
+                            {
+                                ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
+                            }
 
                             fromAccountId = reader.GetInt32(1);
                             toAccountId = reader.GetInt32(2);
@@ -392,11 +326,17 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
                     }
 
-                    if (toAccountId != myAccountId) ThrowFault("FORBIDDEN", "No puedes aceptar esta solicitud.");
-                    if (currentStatus != (byte)FriendRequestState.Pending)
-                        ThrowFault("FR_NOT_PENDING", "La solicitud ya fue procesada.");
+                    if (toAccountId != myAccountId)
+                    {
+                        ThrowFault("FORBIDDEN", "No puedes aceptar esta solicitud.");
+                    }
 
-                    using (var command = new SqlCommand(SqlText.AcceptRequest, connection))
+                    if (currentStatus != (byte)FriendRequestState.Pending)
+                    {
+                        ThrowFault("FR_NOT_PENDING", "La solicitud ya fue procesada.");
+                    }
+
+                    using (var command = new SqlCommand(FriendSql.Text.ACCEPT_REQUEST, connection))
                     {
                         command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
                         command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
@@ -404,9 +344,18 @@ namespace ServicesTheWeakestRival.Server.Services
                         command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
 
                         var affectedRows = command.ExecuteNonQuery();
-                        if (affectedRows == 0) ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                        if (affectedRows == 0)
+                        {
+                            ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                        }
                     }
                 }
+
+                Logger.InfoFormat(
+                    "AcceptFriendRequest: request accepted. RequestId={0}, Me={1}, From={2}",
+                    request.FriendRequestId,
+                    myAccountId,
+                    fromAccountId);
 
                 return new AcceptFriendRequestResponse
                 {
@@ -420,20 +369,39 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 };
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at AcceptFriendRequest"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at AcceptFriendRequest"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at AcceptFriendRequest"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at AcceptFriendRequest.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at AcceptFriendRequest.",
+                    ex);
+            }
+
+            return new AcceptFriendRequestResponse();
         }
 
         public RejectFriendRequestResponse RejectFriendRequest(RejectFriendRequestRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
 
             try
             {
-                int fromAccountId, toAccountId;
+                int fromAccountId;
+                int toAccountId;
                 byte currentStatus;
 
                 using (var connection = new SqlConnection(ConnectionString))
@@ -441,12 +409,16 @@ namespace ServicesTheWeakestRival.Server.Services
                     connection.Open();
                     using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
-                        using (var command = new SqlCommand(SqlText.GetRequest, connection, transaction))
+                        using (var command = new SqlCommand(FriendSql.Text.GET_REQUEST, connection, transaction))
                         {
                             command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
                             using (var reader = command.ExecuteReader(CommandBehavior.SingleRow))
                             {
-                                if (!reader.Read()) ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
+                                if (!reader.Read())
+                                {
+                                    ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
+                                }
+
                                 fromAccountId = reader.GetInt32(1);
                                 toAccountId = reader.GetInt32(2);
                                 currentStatus = reader.GetByte(3);
@@ -454,30 +426,43 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
 
                         if (currentStatus != (byte)FriendRequestState.Pending)
+                        {
                             ThrowFault("FR_NOT_PENDING", "La solicitud ya fue resuelta.");
+                        }
 
                         if (toAccountId == myAccountId)
                         {
-                            // Rechazar (quien recibe)
-                            using (var command = new SqlCommand(SqlText.RejectRequest, connection, transaction))
+                            using (var command = new SqlCommand(FriendSql.Text.REJECT_REQUEST, connection, transaction))
                             {
                                 command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
                                 command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                                // SQL usa @Rejected; mapeamos al valor "Declined".
                                 command.Parameters.Add("@Rejected", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Declined;
                                 command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                                 var affectedRows = command.ExecuteNonQuery();
-                                if (affectedRows == 0) ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                if (affectedRows == 0)
+                                {
+                                    ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                }
                             }
 
                             transaction.Commit();
-                            return new RejectFriendRequestResponse { Status = FriendRequestStatus.Rejected };
+
+                            Logger.InfoFormat(
+                                "RejectFriendRequest: request rejected. RequestId={0}, Me={1}, From={2}",
+                                request.FriendRequestId,
+                                myAccountId,
+                                fromAccountId);
+
+                            return new RejectFriendRequestResponse
+                            {
+                                Status = FriendRequestStatus.Rejected
+                            };
                         }
-                        else if (fromAccountId == myAccountId)
+
+                        if (fromAccountId == myAccountId)
                         {
-                            // Cancelar (quien envió)
-                            using (var command = new SqlCommand(SqlText.CancelRequest, connection, transaction))
+                            using (var command = new SqlCommand(FriendSql.Text.CANCEL_REQUEST, connection, transaction))
                             {
                                 command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
                                 command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
@@ -485,28 +470,57 @@ namespace ServicesTheWeakestRival.Server.Services
                                 command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                                 var affectedRows = command.ExecuteNonQuery();
-                                if (affectedRows == 0) ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                if (affectedRows == 0)
+                                {
+                                    ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                }
                             }
 
                             transaction.Commit();
-                            return new RejectFriendRequestResponse { Status = FriendRequestStatus.Cancelled };
+
+                            Logger.InfoFormat(
+                                "RejectFriendRequest: request cancelled. RequestId={0}, Me={1}, To={2}",
+                                request.FriendRequestId,
+                                myAccountId,
+                                toAccountId);
+
+                            return new RejectFriendRequestResponse
+                            {
+                                Status = FriendRequestStatus.Cancelled
+                            };
                         }
-                        else
-                        {
-                            ThrowFault("FR_FORBIDDEN", "No estás involucrado en esta solicitud.");
-                            return new RejectFriendRequestResponse(); // inalcanzable
-                        }
+
+                        ThrowFault("FR_FORBIDDEN", "No estás involucrado en esta solicitud.");
+                        return new RejectFriendRequestResponse();
                     }
                 }
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at RejectFriendRequest"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at RejectFriendRequest"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at RejectFriendRequest"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at RejectFriendRequest.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at RejectFriendRequest.",
+                    ex);
+            }
+
+            return new RejectFriendRequestResponse();
         }
 
         public RemoveFriendResponse RemoveFriend(RemoveFriendRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
             var otherAccountId = request.FriendAccountId;
@@ -519,23 +533,35 @@ namespace ServicesTheWeakestRival.Server.Services
                     using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
                         int? friendRequestId = null;
-                        using (var command = new SqlCommand(SqlText.LatestAccepted, connection, transaction))
+                        using (var command = new SqlCommand(FriendSql.Text.LATEST_ACCEPTED, connection, transaction))
                         {
                             command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                             command.Parameters.Add("@Other", SqlDbType.Int).Value = otherAccountId;
                             command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
 
                             var scalarValue = command.ExecuteScalar();
-                            if (scalarValue != null) friendRequestId = Convert.ToInt32(scalarValue);
+                            if (scalarValue != null)
+                            {
+                                friendRequestId = Convert.ToInt32(scalarValue);
+                            }
                         }
 
                         if (!friendRequestId.HasValue)
                         {
                             transaction.Commit();
-                            return new RemoveFriendResponse { Removed = false };
+
+                            Logger.InfoFormat(
+                                "RemoveFriend: no friendship found. Me={0}, Other={1}",
+                                myAccountId,
+                                otherAccountId);
+
+                            return new RemoveFriendResponse
+                            {
+                                Removed = false
+                            };
                         }
 
-                        using (var command = new SqlCommand(SqlText.MarkCancelled, connection, transaction))
+                        using (var command = new SqlCommand(FriendSql.Text.MARK_CANCELLED, connection, transaction))
                         {
                             command.Parameters.Add("@Id", SqlDbType.Int).Value = friendRequestId.Value;
                             command.Parameters.Add("@Cancelled", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
@@ -543,18 +569,46 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
 
                         transaction.Commit();
-                        return new RemoveFriendResponse { Removed = true };
+
+                        Logger.InfoFormat(
+                            "RemoveFriend: friendship marked as cancelled. Me={0}, Other={1}, RequestId={2}",
+                            myAccountId,
+                            otherAccountId,
+                            friendRequestId.Value);
+
+                        return new RemoveFriendResponse
+                        {
+                            Removed = true
+                        };
                     }
                 }
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at RemoveFriend"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at RemoveFriend"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at RemoveFriend"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at RemoveFriend.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at RemoveFriend.",
+                    ex);
+            }
+
+            return new RemoveFriendResponse();
         }
 
         public ListFriendsResponse ListFriends(ListFriendsRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
 
@@ -565,7 +619,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     connection.Open();
 
                     var friends = new System.Collections.Generic.List<FriendSummary>();
-                    using (var command = new SqlCommand(SqlText.Friends, connection))
+                    using (var command = new SqlCommand(FriendSql.Text.FRIENDS, connection))
                     {
                         command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                         command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
@@ -579,14 +633,14 @@ namespace ServicesTheWeakestRival.Server.Services
                                 var since = reader.IsDBNull(2) ? DateTime.UtcNow : reader.GetDateTime(2);
 
                                 var friendId = (fromId == myAccountId) ? toId : fromId;
-                                var summary = LoadFriendSummary(connection, /*transaction*/ null, friendId, since);
+                                var summary = LoadFriendSummary(connection, null, friendId, since);
                                 friends.Add(summary);
                             }
                         }
                     }
 
                     FriendRequestSummary[] incoming;
-                    using (var command = new SqlCommand(SqlText.PendingIncoming, connection))
+                    using (var command = new SqlCommand(FriendSql.Text.PENDING_INCOMING, connection))
                     {
                         command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                         command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
@@ -607,12 +661,13 @@ namespace ServicesTheWeakestRival.Server.Services
                                     ResolvedUtc = null
                                 });
                             }
+
                             incoming = list.ToArray();
                         }
                     }
 
                     FriendRequestSummary[] outgoing;
-                    using (var command = new SqlCommand(SqlText.PendingOutgoing, connection))
+                    using (var command = new SqlCommand(FriendSql.Text.PENDING_OUTGOING, connection))
                     {
                         command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                         command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
@@ -633,26 +688,54 @@ namespace ServicesTheWeakestRival.Server.Services
                                     ResolvedUtc = null
                                 });
                             }
+
                             outgoing = list.ToArray();
                         }
                     }
 
-                    return new ListFriendsResponse
+                    var response = new ListFriendsResponse
                     {
                         Friends = friends.OrderBy(f => f.DisplayName ?? f.Username).ToArray(),
                         PendingIncoming = incoming,
                         PendingOutgoing = outgoing
                     };
+
+                    Logger.InfoFormat(
+                        "ListFriends: Me={0}, Friends={1}, Incoming={2}, Outgoing={3}",
+                        myAccountId,
+                        response.Friends.Length,
+                        response.PendingIncoming.Length,
+                        response.PendingOutgoing.Length);
+
+                    return response;
                 }
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at ListFriends"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at ListFriends"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at ListFriends"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at ListFriends.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at ListFriends.",
+                    ex);
+            }
+
+            return new ListFriendsResponse();
         }
 
         public HeartbeatResponse PresenceHeartbeat(HeartbeatRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
 
@@ -662,19 +745,19 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     connection.Open();
 
-                    using (var command = new SqlCommand(SqlText.PresenceUpdate, connection))
+                    using (var command = new SqlCommand(FriendSql.Text.PRESENCE_UPDATE, connection))
                     {
                         command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                        command.Parameters.Add("@Dev", SqlDbType.NVarChar, DeviceMaxLength).Value =
+                        command.Parameters.Add("@Dev", SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
                             string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
 
                         var affectedRows = command.ExecuteNonQuery();
                         if (affectedRows == 0)
                         {
-                            using (var insertCommand = new SqlCommand(SqlText.PresenceInsert, connection))
+                            using (var insertCommand = new SqlCommand(FriendSql.Text.PRESENCE_INSERT, connection))
                             {
                                 insertCommand.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                                insertCommand.Parameters.Add("@Dev", SqlDbType.NVarChar, DeviceMaxLength).Value =
+                                insertCommand.Parameters.Add("@Dev", SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
                                     string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
                                 insertCommand.ExecuteNonQuery();
                             }
@@ -682,16 +765,44 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                return new HeartbeatResponse { Utc = DateTime.UtcNow };
+                var utcNow = DateTime.UtcNow;
+
+                Logger.DebugFormat(
+                    "PresenceHeartbeat: updated. Me={0}, Utc={1}",
+                    myAccountId,
+                    utcNow.ToString("o"));
+
+                return new HeartbeatResponse
+                {
+                    Utc = utcNow
+                };
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at PresenceHeartbeat"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at PresenceHeartbeat"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at PresenceHeartbeat"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at PresenceHeartbeat.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at PresenceHeartbeat.",
+                    ex);
+            }
+
+            return new HeartbeatResponse();
         }
 
         public GetFriendsPresenceResponse GetFriendsPresence(GetFriendsPresenceRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
 
@@ -700,12 +811,12 @@ namespace ServicesTheWeakestRival.Server.Services
                 var list = new System.Collections.Generic.List<FriendPresence>();
 
                 using (var connection = new SqlConnection(ConnectionString))
-                using (var command = new SqlCommand(SqlText.FriendsPresence, connection))
+                using (var command = new SqlCommand(FriendSql.Text.FRIENDS_PRESENCE, connection))
                 {
                     connection.Open();
                     command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                     command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
-                    command.Parameters.Add("@Window", SqlDbType.Int).Value = OnlineWindowSeconds;
+                    command.Parameters.Add("@Window", SqlDbType.Int).Value = ONLINE_WINDOW_SECONDS;
 
                     using (var reader = command.ExecuteReader())
                     {
@@ -721,35 +832,63 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                return new GetFriendsPresenceResponse { Friends = list.ToArray() };
+                Logger.DebugFormat(
+                    "GetFriendsPresence: Me={0}, Count={1}",
+                    myAccountId,
+                    list.Count);
+
+                return new GetFriendsPresenceResponse
+                {
+                    Friends = list.ToArray()
+                };
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at GetFriendsPresence"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at GetFriendsPresence"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at GetFriendsPresence"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at GetFriendsPresence.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at GetFriendsPresence.",
+                    ex);
+            }
+
+            return new GetFriendsPresenceResponse();
         }
 
         public SearchAccountsResponse SearchAccounts(SearchAccountsRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
             var query = (request.Query ?? string.Empty).Trim();
-            var maxResults = (request.MaxResults <= 0 || request.MaxResults > MaxResultsLimit) ? DefaultMaxResults : request.MaxResults;
+            var maxResults = (request.MaxResults <= 0 || request.MaxResults > MAX_RESULTS_LIMIT)
+                ? DEFAULT_MAX_RESULTS
+                : request.MaxResults;
 
             try
             {
                 var list = new System.Collections.Generic.List<SearchAccountItem>();
 
                 using (var connection = new SqlConnection(ConnectionString))
-                using (var command = new SqlCommand(SqlText.SearchAccounts, connection))
+                using (var command = new SqlCommand(FriendSql.Text.SEARCH_ACCOUNTS, connection))
                 {
                     connection.Open();
                     command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
                     command.Parameters.Add("@Max", SqlDbType.Int).Value = maxResults;
 
-                    var like = $"%{query}%";
-                    command.Parameters.Add("@Qemail", SqlDbType.NVarChar, MaxEmailLength).Value = like;
-                    command.Parameters.Add("@Qname", SqlDbType.NVarChar, MaxDisplayNameLength).Value = like;
+                    var like = "%" + query + "%";
+                    command.Parameters.Add("@Qemail", SqlDbType.NVarChar, MAX_EMAIL_LENGTH).Value = like;
+                    command.Parameters.Add("@Qname", SqlDbType.NVarChar, MAX_DISPLAY_NAME_LENGTH).Value = like;
 
                     using (var reader = command.ExecuteReader())
                     {
@@ -770,36 +909,57 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                return new SearchAccountsResponse { Results = list.ToArray() };
+                Logger.InfoFormat(
+                    "SearchAccounts: Me={0}, Query='{1}', Results={2}, MaxResults={3}",
+                    myAccountId,
+                    query,
+                    list.Count,
+                    maxResults);
+
+                return new SearchAccountsResponse
+                {
+                    Results = list.ToArray()
+                };
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at SearchAccounts"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at SearchAccounts"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at SearchAccounts"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at SearchAccounts.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at SearchAccounts.",
+                    ex);
+            }
+
+            return new SearchAccountsResponse();
         }
 
         public GetAccountsByIdsResponse GetAccountsByIds(GetAccountsByIdsRequest request)
         {
-            if (request == null) ThrowFault("INVALID_REQUEST", "Request is null.");
+            if (request == null)
+            {
+                ThrowFault("INVALID_REQUEST", "Request is null.");
+            }
 
             var myAccountId = Authenticate(request.Token);
             var ids = request.AccountIds ?? Array.Empty<int>();
-            if (ids.Length == 0) return new GetAccountsByIdsResponse();
+            if (ids.Length == 0)
+            {
+                return new GetAccountsByIdsResponse();
+            }
 
             try
             {
                 var list = new System.Collections.Generic.List<AccountMini>();
 
-                var inParamsBuilder = new StringBuilder();
-                for (int i = 0; i < ids.Length; i++)
-                {
-                    if (i > 0) inParamsBuilder.Append(",");
-                    inParamsBuilder.Append("@p").Append(i);
-                }
-
-                var sqlQuery =
-                    "SELECT a.account_id, ISNULL(u.display_name, a.email) AS display_name, a.email, u.profile_image_url " +
-                    "FROM dbo.Accounts a LEFT JOIN dbo.Users u ON u.user_id = a.account_id " +
-                    $"WHERE a.account_id IN ({inParamsBuilder}) AND a.account_id <> @Me";
+                var sqlQuery = FriendSql.BuildGetAccountsByIdsQuery(ids.Length);
 
                 using (var connection = new SqlConnection(ConnectionString))
                 using (var command = new SqlCommand(sqlQuery, connection))
@@ -807,8 +967,10 @@ namespace ServicesTheWeakestRival.Server.Services
                     connection.Open();
                     command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
 
-                    for (int i = 0; i < ids.Length; i++)
+                    for (var i = 0; i < ids.Length; i++)
+                    {
                         command.Parameters.Add("@p" + i, SqlDbType.Int).Value = ids[i];
+                    }
 
                     using (var reader = command.ExecuteReader())
                     {
@@ -825,16 +987,40 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                return new GetAccountsByIdsResponse { Accounts = list.ToArray() };
+                Logger.DebugFormat(
+                    "GetAccountsByIds: Me={0}, Requested={1}, Found={2}",
+                    myAccountId,
+                    ids.Length,
+                    list.Count);
+
+                return new GetAccountsByIdsResponse
+                {
+                    Accounts = list.ToArray()
+                };
             }
-            catch (FaultException<ServiceFault> ex) { AppLogger.Warn(ex, "Business fault at GetAccountsByIds"); throw; }
-            catch (SqlException ex) { AppLogger.Error(ex, "Database error at GetAccountsByIds"); throw; }
-            catch (Exception ex) { AppLogger.Error(ex, "Unexpected error at GetAccountsByIds"); throw; }
+            catch (SqlException ex)
+            {
+                ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    "Database error at GetAccountsByIds.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                ThrowTechnicalFault(
+                    "UNEXPECTED_ERROR",
+                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    "Unexpected error at GetAccountsByIds.",
+                    ex);
+            }
+
+            return new GetAccountsByIdsResponse();
         }
 
         private FriendSummary LoadFriendSummary(SqlConnection connection, SqlTransaction transaction, int friendId, DateTime sinceUtc)
         {
-            using (var command = new SqlCommand(SqlText.FriendSummary, connection, transaction))
+            using (var command = new SqlCommand(FriendSql.Text.FRIEND_SUMMARY, connection, transaction))
             {
                 command.Parameters.Add("@Id", SqlDbType.Int).Value = friendId;
 
@@ -848,6 +1034,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     if (!reader.Read())
                     {
+                        Logger.WarnFormat(
+                            "LoadFriendSummary: no data for FriendId={0}. Returning fallback summary.",
+                            friendId);
+
                         return new FriendSummary
                         {
                             AccountId = friendId,
@@ -860,18 +1050,34 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
 
                     accountId = reader.GetInt32(0);
-                    if (!reader.IsDBNull(1)) email = reader.GetString(1);
-                    if (!reader.IsDBNull(2)) displayName = reader.GetString(2);
-                    if (!reader.IsDBNull(3)) avatarUrl = reader.GetString(3);
-                    if (!reader.IsDBNull(4)) lastSeenUtc = reader.GetDateTime(4);
+                    if (!reader.IsDBNull(1))
+                    {
+                        email = reader.GetString(1);
+                    }
+
+                    if (!reader.IsDBNull(2))
+                    {
+                        displayName = reader.GetString(2);
+                    }
+
+                    if (!reader.IsDBNull(3))
+                    {
+                        avatarUrl = reader.GetString(3);
+                    }
+
+                    if (!reader.IsDBNull(4))
+                    {
+                        lastSeenUtc = reader.GetDateTime(4);
+                    }
                 }
 
-                var isOnline = lastSeenUtc.HasValue && lastSeenUtc.Value >= DateTime.UtcNow.AddSeconds(-OnlineWindowSeconds);
+                var isOnline = lastSeenUtc.HasValue &&
+                               lastSeenUtc.Value >= DateTime.UtcNow.AddSeconds(-ONLINE_WINDOW_SECONDS);
 
                 return new FriendSummary
                 {
                     AccountId = accountId,
-                    Username = string.IsNullOrWhiteSpace(email) ? $"user:{accountId}" : email,
+                    Username = string.IsNullOrWhiteSpace(email) ? "user:" + accountId : email,
                     DisplayName = string.IsNullOrWhiteSpace(displayName) ? email : displayName,
                     AvatarUrl = avatarUrl,
                     SinceUtc = sinceUtc,

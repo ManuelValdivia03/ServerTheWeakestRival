@@ -9,34 +9,24 @@ using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
     [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerCall)]
     public sealed class ChatService : IChatService
     {
-        private const int MaxMessageLength = 500;
-        private const int MaxDisplayNameLength = 80;
-        private const int DefaultPageSize = 50;
-        private const int MaxPageSize = 200;
+        private const int MAX_MESSAGE_LENGTH = 500;
+        private const int MAX_DISPLAYNAME_LENGTH = 80;
+        private const int DEFAULT_PAGE_SIZE = 50;
+        private const int MAX_PAGE_SIZE = 200;
+        private const int DEFAULT_COMMAND_TIMEOUT_SECONDS = 30;
 
-        private const string SqlSelectDisplayName =
-            "SELECT display_name FROM dbo.Users WHERE user_id = @id;";
-
-        private const string SqlInsertChatMessage = @"
-            INSERT INTO dbo.ChatMessages (user_id, display_name, message_text)
-            VALUES (@user_id, @display_name, @message_text);";
-
-        private const string SqlSelectMessagesPaged = @"
-            SELECT TOP (@max)
-                chat_message_id,
-                user_id,
-                display_name,
-                message_text,
-                sent_utc
-            FROM dbo.ChatMessages
-            WHERE chat_message_id > @since_id
-            ORDER BY chat_message_id ASC;";
+        private const string COL_CHAT_MESSAGE_ID = "chat_message_id";
+        private const string COL_USER_ID = "user_id";
+        private const string COL_DISPLAY_NAME = "display_name";
+        private const string COL_MESSAGE_TEXT = "message_text";
+        private const string COL_SENT_UTC = "sent_utc";
 
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
@@ -44,10 +34,13 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             get
             {
-                var cs = ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"];
-                if (cs == null || string.IsNullOrWhiteSpace(cs.ConnectionString))
+                var connectionString = ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"];
+                if (connectionString == null || string.IsNullOrWhiteSpace(connectionString.ConnectionString))
+                {
                     ThrowFault("CONFIG_ERROR", "Missing connection string 'TheWeakestRivalDb'.");
-                return cs.ConnectionString;
+                }
+
+                return connectionString.ConnectionString;
             }
         }
 
@@ -60,59 +53,95 @@ namespace ServicesTheWeakestRival.Server.Services
         private static int EnsureAuthorizedAndGetUserId(string authToken)
         {
             if (string.IsNullOrWhiteSpace(authToken))
+            {
                 ThrowFault("UNAUTHORIZED", "Auth token is required.");
+            }
 
             if (!TokenCache.TryGetValue(authToken, out var token) || token == null)
+            {
                 ThrowFault("UNAUTHORIZED", "Auth token is invalid.");
+            }
 
             if (token.ExpiresAtUtc <= DateTime.UtcNow)
+            {
                 ThrowFault("UNAUTHORIZED", "Auth token has expired.");
+            }
 
             return token.UserId;
         }
 
         private static string GetUserDisplayName(int userId)
         {
-            using (var conn = new SqlConnection(ConnectionString))
-            using (var cmd = new SqlCommand(SqlSelectDisplayName, conn))
+            using (var sqlConnection = new SqlConnection(ConnectionString))
+            using (var getDisplayNameCommand = new SqlCommand(ChatSql.Text.SELECT_DISPLAY_NAME, sqlConnection))
             {
-                cmd.Parameters.Add("@id", SqlDbType.Int).Value = userId;
-                conn.Open();
+                getDisplayNameCommand.CommandType = CommandType.Text;
+                getDisplayNameCommand.CommandTimeout = DEFAULT_COMMAND_TIMEOUT_SECONDS;
 
-                var obj = cmd.ExecuteScalar();
-                var name = (obj == null || obj == DBNull.Value) ? null : Convert.ToString(obj);
+                getDisplayNameCommand.Parameters.Add(new SqlParameter("@user_id", SqlDbType.Int) { Value = userId });
 
+                sqlConnection.Open();
+                var result = getDisplayNameCommand.ExecuteScalar();
+
+                var name = (result == null || result == DBNull.Value) ? null : Convert.ToString(result);
                 return string.IsNullOrWhiteSpace(name) ? $"User{userId}" : name.Trim();
             }
+        }
+
+        private static int GetInt32OrDefault(SqlDataReader reader, int ordinal, int defaultValue)
+        {
+            return reader.IsDBNull(ordinal) ? defaultValue : reader.GetInt32(ordinal);
+        }
+
+        private static string GetStringOrDefault(SqlDataReader reader, int ordinal, string defaultValue)
+        {
+            return reader.IsDBNull(ordinal) ? defaultValue : reader.GetString(ordinal);
+        }
+
+        private static DateTime GetDateTimeOrDefault(SqlDataReader reader, int ordinal, DateTime defaultValue)
+        {
+            return reader.IsDBNull(ordinal) ? defaultValue : reader.GetDateTime(ordinal);
         }
 
         public BasicResponse SendChatMessage(SendChatMessageRequest request)
         {
             if (request == null)
+            {
                 ThrowFault("INVALID_REQUEST", "Request cannot be null.");
+            }
 
             var messageText = (request.MessageText ?? string.Empty).Trim();
             if (messageText.Length == 0)
+            {
                 ThrowFault("VALIDATION_ERROR", "MessageText cannot be empty.");
-            if (messageText.Length > MaxMessageLength)
-                ThrowFault("VALIDATION_ERROR", $"MessageText exceeds {MaxMessageLength} characters.");
+            }
+
+            if (messageText.Length > MAX_MESSAGE_LENGTH)
+            {
+                ThrowFault("VALIDATION_ERROR", $"MessageText exceeds {MAX_MESSAGE_LENGTH} characters.");
+            }
 
             var userId = EnsureAuthorizedAndGetUserId(request.AuthToken);
             var displayName = GetUserDisplayName(userId);
 
             try
             {
-                using (var conn = new SqlConnection(ConnectionString))
-                using (var cmd = new SqlCommand(SqlInsertChatMessage, conn))
+                using (var sqlConnection = new SqlConnection(ConnectionString))
+                using (var insertMessageCommand = new SqlCommand(ChatSql.Text.INSERT_CHAT_MESSAGE, sqlConnection))
                 {
-                    cmd.Parameters.Add("@user_id", SqlDbType.Int).Value = userId;
-                    cmd.Parameters.Add("@display_name", SqlDbType.NVarChar, MaxDisplayNameLength).Value = displayName;
-                    cmd.Parameters.Add("@message_text", SqlDbType.NVarChar, MaxMessageLength).Value = messageText;
+                    insertMessageCommand.CommandType = CommandType.Text;
+                    insertMessageCommand.CommandTimeout = DEFAULT_COMMAND_TIMEOUT_SECONDS;
 
-                    conn.Open();
-                    var affected = cmd.ExecuteNonQuery();
-                    if (affected != 1)
+                    insertMessageCommand.Parameters.Add(new SqlParameter("@user_id", SqlDbType.Int) { Value = userId });
+                    insertMessageCommand.Parameters.Add(new SqlParameter("@display_name", SqlDbType.NVarChar, MAX_DISPLAYNAME_LENGTH) { Value = displayName });
+                    insertMessageCommand.Parameters.Add(new SqlParameter("@message_text", SqlDbType.NVarChar, MAX_MESSAGE_LENGTH) { Value = messageText });
+
+                    sqlConnection.Open();
+                    var affectedRows = insertMessageCommand.ExecuteNonQuery();
+                    if (affectedRows != 1)
+                    {
                         ThrowFault("DB_ERROR", "Failed to insert chat message.");
+                    }
                 }
 
                 return new BasicResponse { IsSuccess = true, Message = "Message sent." };
@@ -120,7 +149,7 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 Console.Error.WriteLine($"[SqlException] Number={ex.Number}, Message={ex.Message}\n{ex}");
-                throw; // no enmascarar
+                throw;
             }
             catch (TimeoutException ex)
             {
@@ -129,7 +158,12 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (OperationCanceledException ex)
             {
-                Console.Error.WriteLine($"[OperationCanceled] {ex.Message}\n{ex}");
+                Console.Error.WriteLine($"[OperationCanceledException] {ex.Message}\n{ex}");
+                throw;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.Error.WriteLine($"[InvalidOperationException] {ex.Message}\n{ex}");
                 throw;
             }
             catch (Exception ex)
@@ -142,42 +176,58 @@ namespace ServicesTheWeakestRival.Server.Services
         public GetChatMessagesResponse GetChatMessages(GetChatMessagesRequest request)
         {
             if (request == null)
+            {
                 ThrowFault("INVALID_REQUEST", "Request cannot be null.");
+            }
 
             EnsureAuthorizedAndGetUserId(request.AuthToken);
 
             var sinceId = request.SinceChatMessageId ?? 0;
-            var requestedMax = request.MaxCount.GetValueOrDefault(DefaultPageSize);
-            var maxCount = Math.Min(Math.Max(requestedMax, 1), MaxPageSize);
+            var requestedMax = request.MaxCount.GetValueOrDefault(DEFAULT_PAGE_SIZE);
+            var maxCount = Math.Min(Math.Max(requestedMax, 1), MAX_PAGE_SIZE);
 
             try
             {
-                using (var conn = new SqlConnection(ConnectionString))
-                using (var cmd = new SqlCommand(SqlSelectMessagesPaged, conn))
+                using (var sqlConnection = new SqlConnection(ConnectionString))
+                using (var getMessagesCommand = new SqlCommand(ChatSql.Text.SELECT_MESSAGES_PAGED, sqlConnection))
                 {
-                    cmd.Parameters.Add("@max", SqlDbType.Int).Value = maxCount;
-                    cmd.Parameters.Add("@since_id", SqlDbType.Int).Value = sinceId;
+                    getMessagesCommand.CommandType = CommandType.Text;
+                    getMessagesCommand.CommandTimeout = DEFAULT_COMMAND_TIMEOUT_SECONDS;
 
-                    conn.Open();
-                    using (var reader = cmd.ExecuteReader())
+                    getMessagesCommand.Parameters.Add(new SqlParameter("@max_count", SqlDbType.Int) { Value = maxCount });
+                    getMessagesCommand.Parameters.Add(new SqlParameter("@since_id", SqlDbType.Int) { Value = sinceId });
+
+                    sqlConnection.Open();
+
+                    using (var reader = getMessagesCommand.ExecuteReader(CommandBehavior.SequentialAccess))
                     {
-                        var items = new List<ChatMessageDto>();
+                        var ordId = reader.GetOrdinal(COL_CHAT_MESSAGE_ID);
+                        var ordUserId = reader.GetOrdinal(COL_USER_ID);
+                        var ordDisplayName = reader.GetOrdinal(COL_DISPLAY_NAME);
+                        var ordText = reader.GetOrdinal(COL_MESSAGE_TEXT);
+                        var ordSentUtc = reader.GetOrdinal(COL_SENT_UTC);
+
+                        var messages = new List<ChatMessageDto>();
+
                         while (reader.Read())
                         {
-                            items.Add(new ChatMessageDto
+                            var message = new ChatMessageDto
                             {
-                                ChatMessageId = reader.GetInt32(0),
-                                UserId = reader.GetInt32(1),
-                                DisplayName = reader.GetString(2),
-                                MessageText = reader.GetString(3),
-                                SentUtc = reader.GetDateTime(4)
-                            });
+                                ChatMessageId = GetInt32OrDefault(reader, ordId, 0),
+                                UserId = GetInt32OrDefault(reader, ordUserId, 0),
+                                DisplayName = GetStringOrDefault(reader, ordDisplayName, string.Empty),
+                                MessageText = GetStringOrDefault(reader, ordText, string.Empty),
+                                SentUtc = GetDateTimeOrDefault(reader, ordSentUtc, DateTime.MinValue)
+                            };
+
+                            messages.Add(message);
                         }
 
-                        var lastId = items.Count == 0 ? sinceId : items.Last().ChatMessageId;
+                        var lastId = messages.Count == 0 ? sinceId : messages.Last().ChatMessageId;
+
                         return new GetChatMessagesResponse
                         {
-                            Messages = items.ToArray(),
+                            Messages = messages.ToArray(),
                             LastChatMessageId = lastId
                         };
                     }
@@ -195,7 +245,12 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (OperationCanceledException ex)
             {
-                Console.Error.WriteLine($"[OperationCanceled] {ex.Message}\n{ex}");
+                Console.Error.WriteLine($"[OperationCanceledException] {ex.Message}\n{ex}");
+                throw;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.Error.WriteLine($"[InvalidOperationException] {ex.Message}\n{ex}");
                 throw;
             }
             catch (Exception ex)
