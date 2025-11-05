@@ -5,10 +5,11 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Net.Mail;
 using System.ServiceModel;
+using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
-using ServicesTheWeakestRival.Server.Services.Logic; // <-- para AuthSql
+using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -25,19 +26,31 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int EMAIL_CODE_LENGTH = 6;
         private const int BCRYPT_WORK_FACTOR = 10;
 
+        private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
+
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(AuthService));
+
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
-        private static string ConnectionString
+        private static string GetConnectionString()
         {
-            get
+            var connection = ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME];
+
+            if (connection == null || string.IsNullOrWhiteSpace(connection.ConnectionString))
             {
-                var connection = ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"];
-                if (connection == null || string.IsNullOrWhiteSpace(connection.ConnectionString))
-                {
-                    ThrowFault("CONFIG_ERROR", "Missing connection string 'TheWeakestRivalDb'.");
-                }
-                return connection.ConnectionString;
+                var configurationException = new ConfigurationErrorsException(
+                    string.Format(
+                        "Missing connection string '{0}'.",
+                        MAIN_CONNECTION_STRING_NAME));
+
+                throw ThrowTechnicalFault(
+                    "CONFIG_ERROR",
+                    "Configuration error. Please contact support.",
+                    "AuthService.GetConnectionString",
+                    configurationException);
             }
+
+            return connection.ConnectionString;
         }
 
         private static readonly int CodeTtlMinutes = ParseIntAppSetting("EmailCodeTtlMinutes", DEFAULT_CODE_TTL_MINUTES);
@@ -46,15 +59,6 @@ namespace ServicesTheWeakestRival.Server.Services
         private static int ParseIntAppSetting(string key, int @default)
         {
             return int.TryParse(ConfigurationManager.AppSettings[key], out int value) ? value : @default;
-        }
-
-        private static class ErrorFilters
-        {
-            public static bool Log(Exception ex, string context = null)
-            {
-                // TODO: reemplazar por logger real (Serilog/NLog/AppInsights). No lanzar desde aquí.
-                return false; // NO manejar: deja que la excepción siga su curso
-            }
         }
 
         public PingResponse Ping(PingRequest request)
@@ -70,7 +74,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (string.IsNullOrWhiteSpace(request?.Email))
             {
-                ThrowFault("INVALID_REQUEST", "Email is required.");
+                throw ThrowFault("INVALID_REQUEST", "Email is required.");
             }
 
             string email = request.Email.Trim();
@@ -78,7 +82,7 @@ namespace ServicesTheWeakestRival.Server.Services
             byte[] codeHash = SecurityUtil.Sha256(code);
             DateTime expiresAtUtc = DateTime.UtcNow.AddMinutes(CodeTtlMinutes);
 
-            using (var connection = new SqlConnection(ConnectionString))
+            using (var connection = new SqlConnection(GetConnectionString()))
             {
                 connection.Open();
 
@@ -90,7 +94,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         var found = exists.ExecuteScalar();
                         if (found != null)
                         {
-                            ThrowFault("EMAIL_TAKEN", "Email is already registered.");
+                            throw ThrowFault("EMAIL_TAKEN", "Email is already registered.");
                         }
                     }
 
@@ -104,7 +108,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                             (DateTime.UtcNow - lastUtc.Value).TotalSeconds < ResendCooldownSeconds;
                         if (isInCooldown)
                         {
-                            ThrowFault("TOO_SOON", "Please wait before requesting another code.");
+                            throw ThrowFault("TOO_SOON", "Please wait before requesting another code.");
                         }
                     }
 
@@ -130,14 +134,13 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 EmailSender.SendVerificationCode(email, code, CodeTtlMinutes);
             }
-            catch (SmtpException ex) when (ErrorFilters.Log(ex, "BeginRegister.EmailSender"))
-            {
-                // TODO: solo se registra
-            }
             catch (SmtpException ex)
             {
-                // Mapeo a Fault 
-                ThrowFault("SMTP_ERROR", $"Failed to send verification email: {ex.StatusCode}");
+                throw ThrowTechnicalFault(
+                    "SMTP_ERROR",
+                    "Failed to send verification email. Please try again later.",
+                    "BeginRegister.EmailSender",
+                    ex);
             }
 
             return new BeginRegisterResponse
@@ -151,7 +154,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request payload is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request payload is null.");
             }
 
             string email = (request.Email ?? string.Empty).Trim();
@@ -164,7 +167,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 string.IsNullOrWhiteSpace(password) ||
                 string.IsNullOrWhiteSpace(code))
             {
-                ThrowFault("INVALID_REQUEST", "Email, display name, password and code are required.");
+                throw ThrowFault("INVALID_REQUEST", "Email, display name, password and code are required.");
             }
 
             int verificationId;
@@ -173,7 +176,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             byte[] codeHash = SecurityUtil.Sha256(code);
 
-            using (var connection = new SqlConnection(ConnectionString))
+            using (var connection = new SqlConnection(GetConnectionString()))
             using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_VERIFICATION, connection))
             {
                 pick.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
@@ -183,7 +186,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     if (!reader.Read())
                     {
-                        ThrowFault("CODE_MISSING", "No pending code. Request a new one.");
+                        throw ThrowFault("CODE_MISSING", "No pending code. Request a new one.");
                     }
 
                     verificationId = reader.GetInt32(0);
@@ -194,12 +197,12 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (used || expiresAtUtc <= DateTime.UtcNow)
             {
-                ThrowFault("CODE_EXPIRED", "Verification code expired. Request a new one.");
+                throw ThrowFault("CODE_EXPIRED", "Verification code expired. Request a new one.");
             }
 
             int newAccountId = -1;
 
-            using (var connection = new SqlConnection(ConnectionString))
+            using (var connection = new SqlConnection(GetConnectionString()))
             {
                 connection.Open();
 
@@ -231,7 +234,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             var exists = check.ExecuteScalar();
                             if (exists != null)
                             {
-                                ThrowFault("EMAIL_TAKEN", "Email is already registered.");
+                                throw ThrowFault("EMAIL_TAKEN", "Email is already registered.");
                             }
                         }
 
@@ -264,20 +267,20 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         transaction.Commit();
                     }
-                    catch (SqlException ex) when (ErrorFilters.Log(ex, "CompleteRegister.Tx"))
+                    catch (SqlException ex)
                     {
-                        throw;
-                    }
-                    catch (SqlException)
-                    {
-                        throw;
+                        throw ThrowTechnicalFault(
+                            "DB_ERROR",
+                            "Unexpected database error while completing registration.",
+                            "CompleteRegister.Tx",
+                            ex);
                     }
                 }
             }
 
             if (newAccountId <= 0)
             {
-                ThrowFault("DB_ERROR", "Account was not created.");
+                throw ThrowFault("DB_ERROR", "Account was not created.");
             }
 
             var token = IssueToken(newAccountId);
@@ -288,10 +291,10 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request payload is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request payload is null.");
             }
 
-            using (var connection = new SqlConnection(ConnectionString))
+            using (var connection = new SqlConnection(GetConnectionString()))
             using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection))
             {
                 check.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
@@ -300,14 +303,14 @@ namespace ServicesTheWeakestRival.Server.Services
                 var exists = check.ExecuteScalar();
                 if (exists != null)
                 {
-                    ThrowFault("EMAIL_TAKEN", "Email is already registered.");
+                    throw ThrowFault("EMAIL_TAKEN", "Email is already registered.");
                 }
             }
 
             int newAccountId = -1;
             string passwordHash = HashPasswordBc(request.Password);
 
-            using (var connection = new SqlConnection(ConnectionString))
+            using (var connection = new SqlConnection(GetConnectionString()))
             {
                 connection.Open();
 
@@ -335,13 +338,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         transaction.Commit();
                     }
-                    catch (SqlException ex) when (ErrorFilters.Log(ex, "Register.Tx"))
+                    catch (SqlException ex)
                     {
-                        throw;
-                    }
-                    catch (SqlException)
-                    {
-                        throw;
+                        throw ThrowTechnicalFault(
+                            "DB_ERROR",
+                            "Unexpected database error while registering.",
+                            "Register.Tx",
+                            ex);
                     }
                 }
             }
@@ -354,40 +357,51 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request payload is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request payload is null.");
             }
 
             int userId;
             string storedHash;
             byte status;
 
-            using (var connection = new SqlConnection(ConnectionString))
-            using (var get = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
+            try
             {
-                get.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
-                connection.Open();
-
-                using (var reader = get.ExecuteReader(CommandBehavior.SingleRow))
+                using (var connection = new SqlConnection(GetConnectionString()))
+                using (var get = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
                 {
-                    if (!reader.Read())
-                    {
-                        ThrowFault("INVALID_CREDENTIALS", "Email or password is incorrect.");
-                    }
+                    get.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
+                    connection.Open();
 
-                    userId = reader.GetInt32(0);
-                    storedHash = reader.GetString(1);
-                    status = reader.GetByte(2);
+                    using (var reader = get.ExecuteReader(CommandBehavior.SingleRow))
+                    {
+                        if (!reader.Read())
+                        {
+                            throw ThrowFault("INVALID_CREDENTIALS", "Email or password is incorrect.");
+                        }
+
+                        userId = reader.GetInt32(0);
+                        storedHash = reader.GetString(1);
+                        status = reader.GetByte(2);
+                    }
                 }
+            }
+            catch (SqlException ex)
+            {
+                throw ThrowTechnicalFault(
+                    "DB_ERROR",
+                    "Unexpected database error while logging in.",
+                    "Login.Db",
+                    ex);
             }
 
             if (status == ACCOUNT_STATUS_BLOCKED)
             {
-                ThrowFault("ACCOUNT_BLOCKED", "Account is blocked.");
+                throw ThrowFault("ACCOUNT_BLOCKED", "Account is blocked.");
             }
 
             if (!VerifyPasswordBc(request.Password, storedHash))
             {
-                ThrowFault("INVALID_CREDENTIALS", "Email or password is incorrect.");
+                throw ThrowFault("INVALID_CREDENTIALS", "Email or password is incorrect.");
             }
 
             var token = IssueToken(userId);
@@ -403,13 +417,24 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (TokenCache.TryRemove(request.Token, out var removed))
             {
-                using (var connection = new SqlConnection(ConnectionString))
-                using (var cmd = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", connection))
+                try
                 {
-                    cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = removed.UserId;
-                    connection.Open();
-                    cmd.ExecuteNonQuery();
+                    using (var connection = new SqlConnection(GetConnectionString()))
+                    using (var cmd = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", connection))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = removed.UserId;
+                        connection.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+                catch (SqlException ex)
+                {
+                    throw ThrowTechnicalFault(
+                        "DB_ERROR",
+                        "Unexpected database error while logging out.",
+                        "Logout.LeaveAllByUser",
+                        ex);
                 }
             }
         }
@@ -430,16 +455,39 @@ namespace ServicesTheWeakestRival.Server.Services
             return token;
         }
 
-        private static void ThrowFault(string code, string message)
+        private static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
-            var fault = new ServiceFault { Code = code, Message = message };
-            throw new FaultException<ServiceFault>(fault, new FaultReason(message));
+            Logger.WarnFormat(
+                "Business fault. Code={0}. Message={1}.",
+                code,
+                message);
+
+            var fault = new ServiceFault
+            {
+                Code = code,
+                Message = message
+            };
+
+            return new FaultException<ServiceFault>(fault, new FaultReason(message));
         }
 
-        private static bool IsUniqueViolation(SqlException ex)
+        private static FaultException<ServiceFault> ThrowTechnicalFault(
+            string technicalCode,
+            string userMessage,
+            string context,
+            Exception ex)
         {
-            return ex != null && (ex.Number == 2627 || ex.Number == 2601);
+            Logger.Error(context, ex);
+
+            var fault = new ServiceFault
+            {
+                Code = technicalCode,
+                Message = userMessage
+            };
+
+            return new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
         }
+
 
         private static string HashPasswordBc(string password)
         {
@@ -452,6 +500,7 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 return false;
             }
+
             return BCrypt.Net.BCrypt.Verify(password ?? string.Empty, storedHash);
         }
     }

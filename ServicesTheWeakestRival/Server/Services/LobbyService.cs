@@ -7,7 +7,8 @@ using System.Data.SqlClient;
 using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
-using ServicesTheWeakestRival.Server.Services.Logic; 
+using ServicesTheWeakestRival.Server.Services.Logic;
+using log4net;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -20,6 +21,8 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int DEFAULT_MAX_PLAYERS = 8;
         private const int ACCESS_CODE_MAX_LENGTH = 12;
 
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(LobbyService));
+
         private static string Connection =>
             ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"].ConnectionString;
 
@@ -28,13 +31,23 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static string CurrentSessionId
         {
-            get { return OperationContext.Current != null ? OperationContext.Current.SessionId : Guid.NewGuid().ToString("N"); }
+            get
+            {
+                return OperationContext.Current != null
+                    ? OperationContext.Current.SessionId
+                    : Guid.NewGuid().ToString("N");
+            }
         }
 
         private static void AddCallbackForLobby(Guid lobbyUid, ILobbyClientCallback cb)
         {
             var bucket = CallbackBuckets.GetOrAdd(lobbyUid, _ => new ConcurrentDictionary<string, ILobbyClientCallback>());
             bucket[CurrentSessionId] = cb;
+
+            Logger.DebugFormat("AddCallbackForLobby: LobbyUid={0}, SessionId={1}, BucketCount={2}",
+                lobbyUid,
+                CurrentSessionId,
+                bucket.Count);
         }
 
         private static void RemoveCallbackForLobby(Guid lobbyUid)
@@ -46,17 +59,34 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     CallbackBuckets.TryRemove(lobbyUid, out _);
                 }
+
+                Logger.DebugFormat("RemoveCallbackForLobby: LobbyUid={0}, SessionId={1}, RemainingInBucket={2}",
+                    lobbyUid,
+                    CurrentSessionId,
+                    bucket.Count);
             }
         }
 
         private static void BroadcastToLobby(Guid lobbyUid, Action<ILobbyClientCallback> send)
         {
-            if (!CallbackBuckets.TryGetValue(lobbyUid, out var bucket)) return;
+            if (!CallbackBuckets.TryGetValue(lobbyUid, out var bucket))
+            {
+                Logger.DebugFormat("BroadcastToLobby: no callbacks for LobbyUid={0}", lobbyUid);
+                return;
+            }
 
             foreach (var kv in bucket)
             {
-                try { send(kv.Value); }
-                catch { /* canal caído, ignorar o loggear */ }
+                try
+                {
+                    send(kv.Value);
+                }
+                catch (Exception ex)
+                {
+                    Logger.WarnFormat("BroadcastToLobby: callback failed. LobbyUid={0}, SessionId={1}", lobbyUid, kv.Key);
+                    Logger.Warn("BroadcastToLobby callback exception.", ex);
+                    // canal caído, se ignora la excepción como antes
+                }
             }
         }
 
@@ -72,6 +102,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 AccessCode = null
             };
 
+            Logger.InfoFormat("JoinLobby: New in-memory lobby created. LobbyId={0}, LobbyName={1}",
+                lobbyInfo.LobbyId,
+                lobbyInfo.LobbyName);
+
             AddCallbackForLobby(lobbyInfo.LobbyId, callback);
             callback.OnLobbyUpdated(lobbyInfo);
             return new JoinLobbyResponse { Lobby = lobbyInfo };
@@ -85,11 +119,13 @@ namespace ServicesTheWeakestRival.Server.Services
                     || string.IsNullOrWhiteSpace(request.Token)
                     || request.LobbyId == Guid.Empty)
                 {
+                    Logger.Debug("LeaveLobby: invalid request (null, empty token or empty LobbyId).");
                     return;
                 }
 
                 if (!TokenStore.TryGetUserId(request.Token, out var userId))
                 {
+                    Logger.WarnFormat("LeaveLobby: invalid token. LobbyId={0}", request.LobbyId);
                     return;
                 }
 
@@ -104,10 +140,16 @@ namespace ServicesTheWeakestRival.Server.Services
                     sqlConnection.Open();
                     sqlCommand.ExecuteNonQuery();
                 }
+
+                Logger.InfoFormat("LeaveLobby: user left lobby. UserId={0}, LobbyUid={1}, LobbyId={2}",
+                    userId,
+                    request.LobbyId,
+                    intId);
             }
             catch (Exception ex)
             {
-                // TODO: logger / ThrowTechnicalFault(...)
+                Logger.Error("Unexpected error at LeaveLobby.", ex);
+                // se mantiene el mismo comportamiento: se traga la excepción
             }
             finally
             {
@@ -118,16 +160,25 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        public ListLobbiesResponse ListLobbies(ListLobbiesRequest request) =>
-            new ListLobbiesResponse { Lobbies = new List<LobbyInfo>() };
+        public ListLobbiesResponse ListLobbies(ListLobbiesRequest request)
+        {
+            Logger.Debug("ListLobbies called (currently returns empty list).");
+            return new ListLobbiesResponse { Lobbies = new List<LobbyInfo>() };
+        }
 
         public void SendChatMessage(SendLobbyMessageRequest request)
         {
             if (request == null || request.LobbyId == Guid.Empty || string.IsNullOrWhiteSpace(request.Token))
+            {
+                Logger.Debug("SendChatMessage: invalid request (null, empty LobbyId or token).");
                 return;
+            }
 
             if (!TokenStore.TryGetUserId(request.Token, out var userId))
+            {
+                Logger.WarnFormat("SendChatMessage: invalid token. LobbyId={0}", request.LobbyId);
                 return;
+            }
 
             var senderName = GetUserDisplayName(userId);
 
@@ -138,6 +189,11 @@ namespace ServicesTheWeakestRival.Server.Services
                 Message = request.Message ?? string.Empty,
                 SentAtUtc = DateTime.UtcNow
             };
+
+            Logger.InfoFormat("SendChatMessage: LobbyId={0}, UserId={1}, SenderName={2}",
+                request.LobbyId,
+                userId,
+                senderName);
 
             BroadcastToLobby(request.LobbyId, cb => cb.OnChatMessageReceived(chatMessage));
         }
@@ -153,7 +209,13 @@ namespace ServicesTheWeakestRival.Server.Services
                 sqlConnection.Open();
                 using (var rd = sqlCommand.ExecuteReader(CommandBehavior.SingleRow))
                 {
-                    if (!rd.Read()) throw ThrowFault("NOT_FOUND", "Usuario no encontrado.");
+                    if (!rd.Read())
+                    {
+                        throw ThrowFault("NOT_FOUND", "Usuario no encontrado.");
+                    }
+
+                    Logger.DebugFormat("GetMyProfile: UserId={0} found.", userId);
+
                     return new UpdateAccountResponse
                     {
                         UserId = rd.GetInt32(0),
@@ -181,6 +243,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (!hasDisplayNameChange && !hasProfileImageChange && !hasEmailChange)
             {
+                Logger.DebugFormat("UpdateAccount: no changes detected. UserId={0}", userId);
                 return GetMyProfile(request.Token);
             }
 
@@ -203,13 +266,23 @@ namespace ServicesTheWeakestRival.Server.Services
                 UpdateUserEmail(normalizedEmail, userId);
             }
 
+            Logger.InfoFormat(
+                "UpdateAccount: UserId={0}, DisplayNameChange={1}, ProfileImageChange={2}, EmailChange={3}",
+                userId,
+                hasDisplayNameChange,
+                hasProfileImageChange,
+                hasEmailChange);
+
             return GetMyProfile(request.Token);
         }
 
-
         public CreateLobbyResponse CreateLobby(CreateLobbyRequest request)
         {
-            if (request == null) throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+            if (request == null)
+            {
+                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+            }
+
             var ownerId = EnsureAuthorizedAndGetUserId(request.Token);
 
             int lobbyId;
@@ -236,9 +309,12 @@ namespace ServicesTheWeakestRival.Server.Services
                     sqlCommand.Parameters.Add("@MaxPlayers", SqlDbType.TinyInt).Value =
                         request.MaxPlayers > 0 ? request.MaxPlayers : DEFAULT_MAX_PLAYERS;
 
-                    var pId = sqlCommand.Parameters.Add("@LobbyId", SqlDbType.Int); pId.Direction = ParameterDirection.Output;
-                    var pUid = sqlCommand.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier); pUid.Direction = ParameterDirection.Output;
-                    var pCode = sqlCommand.Parameters.Add("@AccessCode", SqlDbType.NVarChar, ACCESS_CODE_MAX_LENGTH); pCode.Direction = ParameterDirection.Output;
+                    var pId = sqlCommand.Parameters.Add("@LobbyId", SqlDbType.Int);
+                    pId.Direction = ParameterDirection.Output;
+                    var pUid = sqlCommand.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier);
+                    pUid.Direction = ParameterDirection.Output;
+                    var pCode = sqlCommand.Parameters.Add("@AccessCode", SqlDbType.NVarChar, ACCESS_CODE_MAX_LENGTH);
+                    pCode.Direction = ParameterDirection.Output;
 
                     sqlCommand.ExecuteNonQuery();
 
@@ -248,12 +324,20 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
             }
 
+            Logger.InfoFormat(
+                "CreateLobby: Lobby created. LobbyIdInt={0}, LobbyUid={1}, OwnerUserId={2}",
+                lobbyId,
+                lobbyUid,
+                ownerId);
+
             var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
             AddCallbackForLobby(lobbyUid, callback);
 
             var info = LoadLobbyInfoByIntId(lobbyId);
             if (string.IsNullOrWhiteSpace(info.AccessCode))
+            {
                 info.AccessCode = accessCode;
+            }
 
             callback.OnLobbyUpdated(info);
 
@@ -262,9 +346,15 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public JoinByCodeResponse JoinByCode(JoinByCodeRequest request)
         {
-            if (request == null) throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+            if (request == null)
+            {
+                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+            }
+
             if (string.IsNullOrWhiteSpace(request.AccessCode))
+            {
                 throw ThrowFault("INVALID_REQUEST", "AccessCode requerido.");
+            }
 
             var userId = EnsureAuthorizedAndGetUserId(request.Token);
 
@@ -279,8 +369,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 sqlCommand.Parameters.Add("@AccessCode", SqlDbType.NVarChar, ACCESS_CODE_MAX_LENGTH).Value =
                     request.AccessCode.Trim().ToUpperInvariant();
 
-                var pId = sqlCommand.Parameters.Add("@LobbyId", SqlDbType.Int); pId.Direction = ParameterDirection.Output;
-                var pUid = sqlCommand.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier); pUid.Direction = ParameterDirection.Output;
+                var pId = sqlCommand.Parameters.Add("@LobbyId", SqlDbType.Int);
+                pId.Direction = ParameterDirection.Output;
+                var pUid = sqlCommand.Parameters.Add("@LobbyUid", SqlDbType.UniqueIdentifier);
+                pUid.Direction = ParameterDirection.Output;
 
                 sqlConnection.Open();
                 sqlCommand.ExecuteNonQuery();
@@ -288,6 +380,13 @@ namespace ServicesTheWeakestRival.Server.Services
                 lobbyId = (int)pId.Value;
                 lobbyUid = (Guid)pUid.Value;
             }
+
+            Logger.InfoFormat(
+                "JoinByCode: UserId={0} joined lobby. LobbyIdInt={1}, LobbyUid={2}, AccessCode={3}",
+                userId,
+                lobbyId,
+                lobbyUid,
+                request.AccessCode);
 
             var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
             AddCallbackForLobby(lobbyUid, callback);
@@ -415,7 +514,11 @@ namespace ServicesTheWeakestRival.Server.Services
                 sqlCommand.Parameters.Add("@u", SqlDbType.UniqueIdentifier).Value = lobbyUid;
                 sqlConnection.Open();
                 var obj = sqlCommand.ExecuteScalar();
-                if (obj == null) throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                if (obj == null)
+                {
+                    throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                }
+
                 return Convert.ToInt32(obj);
             }
         }
@@ -429,7 +532,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 sqlConnection.Open();
                 using (var rd = sqlCommand.ExecuteReader(CommandBehavior.SingleRow))
                 {
-                    if (!rd.Read()) throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                    if (!rd.Read())
+                    {
+                        throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                    }
 
                     var uid = rd.GetGuid(0);
                     var name = rd.IsDBNull(1) ? null : rd.GetString(1);
@@ -457,18 +563,31 @@ namespace ServicesTheWeakestRival.Server.Services
                 sqlConnection.Open();
                 var obj = sqlCommand.ExecuteScalar();
                 var name = (obj == null || obj == DBNull.Value) ? null : Convert.ToString(obj);
-                return string.IsNullOrWhiteSpace(name) ? ("Jugador " + userId) : name.Trim();
+                var finalName = string.IsNullOrWhiteSpace(name) ? "Jugador " + userId : name.Trim();
+
+                Logger.DebugFormat("GetUserDisplayName: UserId={0}, DisplayName={1}", userId, finalName);
+
+                return finalName;
             }
         }
 
         private static bool IsValidEmail(string email)
         {
-            try { var _ = new System.Net.Mail.MailAddress(email); return true; }
-            catch { return false; }
+            try
+            {
+                var _ = new System.Net.Mail.MailAddress(email);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
+            Logger.WarnFormat("LobbyService fault. Code='{0}', Message='{1}'", code, message);
+
             var fault = new ServiceFault
             {
                 Code = code,
