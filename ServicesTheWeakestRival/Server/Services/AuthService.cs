@@ -29,7 +29,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        // Códigos de error
         private const string ERROR_CONFIG = "CONFIG_ERROR";
         private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
         private const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
@@ -40,10 +39,10 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_DB_ERROR = "DB_ERROR";
         private const string ERROR_INVALID_CREDENTIALS = "INVALID_CREDENTIALS";
         private const string ERROR_ACCOUNT_BLOCKED = "ACCOUNT_BLOCKED";
+        private const string ERROR_PAYLOAD_NULL = "Request payload is null.";
         private const string ERROR_SMTP = "SMTP_ERROR";
 
-        // Nombres de parámetros SQL
-        private const string PARAM_EMAIL = "@Email";
+        private const string PARAMETER_EMAIL = "@Email";
 
         private static readonly ILog Logger = LogManager.GetLogger(typeof(AuthService));
 
@@ -107,7 +106,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
                     {
-                        exists.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        exists.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         var found = exists.ExecuteScalar();
                         if (found != null)
                         {
@@ -117,7 +116,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     using (var last = new SqlCommand(AuthSql.Text.LAST_VERIFICATION, connection, transaction))
                     {
-                        last.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        last.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         object lastObj = last.ExecuteScalar();
                         DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
 
@@ -131,13 +130,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_VERIFICATIONS, connection, transaction))
                     {
-                        invalidate.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        invalidate.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         invalidate.ExecuteNonQuery();
                     }
 
                     using (var insert = new SqlCommand(AuthSql.Text.INSERT_VERIFICATION, connection, transaction))
                     {
-                        insert.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        insert.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
                         insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
                         insert.ExecuteNonQuery();
@@ -171,7 +170,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "Request payload is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_PAYLOAD_NULL);
             }
 
             string email = (request.Email ?? string.Empty).Trim();
@@ -196,7 +195,7 @@ namespace ServicesTheWeakestRival.Server.Services
             using (var connection = new SqlConnection(GetConnectionString()))
             using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_VERIFICATION, connection))
             {
-                pick.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                pick.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                 connection.Open();
 
                 using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
@@ -247,7 +246,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     {
                         using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
                         {
-                            check.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                            check.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                             var exists = check.ExecuteScalar();
                             if (exists != null)
                             {
@@ -259,7 +258,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
                         {
-                            insertAcc.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                            insertAcc.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                             insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
                             insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = ACCOUNT_STATUS_ACTIVE;
                             newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
@@ -308,13 +307,13 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "Request payload is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_PAYLOAD_NULL);
             }
 
             using (var connection = new SqlConnection(GetConnectionString()))
             using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection))
             {
-                check.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
+                check.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
                 connection.Open();
 
                 var exists = check.ExecuteScalar();
@@ -337,7 +336,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     {
                         using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
                         {
-                            insertAcc.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
+                            insertAcc.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
                             insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
                             insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = ACCOUNT_STATUS_ACTIVE;
                             newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
@@ -374,7 +373,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "Request payload is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_PAYLOAD_NULL);
             }
 
             int userId;
@@ -386,7 +385,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (var connection = new SqlConnection(GetConnectionString()))
                 using (var get = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
                 {
-                    get.Parameters.Add(PARAM_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
+                    get.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
                     connection.Open();
 
                     using (var reader = get.ExecuteReader(CommandBehavior.SingleRow))
@@ -460,7 +459,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (string.IsNullOrWhiteSpace(request?.Email))
             {
-                throw ThrowFault("INVALID_REQUEST", "Email is required.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Email is required.");
             }
 
             string email = request.Email.Trim();
@@ -474,10 +473,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
-                    // 1) Verificar que la cuenta exista
                     using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
                     {
-                        exists.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        exists.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         var found = exists.ExecuteScalar();
                         if (found == null)
                         {
@@ -485,10 +483,9 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
                     }
 
-                    // 2) Cooldown de reenvío
                     using (var last = new SqlCommand(AuthSql.Text.LAST_RESET_REQUEST, connection, transaction))
                     {
-                        last.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        last.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         object lastObj = last.ExecuteScalar();
                         DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
 
@@ -503,14 +500,14 @@ namespace ServicesTheWeakestRival.Server.Services
                     // 3) Invalidar solicitudes anteriores
                     using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_RESETS, connection, transaction))
                     {
-                        invalidate.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        invalidate.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         invalidate.ExecuteNonQuery();
                     }
 
                     // 4) Insertar nueva solicitud de reset
                     using (var insert = new SqlCommand(AuthSql.Text.INSERT_RESET_REQUEST, connection, transaction))
                     {
-                        insert.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        insert.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                         insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
                         insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
                         insert.ExecuteNonQuery();
@@ -544,7 +541,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request payload is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_PAYLOAD_NULL);
             }
 
             string email = (request.Email ?? string.Empty).Trim();
@@ -555,7 +552,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 string.IsNullOrWhiteSpace(code) ||
                 string.IsNullOrWhiteSpace(newPassword))
             {
-                throw ThrowFault("INVALID_REQUEST", "Email, code and new password are required.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Email, code and new password are required.");
             }
 
             if (newPassword.Length < PASSWORD_MIN_LENGTH)
@@ -569,11 +566,10 @@ namespace ServicesTheWeakestRival.Server.Services
 
             byte[] codeHash = SecurityUtil.Sha256(code);
 
-            // 1) Obtener la última solicitud de reset
             using (var connection = new SqlConnection(GetConnectionString()))
             using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_RESET, connection))
             {
-                pick.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                pick.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                 connection.Open();
 
                 using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
@@ -624,7 +620,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         using (var updatePwd = new SqlCommand(AuthSql.Text.UPDATE_ACCOUNT_PASSWORD, connection, transaction))
                         {
-                            updatePwd.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                            updatePwd.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
                             updatePwd.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
                             int rows = updatePwd.ExecuteNonQuery();
 
