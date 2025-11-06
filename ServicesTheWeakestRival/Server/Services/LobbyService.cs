@@ -21,6 +21,12 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int DEFAULT_MAX_PLAYERS = 8;
         private const int ACCESS_CODE_MAX_LENGTH = 12;
 
+        private const string ERROR_NOT_FOUND = "NOT_FOUND";
+        private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
+        private const string ERROR_VALIDATION_ERROR = "VALIDATION_ERROR";
+        private const string ERROR_UNAUTHORIZED = "UNAUTHORIZED";
+        private const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
+
         private static readonly ILog Logger = LogManager.GetLogger(typeof(LobbyService));
 
         private static string Connection =>
@@ -83,9 +89,12 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
                 catch (Exception ex)
                 {
-                    Logger.WarnFormat("BroadcastToLobby: callback failed. LobbyUid={0}, SessionId={1}", lobbyUid, kv.Key);
-                    Logger.Warn("BroadcastToLobby callback exception.", ex);
-                    // canal caído, se ignora la excepción como antes
+                    var msg = string.Format(
+                        "BroadcastToLobby: callback failed. LobbyUid={0}, SessionId={1}",
+                        lobbyUid,
+                        kv.Key);
+
+                    Logger.Warn(msg, ex);
                 }
             }
         }
@@ -149,7 +158,6 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (Exception ex)
             {
                 Logger.Error("Unexpected error at LeaveLobby.", ex);
-                // se mantiene el mismo comportamiento: se traga la excepción
             }
             finally
             {
@@ -211,7 +219,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     if (!rd.Read())
                     {
-                        throw ThrowFault("NOT_FOUND", "Usuario no encontrado.");
+                        throw ThrowFault(ERROR_NOT_FOUND, "Usuario no encontrado.");
                     }
 
                     Logger.DebugFormat("GetMyProfile: UserId={0} found.", userId);
@@ -232,7 +240,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Request nulo.");
             }
 
             var userId = EnsureAuthorizedAndGetUserId(request.Token);
@@ -280,7 +288,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Request nulo.");
             }
 
             var ownerId = EnsureAuthorizedAndGetUserId(request.Token);
@@ -348,12 +356,12 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request nulo.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Request nulo.");
             }
 
             if (string.IsNullOrWhiteSpace(request.AccessCode))
             {
-                throw ThrowFault("INVALID_REQUEST", "AccessCode requerido.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, "AccessCode requerido.");
             }
 
             var userId = EnsureAuthorizedAndGetUserId(request.Token);
@@ -401,7 +409,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (!TokenStore.TryGetUserId(token, out var userId))
             {
-                throw ThrowFault("UNAUTHORIZED", "Token inválido o expirado.");
+                throw ThrowFault(ERROR_UNAUTHORIZED, "Token inválido o expirado.");
             }
 
             return userId;
@@ -414,12 +422,12 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (hasDisplayNameChange && request.DisplayName.Trim().Length > MAX_DISPLAY_NAME_LENGTH)
             {
-                throw ThrowFault("VALIDATION_ERROR", $"DisplayName máximo {MAX_DISPLAY_NAME_LENGTH}.");
+                throw ThrowFault(ERROR_VALIDATION_ERROR, $"DisplayName máximo {MAX_DISPLAY_NAME_LENGTH}.");
             }
 
             if (hasProfileImageChange && request.ProfileImageUrl.Trim().Length > MAX_PROFILE_IMAGE_URL_LENGTH)
             {
-                throw ThrowFault("VALIDATION_ERROR", $"ProfileImageUrl máximo {MAX_PROFILE_IMAGE_URL_LENGTH}.");
+                throw ThrowFault(ERROR_VALIDATION_ERROR, $"ProfileImageUrl máximo {MAX_PROFILE_IMAGE_URL_LENGTH}.");
             }
         }
 
@@ -429,12 +437,12 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (!IsValidEmail(trimmedEmail))
             {
-                throw ThrowFault("VALIDATION_ERROR", "Email inválido.");
+                throw ThrowFault(ERROR_VALIDATION_ERROR, "Email inválido.");
             }
 
             if (trimmedEmail.Length > MAX_EMAIL_LENGTH)
             {
-                throw ThrowFault("VALIDATION_ERROR", $"Email máximo {MAX_EMAIL_LENGTH}.");
+                throw ThrowFault(ERROR_VALIDATION_ERROR, $"Email máximo {MAX_EMAIL_LENGTH}.");
             }
 
             return trimmedEmail;
@@ -451,7 +459,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 var exists = sqlCommand.ExecuteScalar();
                 if (exists != null)
                 {
-                    throw ThrowFault("EMAIL_TAKEN", "Ese email ya está en uso.");
+                    throw ThrowFault(ERROR_EMAIL_TAKEN, "Ese email ya está en uso.");
                 }
             }
         }
@@ -485,7 +493,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 var rows = sqlCommand.ExecuteNonQuery();
                 if (rows == 0)
                 {
-                    throw ThrowFault("NOT_FOUND", "Usuario no encontrado.");
+                    throw ThrowFault(ERROR_NOT_FOUND, "Usuario no encontrado.");
                 }
             }
         }
@@ -501,7 +509,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 var rows = sqlCommand.ExecuteNonQuery();
                 if (rows == 0)
                 {
-                    throw ThrowFault("NOT_FOUND", "Cuenta no encontrada.");
+                    throw ThrowFault(ERROR_NOT_FOUND, "Cuenta no encontrada.");
                 }
             }
         }
@@ -516,7 +524,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 var obj = sqlCommand.ExecuteScalar();
                 if (obj == null)
                 {
-                    throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                    throw ThrowFault(ERROR_NOT_FOUND, "Lobby no encontrado.");
                 }
 
                 return Convert.ToInt32(obj);
@@ -534,7 +542,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     if (!rd.Read())
                     {
-                        throw ThrowFault("NOT_FOUND", "Lobby no encontrado.");
+                        throw ThrowFault(ERROR_NOT_FOUND, "Lobby no encontrado.");
                     }
 
                     var uid = rd.GetGuid(0);
