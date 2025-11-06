@@ -27,5 +27,11 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract]
         void Logout(LogoutRequest request);
+
+        [OperationContract]
+        BeginPasswordResetResponse BeginPasswordReset(BeginPasswordResetRequest request);
+
+        [OperationContract]
+        void CompletePasswordReset(CompletePasswordResetRequest request);
     }
 }

@@ -37,5 +37,30 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 }
             }
         }
+
+        public static void SendPasswordResetCode(string toEmail, string code, int ttlMinutes)
+        {
+            using (var smtp = new SmtpClient(Host, Port))
+            {
+                smtp.EnableSsl = true;
+                smtp.Credentials = new NetworkCredential(User, Pass);
+
+                var subject = "Restablecer contraseña";
+                var body = new StringBuilder()
+                    .AppendLine("Hola,")
+                    .AppendLine()
+                    .AppendLine($"Tu código para restablecer tu contraseña es: {code}")
+                    .AppendLine($"Caduca en {ttlMinutes} minutos.")
+                    .AppendLine()
+                    .AppendLine("Si no solicitaste este código, ignora este correo.")
+                    .ToString();
+
+                using (var msg = new MailMessage(From, toEmail, subject, body))
+                {
+                    smtp.Send(msg);
+                }
+            }
+        }
+
     }
 }

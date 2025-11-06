@@ -25,6 +25,7 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int PROFILE_URL_MAX_LENGTH = 500;
         private const int EMAIL_CODE_LENGTH = 6;
         private const int BCRYPT_WORK_FACTOR = 10;
+        private const int PASSWORD_MIN_LENGTH = 8;
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
@@ -438,6 +439,210 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
             }
         }
+
+        public BeginPasswordResetResponse BeginPasswordReset(BeginPasswordResetRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Email))
+            {
+                throw ThrowFault("INVALID_REQUEST", "Email is required.");
+            }
+
+            string email = request.Email.Trim();
+            string code = SecurityUtil.CreateNumericCode(EMAIL_CODE_LENGTH);
+            byte[] codeHash = SecurityUtil.Sha256(code);
+            DateTime expiresAtUtc = DateTime.UtcNow.AddMinutes(CodeTtlMinutes);
+
+            using (var connection = new SqlConnection(GetConnectionString()))
+            {
+                connection.Open();
+
+                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    // 1) Verificar que la cuenta exista
+                    using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
+                    {
+                        exists.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        var found = exists.ExecuteScalar();
+                        if (found == null)
+                        {
+                            throw ThrowFault("EMAIL_NOT_FOUND", "No account is registered with that email.");
+                        }
+                    }
+
+                    // 2) Cooldown de reenvío
+                    using (var last = new SqlCommand(AuthSql.Text.LAST_RESET_REQUEST, connection, transaction))
+                    {
+                        last.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        object lastObj = last.ExecuteScalar();
+                        DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
+
+                        bool isInCooldown = lastUtc.HasValue &&
+                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < ResendCooldownSeconds;
+                        if (isInCooldown)
+                        {
+                            throw ThrowFault("TOO_SOON", "Please wait before requesting another code.");
+                        }
+                    }
+
+                    // 3) Invalidar solicitudes anteriores
+                    using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_RESETS, connection, transaction))
+                    {
+                        invalidate.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        invalidate.ExecuteNonQuery();
+                    }
+
+                    // 4) Insertar nueva solicitud de reset
+                    using (var insert = new SqlCommand(AuthSql.Text.INSERT_RESET_REQUEST, connection, transaction))
+                    {
+                        insert.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                        insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
+                        insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
+                        insert.ExecuteNonQuery();
+                    }
+
+                    transaction.Commit();
+                }
+            }
+
+            try
+            {
+                EmailSender.SendPasswordResetCode(email, code, CodeTtlMinutes);
+            }
+            catch (SmtpException ex)
+            {
+                throw ThrowTechnicalFault(
+                    "SMTP_ERROR",
+                    "Failed to send password reset email. Please try again later.",
+                    "BeginPasswordReset.EmailSender",
+                    ex);
+            }
+
+            return new BeginPasswordResetResponse
+            {
+                ExpiresAtUtc = expiresAtUtc,
+                ResendAfterSeconds = ResendCooldownSeconds
+            };
+        }
+
+        public void CompletePasswordReset(CompletePasswordResetRequest request)
+        {
+            if (request == null)
+            {
+                throw ThrowFault("INVALID_REQUEST", "Request payload is null.");
+            }
+
+            string email = (request.Email ?? string.Empty).Trim();
+            string code = request.Code ?? string.Empty;
+            string newPassword = request.NewPassword ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(email) ||
+                string.IsNullOrWhiteSpace(code) ||
+                string.IsNullOrWhiteSpace(newPassword))
+            {
+                throw ThrowFault("INVALID_REQUEST", "Email, code and new password are required.");
+            }
+
+            if (newPassword.Length < PASSWORD_MIN_LENGTH)
+            {
+                throw ThrowFault("WEAK_PASSWORD", "New password does not meet the minimum length requirements.");
+            }
+
+            int resetId;
+            DateTime expiresAtUtc;
+            bool used;
+
+            byte[] codeHash = SecurityUtil.Sha256(code);
+
+            // 1) Obtener la última solicitud de reset
+            using (var connection = new SqlConnection(GetConnectionString()))
+            using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_RESET, connection))
+            {
+                pick.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                connection.Open();
+
+                using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
+                {
+                    if (!reader.Read())
+                    {
+                        throw ThrowFault("CODE_MISSING", "No pending reset code. Request a new one.");
+                    }
+
+                    resetId = reader.GetInt32(0);
+                    expiresAtUtc = reader.GetDateTime(1);
+                    used = reader.GetBoolean(2);
+                }
+            }
+
+            if (used || expiresAtUtc <= DateTime.UtcNow)
+            {
+                throw ThrowFault("CODE_EXPIRED", "Reset code expired. Request a new one.");
+            }
+
+            using (var connection = new SqlConnection(GetConnectionString()))
+            {
+                connection.Open();
+
+                using (var validate = new SqlCommand(AuthSql.Text.VALIDATE_RESET, connection))
+                {
+                    validate.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
+                    validate.Parameters.Add("@Hash", SqlDbType.VarBinary, 32).Value = codeHash;
+
+                    bool ok = Convert.ToInt32(validate.ExecuteScalar()) == 1;
+                    if (!ok)
+                    {
+                        using (var inc = new SqlCommand(AuthSql.Text.INCREMENT_RESET_ATTEMPTS, connection))
+                        {
+                            inc.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
+                            inc.ExecuteNonQuery();
+                        }
+
+                        throw ThrowFault("CODE_INVALID", "Invalid reset code.");
+                    }
+                }
+
+                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    try
+                    {
+                        string passwordHash = HashPasswordBc(newPassword);
+
+                        using (var updatePwd = new SqlCommand(AuthSql.Text.UPDATE_ACCOUNT_PASSWORD, connection, transaction))
+                        {
+                            updatePwd.Parameters.Add("@Email", SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
+                            updatePwd.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
+                            int rows = updatePwd.ExecuteNonQuery();
+
+                            if (rows <= 0)
+                            {
+                                throw ThrowFault("EMAIL_NOT_FOUND", "No account is registered with that email.");
+                            }
+                        }
+
+                        using (var mark = new SqlCommand(AuthSql.Text.MARK_RESET_USED, connection, transaction))
+                        {
+                            mark.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
+                            mark.ExecuteNonQuery();
+                        }
+
+                        transaction.Commit();
+                    }
+                    catch (SqlException ex)
+                    {
+                        string userMessage =
+                            $"Unexpected database error while completing password reset. " +
+                            $"(Sql {ex.Number}: {ex.Message})";
+
+                        throw ThrowTechnicalFault(
+                            "DB_ERROR",
+                            userMessage,
+                            "CompletePasswordReset.Tx",
+                            ex);
+                    }
+                }
+            }
+        }
+
+
 
         private static AuthToken IssueToken(int userId)
         {

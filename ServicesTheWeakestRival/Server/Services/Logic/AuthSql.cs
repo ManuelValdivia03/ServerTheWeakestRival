@@ -69,6 +69,55 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
 
             
             public const string SP_LOBBY_LEAVE_ALL_BY_USER = "dbo.usp_Lobby_LeaveAllByUser";
+
+            internal const string LAST_RESET_REQUEST =
+                @"SELECT TOP (1) CreatedAtUtc
+                  FROM dbo.PasswordResetRequests
+                  WHERE Email = @Email
+                  ORDER BY CreatedAtUtc DESC;";
+
+            internal const string INVALIDATE_PENDING_RESETS =
+                @"UPDATE dbo.PasswordResetRequests
+                  SET Used = 1
+                  WHERE Email = @Email
+                    AND Used = 0
+                    AND ExpiresAtUtc > SYSUTCDATETIME();";
+
+            internal const string INSERT_RESET_REQUEST =
+                @"INSERT INTO dbo.PasswordResetRequests
+                        (Email, CodeHash, ExpiresAtUtc, Used, Attempts, CreatedAtUtc)
+                  VALUES (@Email, @CodeHash, @ExpiresAtUtc, 0, 0, SYSUTCDATETIME());";
+
+            internal const string PICK_LATEST_RESET =
+                @"SELECT TOP (1) Id,
+                                 ExpiresAtUtc,
+                                 Used
+                  FROM dbo.PasswordResetRequests
+                  WHERE Email = @Email
+                  ORDER BY CreatedAtUtc DESC;";
+
+            internal const string VALIDATE_RESET =
+                @"SELECT CASE
+                            WHEN CodeHash = @Hash AND Used = 0 THEN 1
+                            ELSE 0
+                        END
+                  FROM dbo.PasswordResetRequests
+                  WHERE Id = @Id;";
+
+            internal const string INCREMENT_RESET_ATTEMPTS =
+                @"UPDATE dbo.PasswordResetRequests
+                  SET Attempts = Attempts + 1
+                  WHERE Id = @Id;";
+
+            internal const string MARK_RESET_USED =
+                @"UPDATE dbo.PasswordResetRequests
+                  SET Used = 1
+                  WHERE Id = @Id;";
+
+            internal const string UPDATE_ACCOUNT_PASSWORD =
+                @"UPDATE dbo.Accounts
+                  SET password_hash = @PasswordHash
+                  WHERE Email = @Email;";
         }
     }
 }
