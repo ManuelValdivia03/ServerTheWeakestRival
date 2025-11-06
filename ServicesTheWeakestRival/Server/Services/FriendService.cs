@@ -5,10 +5,10 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.ServiceModel;
+using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services.Logic;
-using log4net;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -25,6 +25,8 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int DEFAULT_MAX_RESULTS = 20;
         private const int MAX_RESULTS_LIMIT = 100;
 
+        private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
+
         private enum FriendRequestState : byte
         {
             Pending = 0,
@@ -33,22 +35,26 @@ namespace ServicesTheWeakestRival.Server.Services
             Cancelled = 3
         }
 
-        private static string ConnectionString
+        private static string GetConnectionString()
         {
-            get
-            {
-                var configurationString = ConfigurationManager.ConnectionStrings["TheWeakestRivalDb"];
-                if (configurationString == null || string.IsNullOrWhiteSpace(configurationString.ConnectionString))
-                {
-                    Logger.Error("Missing connection string 'TheWeakestRivalDb'.");
-                    ThrowFault("CONFIG_ERROR", "Missing connection string 'TheWeakestRivalDb'.");
-                }
+            var configurationString = ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME];
 
-                return configurationString.ConnectionString;
+            if (configurationString == null || string.IsNullOrWhiteSpace(configurationString.ConnectionString))
+            {
+                Logger.ErrorFormat("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME);
+
+                throw ThrowTechnicalFault(
+                    "CONFIG_ERROR",
+                    "Configuration error. Please contact support.",
+                    "FriendService.GetConnectionString",
+                    new ConfigurationErrorsException(
+                        string.Format("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME)));
             }
+
+            return configurationString.ConnectionString;
         }
 
-        private static void ThrowFault(string code, string message)
+        private static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
             Logger.WarnFormat("Service fault. Code='{0}', Message='{1}'", code, message);
 
@@ -58,10 +64,14 @@ namespace ServicesTheWeakestRival.Server.Services
                 Message = message
             };
 
-            throw new FaultException<ServiceFault>(fault, new FaultReason(message));
+            return new FaultException<ServiceFault>(fault, new FaultReason(message));
         }
 
-        private static void ThrowTechnicalFault(string code, string userMessage, string context, Exception ex)
+        private static FaultException<ServiceFault> ThrowTechnicalFault(
+            string code,
+            string userMessage,
+            string context,
+            Exception ex)
         {
             Logger.Error(context, ex);
 
@@ -71,7 +81,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 Message = userMessage
             };
 
-            throw new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
+            return new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
         }
 
         private static bool IsUniqueViolation(SqlException ex) =>
@@ -81,17 +91,17 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                ThrowFault("AUTH_REQUIRED", "Missing token.");
+                throw ThrowFault("AUTH_REQUIRED", "Missing token.");
             }
 
             if (!TokenCache.TryGetValue(token, out var authToken))
             {
-                ThrowFault("AUTH_INVALID", "Invalid token.");
+                throw ThrowFault("AUTH_INVALID", "Invalid token.");
             }
 
             if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
             {
-                ThrowFault("AUTH_EXPIRED", "Token expired.");
+                throw ThrowFault("AUTH_EXPIRED", "Token expired.");
             }
 
             return authToken.UserId;
@@ -101,7 +111,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -109,12 +119,12 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (myAccountId == targetAccountId)
             {
-                ThrowFault("FR_SELF", "No puedes enviarte solicitud a ti mismo.");
+                throw ThrowFault("FR_SELF", "No puedes enviarte solicitud a ti mismo.");
             }
 
             try
             {
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     connection.Open();
                     using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
@@ -128,7 +138,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             var scalarValue = command.ExecuteScalar();
                             if (scalarValue != null)
                             {
-                                ThrowFault("FR_ALREADY", "Ya existe una amistad entre estas cuentas.");
+                                throw ThrowFault("FR_ALREADY", "Ya existe una amistad entre estas cuentas.");
                             }
                         }
 
@@ -246,7 +256,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                         myAccountId,
                                         targetAccountId);
 
-                                    ThrowFault("FR_RACE", "No se pudo crear ni reabrir la solicitud (carrera).");
+                                    throw ThrowFault("FR_RACE", "No se pudo crear ni reabrir la solicitud (carrera).");
                                 }
 
                                 reopenedId = Convert.ToInt32(scalarValue);
@@ -271,7 +281,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at SendFriendRequest.",
@@ -279,22 +289,19 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at SendFriendRequest.",
                     ex);
             }
-
-            // Inalcanzable, pero requerido por el compilador.
-            return new SendFriendRequestResponse();
         }
 
         public AcceptFriendRequestResponse AcceptFriendRequest(AcceptFriendRequestRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -305,7 +312,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 int toAccountId;
                 byte currentStatus;
 
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     connection.Open();
 
@@ -317,7 +324,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             if (!reader.Read())
                             {
-                                ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
+                                throw ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
                             }
 
                             fromAccountId = reader.GetInt32(1);
@@ -328,12 +335,12 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     if (toAccountId != myAccountId)
                     {
-                        ThrowFault("FORBIDDEN", "No puedes aceptar esta solicitud.");
+                        throw ThrowFault("FORBIDDEN", "No puedes aceptar esta solicitud.");
                     }
 
                     if (currentStatus != (byte)FriendRequestState.Pending)
                     {
-                        ThrowFault("FR_NOT_PENDING", "La solicitud ya fue procesada.");
+                        throw ThrowFault("FR_NOT_PENDING", "La solicitud ya fue procesada.");
                     }
 
                     using (var command = new SqlCommand(FriendSql.Text.ACCEPT_REQUEST, connection))
@@ -346,7 +353,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         var affectedRows = command.ExecuteNonQuery();
                         if (affectedRows == 0)
                         {
-                            ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                            throw ThrowFault("FR_RACE", "El estado cambió. Refresca.");
                         }
                     }
                 }
@@ -371,7 +378,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at AcceptFriendRequest.",
@@ -379,21 +386,19 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at AcceptFriendRequest.",
                     ex);
             }
-
-            return new AcceptFriendRequestResponse();
         }
 
         public RejectFriendRequestResponse RejectFriendRequest(RejectFriendRequestRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -404,7 +409,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 int toAccountId;
                 byte currentStatus;
 
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     connection.Open();
                     using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
@@ -416,7 +421,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             {
                                 if (!reader.Read())
                                 {
-                                    ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
+                                    throw ThrowFault("FR_NOT_FOUND", "La solicitud no existe.");
                                 }
 
                                 fromAccountId = reader.GetInt32(1);
@@ -427,7 +432,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         if (currentStatus != (byte)FriendRequestState.Pending)
                         {
-                            ThrowFault("FR_NOT_PENDING", "La solicitud ya fue resuelta.");
+                            throw ThrowFault("FR_NOT_PENDING", "La solicitud ya fue resuelta.");
                         }
 
                         if (toAccountId == myAccountId)
@@ -442,7 +447,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 var affectedRows = command.ExecuteNonQuery();
                                 if (affectedRows == 0)
                                 {
-                                    ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                    throw ThrowFault("FR_RACE", "El estado cambió. Refresca.");
                                 }
                             }
 
@@ -472,7 +477,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 var affectedRows = command.ExecuteNonQuery();
                                 if (affectedRows == 0)
                                 {
-                                    ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                    throw ThrowFault("FR_RACE", "El estado cambió. Refresca.");
                                 }
                             }
 
@@ -490,14 +495,13 @@ namespace ServicesTheWeakestRival.Server.Services
                             };
                         }
 
-                        ThrowFault("FR_FORBIDDEN", "No estás involucrado en esta solicitud.");
-                        return new RejectFriendRequestResponse();
+                        throw ThrowFault("FR_FORBIDDEN", "No estás involucrado en esta solicitud.");
                     }
                 }
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at RejectFriendRequest.",
@@ -505,21 +509,19 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at RejectFriendRequest.",
                     ex);
             }
-
-            return new RejectFriendRequestResponse();
         }
 
         public RemoveFriendResponse RemoveFriend(RemoveFriendRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -527,7 +529,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     connection.Open();
                     using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
@@ -585,7 +587,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at RemoveFriend.",
@@ -593,28 +595,26 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at RemoveFriend.",
                     ex);
             }
-
-            return new RemoveFriendResponse();
         }
 
         public ListFriendsResponse ListFriends(ListFriendsRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
 
             try
             {
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     connection.Open();
 
@@ -712,7 +712,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at ListFriends.",
@@ -720,28 +720,26 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at ListFriends.",
                     ex);
             }
-
-            return new ListFriendsResponse();
         }
 
         public HeartbeatResponse PresenceHeartbeat(HeartbeatRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
 
             try
             {
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 {
                     connection.Open();
 
@@ -779,7 +777,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at PresenceHeartbeat.",
@@ -787,21 +785,19 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at PresenceHeartbeat.",
                     ex);
             }
-
-            return new HeartbeatResponse();
         }
 
         public GetFriendsPresenceResponse GetFriendsPresence(GetFriendsPresenceRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -810,7 +806,7 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 var list = new System.Collections.Generic.List<FriendPresence>();
 
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 using (var command = new SqlCommand(FriendSql.Text.FRIENDS_PRESENCE, connection))
                 {
                     connection.Open();
@@ -844,7 +840,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at GetFriendsPresence.",
@@ -852,21 +848,19 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at GetFriendsPresence.",
                     ex);
             }
-
-            return new GetFriendsPresenceResponse();
         }
 
         public SearchAccountsResponse SearchAccounts(SearchAccountsRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -879,7 +873,7 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 var list = new System.Collections.Generic.List<SearchAccountItem>();
 
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 using (var command = new SqlCommand(FriendSql.Text.SEARCH_ACCOUNTS, connection))
                 {
                     connection.Open();
@@ -923,7 +917,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at SearchAccounts.",
@@ -931,21 +925,19 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at SearchAccounts.",
                     ex);
             }
-
-            return new SearchAccountsResponse();
         }
 
         public GetAccountsByIdsResponse GetAccountsByIds(GetAccountsByIdsRequest request)
         {
             if (request == null)
             {
-                ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault("INVALID_REQUEST", "Request is null.");
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -961,7 +953,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 var sqlQuery = FriendSql.BuildGetAccountsByIdsQuery(ids.Length);
 
-                using (var connection = new SqlConnection(ConnectionString))
+                using (var connection = new SqlConnection(GetConnectionString()))
                 using (var command = new SqlCommand(sqlQuery, connection))
                 {
                     connection.Open();
@@ -1000,7 +992,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "DB_ERROR",
                     "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
                     "Database error at GetAccountsByIds.",
@@ -1008,14 +1000,12 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     "UNEXPECTED_ERROR",
                     "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
                     "Unexpected error at GetAccountsByIds.",
                     ex);
             }
-
-            return new GetAccountsByIdsResponse();
         }
 
         private FriendSummary LoadFriendSummary(SqlConnection connection, SqlTransaction transaction, int friendId, DateTime sinceUtc)
