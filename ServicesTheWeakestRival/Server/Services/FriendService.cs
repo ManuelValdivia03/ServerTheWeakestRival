@@ -27,6 +27,18 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
+        private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
+        private const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
+
+
+        private const string PARAM_ME = "@Me";
+        private const string PARAM_TARGET = "@Target";
+        private const string PARAM_ACCEPTED = "@Accepted";
+        private const string PARAM_PENDING = "@Pending";
+        private const string PARAM_DECLINED = "@Declined";
+        private const string PARAM_CANCELLED = "@Cancelled";
+        private const string PARAM_ID = "@Id";
+
         private enum FriendRequestState : byte
         {
             Pending = 0,
@@ -111,7 +123,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -131,9 +143,9 @@ namespace ServicesTheWeakestRival.Server.Services
                     {
                         using (var command = new SqlCommand(FriendSql.Text.EXISTS_FRIEND, connection, transaction))
                         {
-                            command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                            command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
-                            command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
+                            command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                            command.Parameters.Add(PARAM_TARGET, SqlDbType.Int).Value = targetAccountId;
+                            command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
 
                             var scalarValue = command.ExecuteScalar();
                             if (scalarValue != null)
@@ -145,9 +157,9 @@ namespace ServicesTheWeakestRival.Server.Services
                         int? existingOutgoingId = null;
                         using (var command = new SqlCommand(FriendSql.Text.PENDING_OUT, connection, transaction))
                         {
-                            command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                            command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
-                            command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                            command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                            command.Parameters.Add(PARAM_TARGET, SqlDbType.Int).Value = targetAccountId;
+                            command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                             var scalarValue = command.ExecuteScalar();
                             if (scalarValue != null)
@@ -176,9 +188,9 @@ namespace ServicesTheWeakestRival.Server.Services
                         int? incomingId = null;
                         using (var command = new SqlCommand(FriendSql.Text.PENDING_IN, connection, transaction))
                         {
-                            command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                            command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
-                            command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                            command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                            command.Parameters.Add(PARAM_TARGET, SqlDbType.Int).Value = targetAccountId;
+                            command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                             var scalarValue = command.ExecuteScalar();
                             if (scalarValue != null)
@@ -193,7 +205,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             using (var command = new SqlCommand(FriendSql.Text.ACCEPT_INCOMING, connection, transaction))
                             {
                                 command.Parameters.Add("@ReqId", SqlDbType.Int).Value = incomingId.Value;
-                                command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
+                                command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
                                 acceptedId = Convert.ToInt32(command.ExecuteScalar());
                             }
 
@@ -217,9 +229,9 @@ namespace ServicesTheWeakestRival.Server.Services
                             int newId;
                             using (var command = new SqlCommand(FriendSql.Text.INSERT_REQUEST, connection, transaction))
                             {
-                                command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                                command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
-                                command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                                command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                                command.Parameters.Add(PARAM_TARGET, SqlDbType.Int).Value = targetAccountId;
+                                command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
                                 newId = Convert.ToInt32(command.ExecuteScalar());
                             }
 
@@ -242,11 +254,11 @@ namespace ServicesTheWeakestRival.Server.Services
                             int reopenedId;
                             using (var command = new SqlCommand(FriendSql.Text.REOPEN_REQUEST, connection, transaction))
                             {
-                                command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                                command.Parameters.Add("@Target", SqlDbType.Int).Value = targetAccountId;
-                                command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
-                                command.Parameters.Add("@Declined", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Declined;
-                                command.Parameters.Add("@Cancelled", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
+                                command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                                command.Parameters.Add(PARAM_TARGET, SqlDbType.Int).Value = targetAccountId;
+                                command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                                command.Parameters.Add(PARAM_DECLINED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Declined;
+                                command.Parameters.Add(PARAM_CANCELLED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
 
                                 var scalarValue = command.ExecuteScalar();
                                 if (scalarValue == null)
@@ -301,7 +313,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -318,7 +330,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     using (var command = new SqlCommand(FriendSql.Text.CHECK_REQUEST, connection))
                     {
-                        command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
+                        command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = request.FriendRequestId;
 
                         using (var reader = command.ExecuteReader(CommandBehavior.SingleRow))
                         {
@@ -345,10 +357,10 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     using (var command = new SqlCommand(FriendSql.Text.ACCEPT_REQUEST, connection))
                     {
-                        command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
-                        command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
-                        command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
-                        command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
+                        command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
+                        command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                        command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = request.FriendRequestId;
+                        command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
 
                         var affectedRows = command.ExecuteNonQuery();
                         if (affectedRows == 0)
@@ -398,7 +410,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -416,7 +428,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     {
                         using (var command = new SqlCommand(FriendSql.Text.GET_REQUEST, connection, transaction))
                         {
-                            command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
+                            command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = request.FriendRequestId;
                             using (var reader = command.ExecuteReader(CommandBehavior.SingleRow))
                             {
                                 if (!reader.Read())
@@ -439,10 +451,10 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             using (var command = new SqlCommand(FriendSql.Text.REJECT_REQUEST, connection, transaction))
                             {
-                                command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
-                                command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
+                                command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = request.FriendRequestId;
+                                command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
                                 command.Parameters.Add("@Rejected", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Declined;
-                                command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                                command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                                 var affectedRows = command.ExecuteNonQuery();
                                 if (affectedRows == 0)
@@ -469,10 +481,10 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             using (var command = new SqlCommand(FriendSql.Text.CANCEL_REQUEST, connection, transaction))
                             {
-                                command.Parameters.Add("@Id", SqlDbType.Int).Value = request.FriendRequestId;
-                                command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                                command.Parameters.Add("@Cancelled", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
-                                command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                                command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = request.FriendRequestId;
+                                command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                                command.Parameters.Add(PARAM_CANCELLED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
+                                command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                                 var affectedRows = command.ExecuteNonQuery();
                                 if (affectedRows == 0)
@@ -521,7 +533,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -537,9 +549,9 @@ namespace ServicesTheWeakestRival.Server.Services
                         int? friendRequestId = null;
                         using (var command = new SqlCommand(FriendSql.Text.LATEST_ACCEPTED, connection, transaction))
                         {
-                            command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
+                            command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
                             command.Parameters.Add("@Other", SqlDbType.Int).Value = otherAccountId;
-                            command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
+                            command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
 
                             var scalarValue = command.ExecuteScalar();
                             if (scalarValue != null)
@@ -565,8 +577,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         using (var command = new SqlCommand(FriendSql.Text.MARK_CANCELLED, connection, transaction))
                         {
-                            command.Parameters.Add("@Id", SqlDbType.Int).Value = friendRequestId.Value;
-                            command.Parameters.Add("@Cancelled", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
+                            command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = friendRequestId.Value;
+                            command.Parameters.Add(PARAM_CANCELLED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Cancelled;
                             command.ExecuteNonQuery();
                         }
 
@@ -607,7 +619,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -621,8 +633,8 @@ namespace ServicesTheWeakestRival.Server.Services
                     var friends = new System.Collections.Generic.List<FriendSummary>();
                     using (var command = new SqlCommand(FriendSql.Text.FRIENDS, connection))
                     {
-                        command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                        command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
+                        command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                        command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
 
                         using (var reader = command.ExecuteReader())
                         {
@@ -642,8 +654,8 @@ namespace ServicesTheWeakestRival.Server.Services
                     FriendRequestSummary[] incoming;
                     using (var command = new SqlCommand(FriendSql.Text.PENDING_INCOMING, connection))
                     {
-                        command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                        command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                        command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                        command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                         using (var reader = command.ExecuteReader())
                         {
@@ -669,8 +681,8 @@ namespace ServicesTheWeakestRival.Server.Services
                     FriendRequestSummary[] outgoing;
                     using (var command = new SqlCommand(FriendSql.Text.PENDING_OUTGOING, connection))
                     {
-                        command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                        command.Parameters.Add("@Pending", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
+                        command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                        command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                         using (var reader = command.ExecuteReader())
                         {
@@ -732,7 +744,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -745,7 +757,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     using (var command = new SqlCommand(FriendSql.Text.PRESENCE_UPDATE, connection))
                     {
-                        command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
+                        command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
                         command.Parameters.Add("@Dev", SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
                             string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
 
@@ -754,7 +766,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             using (var insertCommand = new SqlCommand(FriendSql.Text.PRESENCE_INSERT, connection))
                             {
-                                insertCommand.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
+                                insertCommand.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
                                 insertCommand.Parameters.Add("@Dev", SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
                                     string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
                                 insertCommand.ExecuteNonQuery();
@@ -797,7 +809,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -810,8 +822,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (var command = new SqlCommand(FriendSql.Text.FRIENDS_PRESENCE, connection))
                 {
                     connection.Open();
-                    command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
-                    command.Parameters.Add("@Accepted", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
+                    command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
+                    command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
                     command.Parameters.Add("@Window", SqlDbType.Int).Value = ONLINE_WINDOW_SECONDS;
 
                     using (var reader = command.ExecuteReader())
@@ -860,7 +872,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -877,7 +889,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (var command = new SqlCommand(FriendSql.Text.SEARCH_ACCOUNTS, connection))
                 {
                     connection.Open();
-                    command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
+                    command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
                     command.Parameters.Add("@Max", SqlDbType.Int).Value = maxResults;
 
                     var like = "%" + query + "%";
@@ -937,7 +949,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault("INVALID_REQUEST", "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
             var myAccountId = Authenticate(request.Token);
@@ -957,7 +969,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (var command = new SqlCommand(sqlQuery, connection))
                 {
                     connection.Open();
-                    command.Parameters.Add("@Me", SqlDbType.Int).Value = myAccountId;
+                    command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
 
                     for (var i = 0; i < ids.Length; i++)
                     {
@@ -1012,7 +1024,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             using (var command = new SqlCommand(FriendSql.Text.FRIEND_SUMMARY, connection, transaction))
             {
-                command.Parameters.Add("@Id", SqlDbType.Int).Value = friendId;
+                command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = friendId;
 
                 int accountId;
                 string email = string.Empty;
