@@ -12,14 +12,14 @@ namespace TheWeakestRival.Data
     using System;
     using System.Collections.Generic;
     
-    public partial class Accounts
+    public partial class PasswordResetRequests
     {
-        public int account_id { get; set; }
-        public string email { get; set; }
-        public string password_hash { get; set; }
-        public byte status { get; set; }
-        public System.DateTime created_at { get; set; }
-    
-        public virtual Users Users { get; set; }
+        public int Id { get; set; }
+        public string Email { get; set; }
+        public byte[] CodeHash { get; set; }
+        public System.DateTime ExpiresAtUtc { get; set; }
+        public bool Used { get; set; }
+        public int Attempts { get; set; }
+        public System.DateTime CreatedAtUtc { get; set; }
     }
 }

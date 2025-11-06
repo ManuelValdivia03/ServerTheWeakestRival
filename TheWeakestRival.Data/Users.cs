@@ -34,6 +34,8 @@ namespace TheWeakestRival.Data
             this.RoundVotes1 = new HashSet<RoundVotes>();
             this.UserFriends = new HashSet<UserFriends>();
             this.UserFriends1 = new HashSet<UserFriends>();
+            this.Lobbies = new HashSet<Lobbies>();
+            this.LobbyMembers = new HashSet<LobbyMembers>();
         }
     
         public int user_id { get; set; }
@@ -76,5 +78,10 @@ namespace TheWeakestRival.Data
         public virtual ICollection<UserFriends> UserFriends { get; set; }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         public virtual ICollection<UserFriends> UserFriends1 { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<Lobbies> Lobbies { get; set; }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        public virtual ICollection<LobbyMembers> LobbyMembers { get; set; }
+        public virtual UserPresence UserPresence { get; set; }
     }
 }

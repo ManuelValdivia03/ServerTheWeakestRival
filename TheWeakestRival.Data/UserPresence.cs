@@ -12,13 +12,11 @@ namespace TheWeakestRival.Data
     using System;
     using System.Collections.Generic;
     
-    public partial class Accounts
+    public partial class UserPresence
     {
-        public int account_id { get; set; }
-        public string email { get; set; }
-        public string password_hash { get; set; }
-        public byte status { get; set; }
-        public System.DateTime created_at { get; set; }
+        public int user_id { get; set; }
+        public System.DateTime last_seen_utc { get; set; }
+        public string device { get; set; }
     
         public virtual Users Users { get; set; }
     }

@@ -12,14 +12,16 @@ namespace TheWeakestRival.Data
     using System;
     using System.Collections.Generic;
     
-    public partial class Accounts
+    public partial class LobbyMembers
     {
-        public int account_id { get; set; }
-        public string email { get; set; }
-        public string password_hash { get; set; }
-        public byte status { get; set; }
-        public System.DateTime created_at { get; set; }
+        public int lobby_id { get; set; }
+        public int user_id { get; set; }
+        public byte role { get; set; }
+        public System.DateTime joined_at_utc { get; set; }
+        public Nullable<System.DateTime> left_at_utc { get; set; }
+        public bool is_active { get; set; }
     
+        public virtual Lobbies Lobbies { get; set; }
         public virtual Users Users { get; set; }
     }
 }

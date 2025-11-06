@@ -12,14 +12,15 @@ namespace TheWeakestRival.Data
     using System;
     using System.Collections.Generic;
     
-    public partial class Accounts
+    public partial class ChatMessages
     {
-        public int account_id { get; set; }
-        public string email { get; set; }
-        public string password_hash { get; set; }
-        public byte status { get; set; }
-        public System.DateTime created_at { get; set; }
+        public int chat_message_id { get; set; }
+        public int user_id { get; set; }
+        public string display_name { get; set; }
+        public string message_text { get; set; }
+        public System.DateTime sent_utc { get; set; }
+        public Nullable<int> lobby_id { get; set; }
     
-        public virtual Users Users { get; set; }
+        public virtual Lobbies Lobbies { get; set; }
     }
 }

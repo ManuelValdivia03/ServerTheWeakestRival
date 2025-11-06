@@ -4,7 +4,7 @@
   <edmx:Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
     <!-- Diagram content (shape and connector positions) -->
     <edmx:Diagrams>
-      <Diagram DiagramId="0713a401af46499193427fa4197af202" Name="Diagram1" ZoomLevel="64">
+      <Diagram DiagramId="0713a401af46499193427fa4197af202" Name="Diagram1" ZoomLevel="62">
         <EntityTypeShape EntityType="TheWeakestRivalModel.Accounts" Width="1.5" PointX="0.75" PointY="21" IsExpanded="true" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.Answers" Width="1.5" PointX="10.5" PointY="18" IsExpanded="true" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.Categories" Width="1.5" PointX="6" PointY="17.25" IsExpanded="true" />
@@ -59,6 +59,16 @@
         <AssociationConnector Association="TheWeakestRivalModel.FK_uf_fu" ManuallyRouted="false" />
         <AssociationConnector Association="TheWeakestRivalModel.FK_uf_u" ManuallyRouted="false" />
         <EntityTypeShape EntityType="TheWeakestRivalModel.EmailVerifications" Width="1.5" PointX="0.75" PointY="0.75" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.ChatMessages" Width="1.5" PointX="7.375" PointY="31" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.Lobbies" Width="1.5" PointX="5.125" PointY="29.25" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.LobbyMembers" Width="1.5" PointX="13.375" PointY="24.875" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.PasswordResetRequests" Width="1.5" PointX="3.375" PointY="0.75" />
+        <EntityTypeShape EntityType="TheWeakestRivalModel.UserPresence" Width="1.5" PointX="5.125" PointY="13.75" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_ChatMessages_Lobbies" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_Lobbies_Users_Owner" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_LobbyMembers_Lobbies" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_LobbyMembers_Users" />
+        <AssociationConnector Association="TheWeakestRivalModel.FK_userpresence_users" />
       </Diagram>
     </edmx:Diagrams>
   </edmx:Designer>
