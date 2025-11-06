@@ -27,10 +27,22 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
+        // Business error codes / messages reused muchas veces
         private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
         private const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
 
+        private const string ERROR_RACE = "FR_RACE";
+        private const string ERROR_DB = "DB_ERROR";
+        private const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
 
+        private const string MESSAGE_DB_ERROR =
+            "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
+        private const string MESSAGE_UNEXPECTED_ERROR =
+            "Ocurrió un error inesperado. Intenta de nuevo más tarde.";
+        private const string MESSAGE_STATE_CHANGED =
+            "El estado cambió. Refresca.";
+
+        // Parámetros SQL reutilizados
         private const string PARAM_ME = "@Me";
         private const string PARAM_TARGET = "@Target";
         private const string PARAM_ACCEPTED = "@Accepted";
@@ -268,7 +280,9 @@ namespace ServicesTheWeakestRival.Server.Services
                                         myAccountId,
                                         targetAccountId);
 
-                                    throw ThrowFault("FR_RACE", "No se pudo crear ni reabrir la solicitud (carrera).");
+                                    throw ThrowFault(
+                                        ERROR_RACE,
+                                        "No se pudo crear ni reabrir la solicitud (carrera).");
                                 }
 
                                 reopenedId = Convert.ToInt32(scalarValue);
@@ -294,16 +308,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at SendFriendRequest.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at SendFriendRequest.",
                     ex);
             }
@@ -365,7 +379,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         var affectedRows = command.ExecuteNonQuery();
                         if (affectedRows == 0)
                         {
-                            throw ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                            throw ThrowFault(ERROR_RACE, MESSAGE_STATE_CHANGED);
                         }
                     }
                 }
@@ -391,16 +405,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at AcceptFriendRequest.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at AcceptFriendRequest.",
                     ex);
             }
@@ -459,7 +473,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 var affectedRows = command.ExecuteNonQuery();
                                 if (affectedRows == 0)
                                 {
-                                    throw ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                    throw ThrowFault(ERROR_RACE, MESSAGE_STATE_CHANGED);
                                 }
                             }
 
@@ -489,7 +503,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 var affectedRows = command.ExecuteNonQuery();
                                 if (affectedRows == 0)
                                 {
-                                    throw ThrowFault("FR_RACE", "El estado cambió. Refresca.");
+                                    throw ThrowFault(ERROR_RACE, MESSAGE_STATE_CHANGED);
                                 }
                             }
 
@@ -514,16 +528,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at RejectFriendRequest.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at RejectFriendRequest.",
                     ex);
             }
@@ -600,16 +614,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at RemoveFriend.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at RemoveFriend.",
                     ex);
             }
@@ -725,16 +739,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at ListFriends.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at ListFriends.",
                     ex);
             }
@@ -790,16 +804,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at PresenceHeartbeat.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at PresenceHeartbeat.",
                     ex);
             }
@@ -853,16 +867,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at GetFriendsPresence.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at GetFriendsPresence.",
                     ex);
             }
@@ -930,16 +944,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at SearchAccounts.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at SearchAccounts.",
                     ex);
             }
@@ -1005,16 +1019,16 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (SqlException ex)
             {
                 throw ThrowTechnicalFault(
-                    "DB_ERROR",
-                    "Ocurrió un error de base de datos. Intenta de nuevo más tarde.",
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
                     "Database error at GetAccountsByIds.",
                     ex);
             }
             catch (Exception ex)
             {
                 throw ThrowTechnicalFault(
-                    "UNEXPECTED_ERROR",
-                    "Ocurrió un error inesperado. Intenta de nuevo más tarde.",
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
                     "Unexpected error at GetAccountsByIds.",
                     ex);
             }
