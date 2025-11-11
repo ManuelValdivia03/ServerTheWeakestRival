@@ -87,6 +87,7 @@
     <Compile Include="Server\Services\Logic\ChatSql.cs" />
     <Compile Include="Server\Services\Logic\FriendSql.cs" />
     <Compile Include="Server\Services\Logic\LobbySql.cs" />
+    <Compile Include="Server\Services\Logic\UserAvatarSql.cs" />
     <Compile Include="Server\Services\MatchmakingService.cs" />
     <Compile Include="Server\Services\StatsService.cs" />
     <Compile Include="Server\Services\TokenStore.cs" />
