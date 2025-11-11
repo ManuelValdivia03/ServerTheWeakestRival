@@ -27,6 +27,16 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_UNAUTHORIZED = "UNAUTHORIZED";
         private const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
 
+        // nuevos para manejo técnico de errores (igual estilo que otros servicios)
+        private const string ERROR_DB = "DB_ERROR";
+        private const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
+
+        private const string MESSAGE_DB_ERROR =
+            "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
+
+        private const string MESSAGE_UNEXPECTED_ERROR =
+            "Ocurrió un error inesperado. Intenta de nuevo más tarde.";
+
         private static readonly ILog Logger = LogManager.GetLogger(typeof(LobbyService));
 
         private static string Connection =>
@@ -603,6 +613,139 @@ namespace ServicesTheWeakestRival.Server.Services
             };
 
             return new FaultException<ServiceFault>(fault, new FaultReason(message));
+        }
+
+        public StartLobbyMatchResponse StartLobbyMatch(StartLobbyMatchRequest request)
+        {
+            if (request == null)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Request nulo.");
+            }
+
+
+
+            // 1) Autenticar host usando el helper del propio LobbyService
+            var hostUserId = EnsureAuthorizedAndGetUserId(request.Token);
+
+            try
+            {
+                // 2) Crear la partida en BD usando MatchManager
+                var manager = new MatchManager(Connection);
+
+                var createRequest = new CreateMatchRequest
+                {
+                    Token = request.Token,
+                    MaxPlayers = DEFAULT_MAX_PLAYERS,
+                    Config = new MatchConfigDto
+                    {
+                        StartingScore = 0m,
+                        MaxScore = 100m,
+                        PointsPerCorrect = 1m,
+                        PointsPerWrong = -1m,
+                        PointsPerEliminationGain = 0m,
+                        AllowTiebreakCoinflip = true
+                    },
+                    IsPrivate = false
+                };
+
+                var createResponse = manager.CreateMatch(hostUserId, createRequest);
+                var match = createResponse.Match;
+
+                if (match == null)
+                {
+                    throw ThrowTechnicalFault(
+                        ERROR_UNEXPECTED,
+                        MESSAGE_UNEXPECTED_ERROR,
+                        "LobbyService.StartLobbyMatch.NullMatch",
+                        new InvalidOperationException("MatchManager returned null Match."));
+                }
+
+                // 3) Broadcast a TODOS los del lobby
+
+                if (TryGetLobbyUidForCurrentSession(out var lobbyUid))
+                {
+                    Logger.InfoFormat(
+                        "StartLobbyMatch: broadcasting OnMatchStarted. LobbyUid={0}",
+                        lobbyUid);
+
+                    BroadcastToLobby(lobbyUid, cb =>
+                    {
+                        try
+                        {
+                            cb.OnMatchStarted(match);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn("Error sending OnMatchStarted callback.", ex);
+                        }
+                    });
+                }
+                else
+                {
+                    Logger.Warn("StartLobbyMatch: could not resolve lobbyUid for current session.");
+                }
+
+                return new StartLobbyMatchResponse
+                {
+                    Match = match
+                };
+            }
+            catch (FaultException<ServiceFault>)
+            {
+                throw;
+            }
+            catch (SqlException ex)
+            {
+                throw ThrowTechnicalFault(
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
+                    "LobbyService.StartLobbyMatch",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                throw ThrowTechnicalFault(
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
+                    "LobbyService.StartLobbyMatch",
+                    ex);
+            }
+        }
+
+
+        // helper técnico igual que en otros servicios
+        private static FaultException<ServiceFault> ThrowTechnicalFault(
+            string code,
+            string userMessage,
+            string context,
+            Exception ex)
+        {
+            Logger.Error(context, ex);
+
+            var fault = new ServiceFault
+            {
+                Code = code,
+                Message = userMessage
+            };
+
+            return new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
+        }
+
+        private static bool TryGetLobbyUidForCurrentSession(out Guid lobbyUid)
+        {
+            foreach (var kv in CallbackBuckets)
+            {
+                // kv.Key = LobbyUid
+                // kv.Value = diccionario { SessionId -> callback }
+                if (kv.Value.ContainsKey(CurrentSessionId))
+                {
+                    lobbyUid = kv.Key;
+                    return true;
+                }
+            }
+
+            lobbyUid = Guid.Empty;
+            return false;
         }
     }
 }

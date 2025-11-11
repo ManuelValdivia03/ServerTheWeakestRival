@@ -84,7 +84,7 @@
     <Compile Include="Data\ServiceFault.cs" />
     <Compile Include="Data\StatsDtos.cs" />
     <Compile Include="Data\UpdateAccountDtos.cs" />
-    <Compile Include="Data\UserAvatarEntity.cs" />
+    <Compile Include="Data\WildcardDtos.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\IAuthService.cs" />
     <Compile Include="Services\IChatService.cs" />
@@ -93,6 +93,7 @@
     <Compile Include="Services\ILobbyService.cs" />
     <Compile Include="Services\IMatchmakingService.cs" />
     <Compile Include="Services\IStatsService.cs" />
+    <Compile Include="Services\IWildcardService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
