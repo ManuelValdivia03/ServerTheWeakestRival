@@ -92,4 +92,18 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 1, IsRequired = true)] public LobbyInfo Lobby { get; set; }
     }
 
+    [DataContract]
+    public sealed class StartLobbyMatchRequest
+    {
+        [DataMember(Order = 1, IsRequired = true)]
+        public string Token { get; set; }
+    }
+
+    [DataContract]
+    public sealed class StartLobbyMatchResponse
+    {
+        [DataMember(Order = 1, IsRequired = true)]
+        public MatchInfo Match { get; set; }
+    }
+
 }

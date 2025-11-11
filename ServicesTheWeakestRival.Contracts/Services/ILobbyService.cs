@@ -11,6 +11,8 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract(IsOneWay = true)] void OnPlayerJoined(PlayerSummary player);
         [OperationContract(IsOneWay = true)] void OnPlayerLeft(Guid playerId);
         [OperationContract(IsOneWay = true)] void OnChatMessageReceived(ChatMessage message);
+
+        [OperationContract(IsOneWay = true)] void OnMatchStarted(MatchInfo match);
     }
 
     [ServiceContract(CallbackContract = typeof(ILobbyClientCallback))]
@@ -42,5 +44,9 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract, FaultContract(typeof(ServiceFault))]
         JoinByCodeResponse JoinByCode(JoinByCodeRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        StartLobbyMatchResponse StartLobbyMatch(StartLobbyMatchRequest request);
     }
 }
