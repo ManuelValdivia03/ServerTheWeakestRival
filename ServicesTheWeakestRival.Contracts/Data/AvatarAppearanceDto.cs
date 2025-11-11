@@ -52,22 +52,22 @@ namespace ServicesTheWeakestRival.Contracts.Data
     [DataContract]
     public sealed class AvatarAppearanceDto
     {
-        [DataMember]
+        [DataMember(Order = 1)]
         public AvatarBodyColor BodyColor { get; set; }
 
-        [DataMember]
+        [DataMember(Order = 2)]
         public AvatarPantsColor PantsColor { get; set; }
 
-        [DataMember]
+        [DataMember(Order = 3)]
         public AvatarHatType HatType { get; set; }
 
-        [DataMember]
+        [DataMember(Order = 4)]
         public AvatarHatColor HatColor { get; set; }
 
-        [DataMember]
+        [DataMember(Order = 5)]
         public AvatarFaceType FaceType { get; set; }
 
-        [DataMember]
+        [DataMember(Order = 6)]
         public bool UseProfilePhotoAsFace { get; set; }
     }
 }

@@ -9,6 +9,7 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 2)] public string DisplayName { get; set; } = string.Empty;
         [DataMember(Order = 3)] public string Email { get; set; } = string.Empty;
         [DataMember(Order = 4)] public string AvatarUrl { get; set; } = null;
+        [DataMember(Order = 5)] public AvatarAppearanceDto Avatar { get; set; } = null;
     }
 
     [DataContract]

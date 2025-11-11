@@ -108,6 +108,25 @@ namespace ServicesTheWeakestRival.Server.Services
             return new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
         }
 
+        private static AvatarAppearanceDto MapAvatar(UserAvatarEntity entity)
+        {
+            if (entity == null)
+            {
+                return null;
+            }
+
+            return new AvatarAppearanceDto
+            {
+                BodyColor = (AvatarBodyColor)entity.BodyColor,
+                PantsColor = (AvatarPantsColor)entity.PantsColor,
+                HatType = (AvatarHatType)entity.HatType,
+                HatColor = (AvatarHatColor)entity.HatColor,
+                FaceType = (AvatarFaceType)entity.FaceType,
+                UseProfilePhotoAsFace = entity.UseProfilePhoto
+            };
+        }
+
+
         private static bool IsUniqueViolation(SqlException ex) =>
             ex != null && (ex.Number == 2627 || ex.Number == 2601);
 
@@ -977,6 +996,8 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 var list = new System.Collections.Generic.List<AccountMini>();
 
+                var avatarSql = new UserAvatarSql(GetConnectionString());
+
                 var sqlQuery = FriendSql.BuildGetAccountsByIdsQuery(ids.Length);
 
                 using (var connection = new SqlConnection(GetConnectionString()))
@@ -994,12 +1015,22 @@ namespace ServicesTheWeakestRival.Server.Services
                     {
                         while (reader.Read())
                         {
+                            var accountId = reader.GetInt32(0);
+                            var displayName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                            var email = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                            var avatarUrl = reader.IsDBNull(3) ? null : reader.GetString(3);
+
+                            UserAvatarEntity avatarEntity = avatarSql.GetByUserId(accountId);
+
+                            AvatarAppearanceDto avatar = MapAvatar(avatarEntity);
+
                             list.Add(new AccountMini
                             {
-                                AccountId = reader.GetInt32(0),
-                                DisplayName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-                                Email = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                                AvatarUrl = reader.IsDBNull(3) ? null : reader.GetString(3)
+                                AccountId = accountId,
+                                DisplayName = displayName,
+                                Email = email,
+                                AvatarUrl = avatarUrl,
+                                Avatar = avatar
                             });
                         }
                     }

@@ -27,7 +27,6 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_UNAUTHORIZED = "UNAUTHORIZED";
         private const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
 
-        // nuevos para manejo técnico de errores (igual estilo que otros servicios)
         private const string ERROR_DB = "DB_ERROR";
         private const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
 
@@ -624,12 +623,10 @@ namespace ServicesTheWeakestRival.Server.Services
 
 
 
-            // 1) Autenticar host usando el helper del propio LobbyService
             var hostUserId = EnsureAuthorizedAndGetUserId(request.Token);
 
             try
             {
-                // 2) Crear la partida en BD usando MatchManager
                 var manager = new MatchManager(Connection);
 
                 var createRequest = new CreateMatchRequest
@@ -660,7 +657,6 @@ namespace ServicesTheWeakestRival.Server.Services
                         new InvalidOperationException("MatchManager returned null Match."));
                 }
 
-                // 3) Broadcast a TODOS los del lobby
 
                 if (TryGetLobbyUidForCurrentSession(out var lobbyUid))
                 {

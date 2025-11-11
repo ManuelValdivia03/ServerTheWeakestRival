@@ -165,23 +165,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 ResendAfterSeconds = ResendCooldownSeconds
             };
         }
-        private static AvatarAppearanceDto MapAvatar(UserAvatarEntity entity)
-            {
-                if (entity == null)
-                {
-                    return null;
-                }
-
-                return new AvatarAppearanceDto
-                {
-                    BodyColor = (AvatarBodyColor)entity.BodyColor,
-                    PantsColor = (AvatarPantsColor)entity.PantsColor,
-                    HatType = (AvatarHatType)entity.HatType,
-                    HatColor = (AvatarHatColor)entity.HatColor,
-                    FaceType = (AvatarFaceType)entity.FaceType,
-                    UseProfilePhotoAsFace = entity.UseProfilePhoto
-                };
-            }
+       
         public RegisterResponse CompleteRegister(CompleteRegisterRequest request)
         {
             if (request == null)
