@@ -54,6 +54,25 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
+        private static AvatarAppearanceDto MapAvatar(UserAvatarEntity entity)
+        {
+            if (entity == null)
+            {
+                return null;
+            }
+
+            return new AvatarAppearanceDto
+            {
+                BodyColor = (AvatarBodyColor)entity.BodyColor,
+                PantsColor = (AvatarPantsColor)entity.PantsColor,
+                HatType = (AvatarHatType)entity.HatType,
+                HatColor = (AvatarHatColor)entity.HatColor,
+                FaceType = (AvatarFaceType)entity.FaceType,
+                UseProfilePhotoAsFace = entity.UseProfilePhoto
+            };
+        }
+
+
         private static void AddCallbackForLobby(Guid lobbyUid, ILobbyClientCallback cb)
         {
             var bucket = CallbackBuckets.GetOrAdd(lobbyUid, _ => new ConcurrentDictionary<string, ILobbyClientCallback>());
@@ -219,6 +238,8 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             var userId = EnsureAuthorizedAndGetUserId(token);
 
+            UpdateAccountResponse response;
+
             using (var sqlConnection = new SqlConnection(Connection))
             using (var sqlCommand = new SqlCommand(LobbySql.Text.GET_MY_PROFILE, sqlConnection))
             {
@@ -233,7 +254,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     Logger.DebugFormat("GetMyProfile: UserId={0} found.", userId);
 
-                    return new UpdateAccountResponse
+                    response = new UpdateAccountResponse
                     {
                         UserId = rd.GetInt32(0),
                         DisplayName = rd.IsDBNull(1) ? null : rd.GetString(1),
@@ -243,7 +264,15 @@ namespace ServicesTheWeakestRival.Server.Services
                     };
                 }
             }
+
+            var avatarSql = new UserAvatarSql(Connection);
+            var avatarEntity = avatarSql.GetByUserId(userId);
+            response.Avatar = MapAvatar(avatarEntity);
+
+            return response;
         }
+
+
 
         public UpdateAccountResponse UpdateAccount(UpdateAccountRequest request)
         {
@@ -724,6 +753,7 @@ namespace ServicesTheWeakestRival.Server.Services
         }
 
 
+        // helper técnico igual que en otros servicios
         private static FaultException<ServiceFault> ThrowTechnicalFault(
             string code,
             string userMessage,
@@ -745,8 +775,6 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             foreach (var kv in CallbackBuckets)
             {
-                // kv.Key = LobbyUid
-                // kv.Value = diccionario { SessionId -> callback }
                 if (kv.Value.ContainsKey(CurrentSessionId))
                 {
                     lobbyUid = kv.Key;
