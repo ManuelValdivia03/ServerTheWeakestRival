@@ -97,6 +97,18 @@ namespace ServicesTheWeakestRival.Contracts.Data
     {
         [DataMember(Order = 1, IsRequired = true)]
         public string Token { get; set; }
+
+        // Cuántos jugadores máximo queremos en la partida
+        [DataMember(Order = 2, IsRequired = false)]
+        public int MaxPlayers { get; set; }
+
+        // Si la partida va a ser privada o no (para cuando la quieras listar / abrir a otros)
+        [DataMember(Order = 3, IsRequired = false)]
+        public bool IsPrivate { get; set; }
+
+        // Opcional: config completa (cuando quieras mandar puntos, score inicial, etc.)
+        [DataMember(Order = 4, IsRequired = false)]
+        public MatchConfigDto Config { get; set; }
     }
 
     [DataContract]

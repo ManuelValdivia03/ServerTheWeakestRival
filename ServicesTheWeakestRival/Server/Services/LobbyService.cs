@@ -621,28 +621,36 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_INVALID_REQUEST, "Request nulo.");
             }
 
-
-
             var hostUserId = EnsureAuthorizedAndGetUserId(request.Token);
 
             try
             {
                 var manager = new MatchManager(Connection);
 
+                // 1) MaxPlayers: si el cliente manda 0, usamos el default del server
+                var maxPlayers =
+                    request.MaxPlayers > 0
+                        ? (int)request.MaxPlayers
+                        : DEFAULT_MAX_PLAYERS;
+
+                // 2) Config: usamos la que viene del cliente o caemos en un default
+                var config = request.Config ?? new MatchConfigDto
+                {
+                    StartingScore = 0m,
+                    MaxScore = 100m,
+                    PointsPerCorrect = 1m,
+                    PointsPerWrong = -1m,
+                    PointsPerEliminationGain = 0m,
+                    AllowTiebreakCoinflip = true
+                };
+
+                // 3) Armamos el CreateMatchRequest para el MatchManager
                 var createRequest = new CreateMatchRequest
                 {
                     Token = request.Token,
-                    MaxPlayers = DEFAULT_MAX_PLAYERS,
-                    Config = new MatchConfigDto
-                    {
-                        StartingScore = 0m,
-                        MaxScore = 100m,
-                        PointsPerCorrect = 1m,
-                        PointsPerWrong = -1m,
-                        PointsPerEliminationGain = 0m,
-                        AllowTiebreakCoinflip = true
-                    },
-                    IsPrivate = false
+                    MaxPlayers = maxPlayers,
+                    Config = config,
+                    IsPrivate = request.IsPrivate
                 };
 
                 var createResponse = manager.CreateMatch(hostUserId, createRequest);
@@ -657,7 +665,13 @@ namespace ServicesTheWeakestRival.Server.Services
                         new InvalidOperationException("MatchManager returned null Match."));
                 }
 
+                // OPCIONAL pero recomendable:
+                // nos aseguramos de que el match devuelto lleva la misma config
+                // que usamos para crearla (por si MatchManager en el futuro hace algo raro).
+                match.Config = config;
 
+                // 4) Broadcast al lobby actual: todos los que estén conectados a ese lobby
+                // recibirán OnMatchStarted(match)
                 if (TryGetLobbyUidForCurrentSession(out var lobbyUid))
                 {
                     Logger.InfoFormat(
@@ -688,6 +702,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (FaultException<ServiceFault>)
             {
+                // Faults de negocio ya construidos, solo los propagamos
                 throw;
             }
             catch (SqlException ex)
@@ -709,7 +724,6 @@ namespace ServicesTheWeakestRival.Server.Services
         }
 
 
-        // helper técnico igual que en otros servicios
         private static FaultException<ServiceFault> ThrowTechnicalFault(
             string code,
             string userMessage,
