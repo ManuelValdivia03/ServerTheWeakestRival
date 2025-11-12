@@ -21,5 +21,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 3, IsRequired = false)] public string ProfileImageUrl { get; set; }
         [DataMember(Order = 4, IsRequired = true)] public DateTime CreatedAtUtc { get; set; }
         [DataMember(Order = 5, IsRequired = true)] public string Email { get; set; }
+        [DataMember(Order = 6)] public AvatarAppearanceDto Avatar { get; set; }
     }
 }
