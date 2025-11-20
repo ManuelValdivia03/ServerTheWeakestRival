@@ -3,7 +3,6 @@ using System.Runtime.Serialization;
 
 namespace ServicesTheWeakestRival.Contracts.Data
 {
-    /// <summary>Resumen de un amigo (relación aceptada)</summary>
     [DataContract]
     public class FriendSummary
     {
@@ -15,7 +14,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 6)] public bool IsOnline { get; set; }
     }
 
-    /// <summary>Resumen de una solicitud de amistad</summary>
     [DataContract]
     public class FriendRequestSummary
     {

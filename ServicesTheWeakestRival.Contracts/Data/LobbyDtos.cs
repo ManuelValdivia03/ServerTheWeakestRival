@@ -10,9 +10,11 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 1)] public Guid LobbyId { get; set; }
         [DataMember(Order = 2)] public string LobbyName { get; set; }
         [DataMember(Order = 3)] public int MaxPlayers { get; set; }
-        [DataMember(Order = 4)] public List<PlayerSummary> Players { get; set; } = new List<PlayerSummary>();
-        [DataMember(Order = 5)] public string AccessCode { get; set; }
 
+        [DataMember(Order = 4)]
+        public List<AccountMini> Players { get; set; } = new List<AccountMini>();
+
+        [DataMember(Order = 5)] public string AccessCode { get; set; }
     }
 
     [DataContract]

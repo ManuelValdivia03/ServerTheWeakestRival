@@ -48,5 +48,8 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
         StartLobbyMatchResponse StartLobbyMatch(StartLobbyMatchRequest request);
+
+        [OperationContract]
+        void UpdateAvatar(UpdateAvatarRequest request);
     }
 }

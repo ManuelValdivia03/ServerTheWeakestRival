@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
@@ -25,9 +26,11 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int DEFAULT_MAX_RESULTS = 20;
         private const int MAX_RESULTS_LIMIT = 100;
 
+        private const int SQL_ERROR_UNIQUE_CONSTRAINT = 2627;
+        private const int SQL_ERROR_UNIQUE_INDEX = 2601;
+
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        // Business error codes / messages reused muchas veces
         private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
         private const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
 
@@ -42,7 +45,6 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string MESSAGE_STATE_CHANGED =
             "El estado cambió. Refresca.";
 
-        // Parámetros SQL reutilizados
         private const string PARAM_ME = "@Me";
         private const string PARAM_TARGET = "@Target";
         private const string PARAM_ACCEPTED = "@Accepted";
@@ -50,6 +52,15 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string PARAM_DECLINED = "@Declined";
         private const string PARAM_CANCELLED = "@Cancelled";
         private const string PARAM_ID = "@Id";
+        private const string PARAM_OTHER = "@Other";
+        private const string PARAM_DEVICE = "@Dev";
+        private const string PARAM_WINDOW = "@Window";
+        private const string PARAM_MAX = "@Max";
+        private const string PARAM_QUERY_EMAIL = "@Qemail";
+        private const string PARAM_QUERY_NAME = "@Qname";
+        private const string PARAM_REJECTED = "@Rejected";
+
+        private const string FALLBACK_USERNAME_PREFIX = "user:";
 
         private enum FriendRequestState : byte
         {
@@ -112,7 +123,15 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (entity == null)
             {
-                return null;
+                return new AvatarAppearanceDto
+                {
+                    BodyColor = AvatarBodyColor.Blue,
+                    PantsColor = AvatarPantsColor.Black,
+                    HatType = AvatarHatType.None,
+                    HatColor = AvatarHatColor.Default,
+                    FaceType = AvatarFaceType.Default,
+                    UseProfilePhotoAsFace = false
+                };
             }
 
             return new AvatarAppearanceDto
@@ -126,9 +145,16 @@ namespace ServicesTheWeakestRival.Server.Services
             };
         }
 
+        private static bool IsUniqueViolation(SqlException ex)
+        {
+            if (ex == null)
+            {
+                return false;
+            }
 
-        private static bool IsUniqueViolation(SqlException ex) =>
-            ex != null && (ex.Number == 2627 || ex.Number == 2601);
+            return ex.Number == SQL_ERROR_UNIQUE_CONSTRAINT ||
+                   ex.Number == SQL_ERROR_UNIQUE_INDEX;
+        }
 
         private static int Authenticate(string token)
         {
@@ -212,7 +238,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = existingOutgoingId.Value,
-                                Status = (FriendRequestStatus)FriendRequestState.Pending
+                                Status = FriendRequestStatus.Pending
                             };
                         }
 
@@ -251,7 +277,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = acceptedId,
-                                Status = (FriendRequestStatus)FriendRequestState.Accepted
+                                Status = FriendRequestStatus.Accepted
                             };
                         }
 
@@ -277,7 +303,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = newId,
-                                Status = (FriendRequestStatus)FriendRequestState.Pending
+                                Status = FriendRequestStatus.Pending
                             };
                         }
                         catch (SqlException ex) when (IsUniqueViolation(ex))
@@ -318,7 +344,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             return new SendFriendRequestResponse
                             {
                                 FriendRequestId = reopenedId,
-                                Status = (FriendRequestStatus)FriendRequestState.Pending
+                                Status = FriendRequestStatus.Pending
                             };
                         }
                     }
@@ -486,7 +512,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             {
                                 command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = request.FriendRequestId;
                                 command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
-                                command.Parameters.Add("@Rejected", SqlDbType.TinyInt).Value = (byte)FriendRequestState.Declined;
+                                command.Parameters.Add(PARAM_REJECTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Declined;
                                 command.Parameters.Add(PARAM_PENDING, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Pending;
 
                                 var affectedRows = command.ExecuteNonQuery();
@@ -583,7 +609,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         using (var command = new SqlCommand(FriendSql.Text.LATEST_ACCEPTED, connection, transaction))
                         {
                             command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
-                            command.Parameters.Add("@Other", SqlDbType.Int).Value = otherAccountId;
+                            command.Parameters.Add(PARAM_OTHER, SqlDbType.Int).Value = otherAccountId;
                             command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
 
                             var scalarValue = command.ExecuteScalar();
@@ -663,7 +689,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     connection.Open();
 
-                    var friends = new System.Collections.Generic.List<FriendSummary>();
+                    var friends = new List<FriendSummary>();
                     using (var command = new SqlCommand(FriendSql.Text.FRIENDS, connection))
                     {
                         command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
@@ -677,7 +703,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 var toId = reader.GetInt32(1);
                                 var since = reader.IsDBNull(2) ? DateTime.UtcNow : reader.GetDateTime(2);
 
-                                var friendId = (fromId == myAccountId) ? toId : fromId;
+                                var friendId = fromId == myAccountId ? toId : fromId;
                                 var summary = LoadFriendSummary(connection, null, friendId, since);
                                 friends.Add(summary);
                             }
@@ -692,7 +718,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         using (var reader = command.ExecuteReader())
                         {
-                            var list = new System.Collections.Generic.List<FriendRequestSummary>();
+                            var list = new List<FriendRequestSummary>();
                             while (reader.Read())
                             {
                                 list.Add(new FriendRequestSummary
@@ -719,7 +745,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         using (var reader = command.ExecuteReader())
                         {
-                            var list = new System.Collections.Generic.List<FriendRequestSummary>();
+                            var list = new List<FriendRequestSummary>();
                             while (reader.Read())
                             {
                                 list.Add(new FriendRequestSummary
@@ -791,7 +817,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     using (var command = new SqlCommand(FriendSql.Text.PRESENCE_UPDATE, connection))
                     {
                         command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
-                        command.Parameters.Add("@Dev", SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
+                        command.Parameters.Add(PARAM_DEVICE, SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
                             string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
 
                         var affectedRows = command.ExecuteNonQuery();
@@ -800,7 +826,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             using (var insertCommand = new SqlCommand(FriendSql.Text.PRESENCE_INSERT, connection))
                             {
                                 insertCommand.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
-                                insertCommand.Parameters.Add("@Dev", SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
+                                insertCommand.Parameters.Add(PARAM_DEVICE, SqlDbType.NVarChar, DEVICE_MAX_LENGTH).Value =
                                     string.IsNullOrWhiteSpace(request.Device) ? (object)DBNull.Value : request.Device;
                                 insertCommand.ExecuteNonQuery();
                             }
@@ -849,7 +875,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                var list = new System.Collections.Generic.List<FriendPresence>();
+                var list = new List<FriendPresence>();
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 using (var command = new SqlCommand(FriendSql.Text.FRIENDS_PRESENCE, connection))
@@ -857,7 +883,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     connection.Open();
                     command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
                     command.Parameters.Add(PARAM_ACCEPTED, SqlDbType.TinyInt).Value = (byte)FriendRequestState.Accepted;
-                    command.Parameters.Add("@Window", SqlDbType.Int).Value = ONLINE_WINDOW_SECONDS;
+                    command.Parameters.Add(PARAM_WINDOW, SqlDbType.Int).Value = ONLINE_WINDOW_SECONDS;
 
                     using (var reader = command.ExecuteReader())
                     {
@@ -910,30 +936,30 @@ namespace ServicesTheWeakestRival.Server.Services
 
             var myAccountId = Authenticate(request.Token);
             var query = (request.Query ?? string.Empty).Trim();
-            var maxResults = (request.MaxResults <= 0 || request.MaxResults > MAX_RESULTS_LIMIT)
+            var maxResults = request.MaxResults <= 0 || request.MaxResults > MAX_RESULTS_LIMIT
                 ? DEFAULT_MAX_RESULTS
                 : request.MaxResults;
 
             try
             {
-                var list = new System.Collections.Generic.List<SearchAccountItem>();
+                var results = new List<SearchAccountItem>();
 
                 using (var connection = new SqlConnection(GetConnectionString()))
                 using (var command = new SqlCommand(FriendSql.Text.SEARCH_ACCOUNTS, connection))
                 {
                     connection.Open();
                     command.Parameters.Add(PARAM_ME, SqlDbType.Int).Value = myAccountId;
-                    command.Parameters.Add("@Max", SqlDbType.Int).Value = maxResults;
+                    command.Parameters.Add(PARAM_MAX, SqlDbType.Int).Value = maxResults;
 
                     var like = "%" + query + "%";
-                    command.Parameters.Add("@Qemail", SqlDbType.NVarChar, MAX_EMAIL_LENGTH).Value = like;
-                    command.Parameters.Add("@Qname", SqlDbType.NVarChar, MAX_DISPLAY_NAME_LENGTH).Value = like;
+                    command.Parameters.Add(PARAM_QUERY_EMAIL, SqlDbType.NVarChar, MAX_EMAIL_LENGTH).Value = like;
+                    command.Parameters.Add(PARAM_QUERY_NAME, SqlDbType.NVarChar, MAX_DISPLAY_NAME_LENGTH).Value = like;
 
                     using (var reader = command.ExecuteReader())
                     {
                         while (reader.Read())
                         {
-                            list.Add(new SearchAccountItem
+                            results.Add(new SearchAccountItem
                             {
                                 AccountId = reader.GetInt32(0),
                                 DisplayName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
@@ -952,12 +978,12 @@ namespace ServicesTheWeakestRival.Server.Services
                     "SearchAccounts: Me={0}, Query='{1}', Results={2}, MaxResults={3}",
                     myAccountId,
                     query,
-                    list.Count,
+                    results.Count,
                     maxResults);
 
                 return new SearchAccountsResponse
                 {
-                    Results = list.ToArray()
+                    Results = results.ToArray()
                 };
             }
             catch (SqlException ex)
@@ -994,10 +1020,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                var list = new System.Collections.Generic.List<AccountMini>();
-
+                var accounts = new List<AccountMini>();
                 var avatarSql = new UserAvatarSql(GetConnectionString());
-
                 var sqlQuery = FriendSql.BuildGetAccountsByIdsQuery(ids.Length);
 
                 using (var connection = new SqlConnection(GetConnectionString()))
@@ -1020,11 +1044,10 @@ namespace ServicesTheWeakestRival.Server.Services
                             var email = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
                             var avatarUrl = reader.IsDBNull(3) ? null : reader.GetString(3);
 
-                            UserAvatarEntity avatarEntity = avatarSql.GetByUserId(accountId);
+                            var avatarEntity = avatarSql.GetByUserId(accountId);
+                            var avatar = MapAvatar(avatarEntity);
 
-                            AvatarAppearanceDto avatar = MapAvatar(avatarEntity);
-
-                            list.Add(new AccountMini
+                            accounts.Add(new AccountMini
                             {
                                 AccountId = accountId,
                                 DisplayName = displayName,
@@ -1040,11 +1063,11 @@ namespace ServicesTheWeakestRival.Server.Services
                     "GetAccountsByIds: Me={0}, Requested={1}, Found={2}",
                     myAccountId,
                     ids.Length,
-                    list.Count);
+                    accounts.Count);
 
                 return new GetAccountsByIdsResponse
                 {
-                    Accounts = list.ToArray()
+                    Accounts = accounts.ToArray()
                 };
             }
             catch (SqlException ex)
@@ -1065,15 +1088,19 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        private FriendSummary LoadFriendSummary(SqlConnection connection, SqlTransaction transaction, int friendId, DateTime sinceUtc)
+        private FriendSummary LoadFriendSummary(
+            SqlConnection connection,
+            SqlTransaction transaction,
+            int friendId,
+            DateTime sinceUtc)
         {
             using (var command = new SqlCommand(FriendSql.Text.FRIEND_SUMMARY, connection, transaction))
             {
                 command.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = friendId;
 
                 int accountId;
-                string email = string.Empty;
-                string displayName = string.Empty;
+                var email = string.Empty;
+                var displayName = string.Empty;
                 string avatarUrl = null;
                 DateTime? lastSeenUtc = null;
 
@@ -1085,11 +1112,13 @@ namespace ServicesTheWeakestRival.Server.Services
                             "LoadFriendSummary: no data for FriendId={0}. Returning fallback summary.",
                             friendId);
 
+                        var fallbackUsername = FALLBACK_USERNAME_PREFIX + friendId;
+
                         return new FriendSummary
                         {
                             AccountId = friendId,
-                            Username = "user:" + friendId,
-                            DisplayName = "user:" + friendId,
+                            Username = fallbackUsername,
+                            DisplayName = fallbackUsername,
                             AvatarUrl = null,
                             SinceUtc = sinceUtc,
                             IsOnline = false
@@ -1118,14 +1147,22 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                var isOnline = lastSeenUtc.HasValue &&
-                               lastSeenUtc.Value >= DateTime.UtcNow.AddSeconds(-ONLINE_WINDOW_SECONDS);
+                var onlineWindowStartUtc = DateTime.UtcNow.AddSeconds(-ONLINE_WINDOW_SECONDS);
+                var isOnline = lastSeenUtc.HasValue && lastSeenUtc.Value >= onlineWindowStartUtc;
+
+                var username = string.IsNullOrWhiteSpace(email)
+                    ? FALLBACK_USERNAME_PREFIX + accountId
+                    : email;
+
+                var displayNameResult = string.IsNullOrWhiteSpace(displayName)
+                    ? email
+                    : displayName;
 
                 return new FriendSummary
                 {
                     AccountId = accountId,
-                    Username = string.IsNullOrWhiteSpace(email) ? "user:" + accountId : email,
-                    DisplayName = string.IsNullOrWhiteSpace(displayName) ? email : displayName,
+                    Username = username,
+                    DisplayName = displayNameResult,
                     AvatarUrl = avatarUrl,
                     SinceUtc = sinceUtc,
                     IsOnline = isOnline

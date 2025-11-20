@@ -31,14 +31,49 @@
 
             public const string GET_USER_DISPLAY_NAME = @"
                 SELECT display_name FROM dbo.Users WHERE user_id = @Id;";
+
+            public const string GET_LOBBY_PLAYERS = @"
+                SELECT 
+                    lp.account_id,
+                    u.display_name
+                FROM dbo.LobbyPlayers lp
+                JOIN dbo.Users u ON u.user_id = lp.account_id
+                WHERE lp.lobby_id = @LobbyId;";
+
+            public const string GET_LOBBY_MEMBERS_WITH_USERS = @"
+                SELECT 
+                    lm.lobby_id, 
+                    lm.user_id, 
+                    lm.role, 
+                    lm.joined_at_utc, 
+                    lm.left_at_utc, 
+                    lm.is_active, 
+                    u.user_id, 
+                    u.display_name, 
+                    u.profile_image_url
+                FROM dbo.LobbyMembers lm
+                JOIN dbo.Users u ON lm.user_id = u.user_id
+                WHERE lm.lobby_id = @LobbyId AND lm.is_active = 1;";
         }
+
         public static string BuildUpdateUser(bool setName, bool setImg)
         {
-            if (!setName && !setImg) return null;
+            if (!setName && !setImg)
+            {
+                return null;
+            }
 
             var sql = "UPDATE dbo.Users SET ";
-            if (setName) sql += "display_name = @DisplayName";
-            if (setImg) sql += (setName ? ", " : "") + "profile_image_url = @ImageUrl";
+            if (setName)
+            {
+                sql += "display_name = @DisplayName";
+            }
+
+            if (setImg)
+            {
+                sql += (setName ? ", " : string.Empty) + "profile_image_url = @ImageUrl";
+            }
+
             sql += " WHERE user_id = @Id;";
             return sql;
         }
