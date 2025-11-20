@@ -15,11 +15,9 @@ namespace ServicesTheWeakestRival.Server.Services
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(MatchmakingService));
 
-        // Callbacks de clientes suscritos por MatchId (Guid del contrato, no el int de BD)
         private static readonly ConcurrentDictionary<Guid, IMatchmakingClientCallback> Cbs =
             new ConcurrentDictionary<Guid, IMatchmakingClientCallback>();
 
-        // Cache de tokens (igual que en FriendService)
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
@@ -114,32 +112,23 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
-
-            // 1) Autenticar host
             var hostUserId = Authenticate(request.Token);
 
             try
             {
-                // 2) Crear la partida en BD usando MatchManager
                 var manager = new MatchManager(GetConnectionString());
                 var response = manager.CreateMatch(hostUserId, request);
-
-                // 3) Registrar callback del host y notificarle la creación
                 var cb = OperationContext.Current.GetCallbackChannel<IMatchmakingClientCallback>();
 
                 var match = response.Match;
                 if (match == null)
                 {
-                    // No debería pasar, pero por si acaso
                     throw ThrowTechnicalFault(
                         ERROR_UNEXPECTED,
                         MESSAGE_UNEXPECTED_ERROR,
                         "MatchmakingService.CreateMatch.NullMatch",
                         new InvalidOperationException("MatchManager returned null Match."));
                 }
-
-                // Como la BD usa int y el contrato usa Guid,
-                // de momento generamos un Guid lógico para el canal/callback.
                 match.MatchId = Guid.NewGuid();
 
                 Cbs[match.MatchId] = cb;
@@ -151,8 +140,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 catch (Exception ex)
                 {
                     Logger.Warn("Error calling OnMatchCreated callback.", ex);
-                    // No rompemos la operación por fallo de callback,
-                    // pero lo registramos en logs.
+                    
                 }
 
                 return response;
@@ -186,7 +174,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
-            // Validamos token aunque todavía no estemos usando BD aquí
             Authenticate(request.Token);
 
             // De momento, implementación de demo (luego lo conectamos a BD)

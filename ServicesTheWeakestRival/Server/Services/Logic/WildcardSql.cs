@@ -27,7 +27,6 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                        max_uses_per_match
                 FROM dbo.WildcardTypes;";
 
-            // ===== WILDCARDS DEL JUGADOR =====
 
             public const string COUNT_PLAYER_WILDCARDS_BY_TYPE = @"
                 SELECT COUNT(1)
@@ -55,7 +54,6 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                   AND   pw.user_id = @UserId
                   AND   pw.consumed_at IS NULL;";
 
-            // Para usar un comodín válido de ese jugador/partida
             public const string GET_PLAYER_WILDCARD_FOR_USE = @"
                 SELECT  pw.player_wildcard_id,
                         pw.match_id,
@@ -76,7 +74,6 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                   AND   pw.user_id = @UserId
                   AND   pw.consumed_at IS NULL;";
 
-            // ===== INSERT / CONSUME =====
 
             public const string INSERT_PLAYER_WILDCARD = @"
                 INSERT INTO dbo.PlayerWildcards

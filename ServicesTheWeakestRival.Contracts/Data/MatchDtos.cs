@@ -7,12 +7,22 @@ namespace ServicesTheWeakestRival.Contracts.Data
     [DataContract]
     public sealed class MatchInfo
     {
-        [DataMember(Order = 1)] public Guid MatchId { get; set; }
-        [DataMember(Order = 2)] public string MatchCode { get; set; }
-        [DataMember(Order = 3)] public List<PlayerSummary> Players { get; set; } = new List<PlayerSummary>();
-        [DataMember(Order = 4)] public string State { get; set; }
+        [DataMember(Order = 1)]
+        public Guid MatchId { get; set; }
 
-        [DataMember(Order = 5, EmitDefaultValue = false)]
+        [DataMember(Order = 2)]
+        public string MatchCode { get; set; }
+
+        [DataMember(Order = 3)]
+        public int MatchDbId { get; set; }
+
+        [DataMember(Order = 4)]
+        public List<PlayerSummary> Players { get; set; } = new List<PlayerSummary>();
+
+        [DataMember(Order = 5)]
+        public string State { get; set; }
+
+        [DataMember(Order = 6, EmitDefaultValue = false)]
         public MatchConfigDto Config { get; set; }
     }
 
@@ -42,7 +52,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 4, IsRequired = true)]
         public MatchConfigDto Config { get; set; }
     }
-
 
     [DataContract]
     public sealed class CreateMatchResponse
