@@ -6,9 +6,6 @@ using System.Threading.Tasks;
 
 namespace ServicesTheWeakestRival.Server.Services.Logic
 {
-    /// <summary>
-    /// SQL usado por ChatService. Solo constantes (sin acceso a datos).
-    /// </summary>
     public static class ChatSql
     {
         public static class Text
