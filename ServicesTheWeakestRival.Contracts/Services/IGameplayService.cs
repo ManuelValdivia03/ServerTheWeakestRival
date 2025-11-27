@@ -4,14 +4,49 @@ using ServicesTheWeakestRival.Contracts.Data;
 
 namespace ServicesTheWeakestRival.Contracts.Services
 {
-    [ServiceContract]
-    public interface IGameplayClientCallback
+    [ServiceContract(CallbackContract = typeof(IGameplayServiceCallback))]
+    public interface IGameplayService
+    {
+        [OperationContract]
+        SubmitAnswerResponse SubmitAnswer(SubmitAnswerRequest request);
+
+        [OperationContract]
+        BankResponse Bank(BankRequest request);
+
+        [OperationContract]
+        UseLifelineResponse UseLifeline(UseLifelineRequest request);
+
+        [OperationContract]
+        CastVoteResponse CastVote(CastVoteRequest request);
+
+        [OperationContract]
+        AckEventSeenResponse AckEventSeen(AckEventSeenRequest request);
+
+        [OperationContract]
+        GetQuestionsResponse GetQuestions(GetQuestionsRequest request);
+
+        [OperationContract]
+        GameplayJoinMatchResponse JoinMatch(GameplayJoinMatchRequest request);
+
+        [OperationContract]
+        GameplayStartMatchResponse StartMatch(GameplayStartMatchRequest request);
+    }
+
+    public interface IGameplayServiceCallback
     {
         [OperationContract(IsOneWay = true)]
-        void OnNextQuestion(Guid matchId, PlayerSummary targetPlayer, QuestionDto question, decimal currentChain, decimal banked);
+        void OnNextQuestion(
+            Guid matchId,
+            PlayerSummary targetPlayer,
+            QuestionWithAnswersDto question,
+            decimal currentChain,
+            decimal banked);
 
         [OperationContract(IsOneWay = true)]
-        void OnAnswerEvaluated(Guid matchId, PlayerSummary player, AnswerResult result);
+        void OnAnswerEvaluated(
+            Guid matchId,
+            PlayerSummary player,
+            AnswerResult result);
 
         [OperationContract(IsOneWay = true)]
         void OnBankUpdated(Guid matchId, BankState bank);
@@ -24,33 +59,5 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract(IsOneWay = true)]
         void OnSpecialEvent(Guid matchId, string eventName, string description);
-    }
-
-    [ServiceContract(CallbackContract = typeof(IGameplayClientCallback))]
-    public interface IGameplayService
-    {
-        [OperationContract]
-        [FaultContract(typeof(ServiceFault))]
-        SubmitAnswerResponse SubmitAnswer(SubmitAnswerRequest request);
-
-        [OperationContract]
-        [FaultContract(typeof(ServiceFault))]
-        BankResponse Bank(BankRequest request);
-
-        [OperationContract]
-        [FaultContract(typeof(ServiceFault))]
-        UseLifelineResponse UseLifeline(UseLifelineRequest request);
-
-        [OperationContract]
-        [FaultContract(typeof(ServiceFault))]
-        CastVoteResponse CastVote(CastVoteRequest request);
-
-        [OperationContract]
-        [FaultContract(typeof(ServiceFault))]
-        AckEventSeenResponse AckEventSeen(AckEventSeenRequest request);
-
-        [OperationContract]
-        [FaultContract(typeof(ServiceFault))]
-        GetQuestionsResponse GetQuestions(GetQuestionsRequest request);
     }
 }
