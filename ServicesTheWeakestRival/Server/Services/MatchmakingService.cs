@@ -34,8 +34,6 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string MESSAGE_UNEXPECTED_ERROR =
             "Ocurrió un error inesperado. Intenta de nuevo más tarde.";
 
-        // ================== HELPERS COMUNES ==================
-
         private static string GetConnectionString()
         {
             var configurationString = ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME];
@@ -176,7 +174,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             Authenticate(request.Token);
 
-            // De momento, implementación de demo (luego lo conectamos a BD)
             var match = new MatchInfo
             {
                 MatchId = Guid.NewGuid(),
@@ -200,7 +197,6 @@ namespace ServicesTheWeakestRival.Server.Services
             IMatchmakingClientCallback removed;
             Cbs.TryRemove(request.MatchId, out removed);
 
-            // Aquí más adelante podemos notificar al resto de jugadores que alguien salió.
         }
 
         public StartMatchResponse StartMatch(StartMatchRequest request)
@@ -238,7 +234,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public ListOpenMatchesResponse ListOpenMatches(ListOpenMatchesRequest request)
         {
-            //TODO se utilizara para poder ver que partidas hay abiertas y unirse a ellas
             return new ListOpenMatchesResponse
             {
                 Matches = new List<MatchInfo>()
