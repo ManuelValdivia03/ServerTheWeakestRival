@@ -35,7 +35,14 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 4)] public decimal PointsPerWrong { get; set; }
         [DataMember(Order = 5)] public decimal PointsPerEliminationGain { get; set; }
         [DataMember(Order = 6)] public bool AllowTiebreakCoinflip { get; set; }
+
+        [DataMember(Order = 7)]
+        public string DifficultyCode { get; set; }
+
+        [DataMember(Order = 8)]
+        public string CharacterCode { get; set; }
     }
+
 
     [DataContract]
     public sealed class CreateMatchRequest

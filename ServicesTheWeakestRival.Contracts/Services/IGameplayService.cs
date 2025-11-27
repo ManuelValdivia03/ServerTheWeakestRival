@@ -8,7 +8,7 @@ namespace ServicesTheWeakestRival.Contracts.Services
     public interface IGameplayClientCallback
     {
         [OperationContract(IsOneWay = true)]
-        void OnNextQuestion(Guid matchId, PlayerSummary targetPlayer, Question question, decimal currentChain, decimal banked);
+        void OnNextQuestion(Guid matchId, PlayerSummary targetPlayer, QuestionDto question, decimal currentChain, decimal banked);
 
         [OperationContract(IsOneWay = true)]
         void OnAnswerEvaluated(Guid matchId, PlayerSummary player, AnswerResult result);
@@ -48,5 +48,9 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
         AckEventSeenResponse AckEventSeen(AckEventSeenRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        GetQuestionsResponse GetQuestions(GetQuestionsRequest request);
     }
 }

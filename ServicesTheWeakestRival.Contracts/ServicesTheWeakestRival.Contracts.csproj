@@ -78,7 +78,7 @@
     <Compile Include="Data\MatchDtos.cs" />
     <Compile Include="Data\PingDtos.cs" />
     <Compile Include="Data\PlayerSummary.cs" />
-    <Compile Include="Data\Question.cs" />
+    <Compile Include="Data\QuestionDtos.cs" />
     <Compile Include="Data\SearchAccountsRequest.cs" />
     <Compile Include="Data\SendFriendRequestRequest.cs" />
     <Compile Include="Data\ServiceFault.cs" />

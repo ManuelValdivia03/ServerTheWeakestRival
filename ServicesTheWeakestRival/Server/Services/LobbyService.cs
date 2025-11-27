@@ -213,6 +213,8 @@ namespace ServicesTheWeakestRival.Server.Services
                     userId,
                     request.LobbyId,
                     intId);
+
+                TryBroadcastLobbyUpdated(request.LobbyId, intId);
             }
             catch (Exception ex)
             {
@@ -226,6 +228,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
             }
         }
+
 
         public ListLobbiesResponse ListLobbies(ListLobbiesRequest request)
         {
@@ -849,7 +852,6 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-
         private static FaultException<ServiceFault> ThrowTechnicalFault(
             string code,
             string userMessage,
@@ -1005,5 +1007,37 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return members;
         }
+
+        private static void TryBroadcastLobbyUpdated(Guid lobbyUid, int lobbyId)
+        {
+            try
+            {
+                var members = GetLobbyMembers(lobbyId);
+                var avatarSql = new UserAvatarSql(Connection);
+                var accountMinis = MapToAccountMini(members, avatarSql);
+
+                var info = LoadLobbyInfoByIntId(lobbyId);
+                info.Players = accountMinis;
+
+                BroadcastToLobby(
+                    lobbyUid,
+                    cb =>
+                    {
+                        try
+                        {
+                            cb.OnLobbyUpdated(info);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn("Error broadcasting lobby update.", ex);
+                        }
+                    });
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Error rebuilding lobby info for broadcast.", ex);
+            }
+        }
+
     }
 }
