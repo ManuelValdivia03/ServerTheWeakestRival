@@ -1,6 +1,7 @@
 ﻿using System;
 using System.ServiceModel;
 using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Contracts.Enums;
 
 namespace ServicesTheWeakestRival.Contracts.Services
 {
@@ -30,6 +31,9 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract]
         GameplayStartMatchResponse StartMatch(GameplayStartMatchRequest request);
+
+        [OperationContract]
+        ChooseDuelOpponentResponse ChooseDuelOpponent(ChooseDuelOpponentRequest request);
     }
 
     public interface IGameplayServiceCallback
@@ -59,5 +63,40 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract(IsOneWay = true)]
         void OnSpecialEvent(Guid matchId, string eventName, string description);
+
+        [OperationContract(IsOneWay = true)]
+        void OnCoinFlipResolved(Guid matchId, CoinFlipResolvedDto coinFlip);
+
+        [OperationContract(IsOneWay = true)]
+        void OnDuelCandidates(Guid matchId, DuelCandidatesDto duelCandidates);
+
+        [OperationContract(IsOneWay = true)]
+        void OnMatchFinished(
+            Guid matchId,
+            PlayerSummary winner);
+
+        [OperationContract(IsOneWay = true)]
+        void OnLightningChallengeStarted(
+        Guid matchId,
+        Guid roundId,
+        PlayerSummary targetPlayer,
+        int totalQuestions,
+        int totalTimeSeconds);
+
+        [OperationContract(IsOneWay = true)]
+        void OnLightningChallengeQuestion(
+            Guid matchId,
+            Guid roundId,
+            int questionIndex,
+            QuestionWithAnswersDto question);
+
+        [OperationContract(IsOneWay = true)]
+        void OnLightningChallengeFinished(
+            Guid matchId,
+            Guid roundId,
+            int correctAnswers,
+            bool isSuccess);
     }
+
 }
+
