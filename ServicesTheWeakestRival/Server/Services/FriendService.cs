@@ -13,7 +13,7 @@ using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerCall)]
+    [ServiceBehavior(InstanceContextMode = InstanceContextMode.Single, ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class FriendService : IFriendService
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(FriendService));

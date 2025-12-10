@@ -9,55 +9,79 @@ using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
+    [ServiceBehavior(InstanceContextMode = InstanceContextMode.Single, ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class AuthService : IAuthService
     {
-        private const int DEFAULT_CODE_TTL_MINUTES = 10;
-        private const int DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
-        private const int TOKEN_TTL_HOURS = 24;
-        private const byte ACCOUNT_STATUS_ACTIVE = 1;
-        private const byte ACCOUNT_STATUS_BLOCKED = 0;
-        private const int EMAIL_MAX_LENGTH = 320;
-        private const int DISPLAY_NAME_MAX_LENGTH = 80;
-        private const int PROFILE_URL_MAX_LENGTH = 500;
-        private const int EMAIL_CODE_LENGTH = 6;
-        private const int BCRYPT_WORK_FACTOR = 10;
-        private const int PASSWORD_MIN_LENGTH = 8;
+        public const int DEFAULT_CODE_TTL_MINUTES = 10;
+        public const int DEFAULT_RESEND_COOLDOWN_SECONDS = 60;
+        public const int TOKEN_TTL_HOURS = 24;
 
-        private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
+        public const byte ACCOUNT_STATUS_ACTIVE = 1;
+        public const byte ACCOUNT_STATUS_BLOCKED = 0;
 
-        private const string ERROR_CONFIG = "CONFIG_ERROR";
-        private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
-        private const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
-        private const string ERROR_TOO_SOON = "TOO_SOON";
-        private const string ERROR_CODE_MISSING = "CODE_MISSING";
-        private const string ERROR_CODE_EXPIRED = "CODE_EXPIRED";
-        private const string ERROR_CODE_INVALID = "CODE_INVALID";
-        private const string ERROR_DB_ERROR = "DB_ERROR";
-        private const string ERROR_INVALID_CREDENTIALS = "INVALID_CREDENTIALS";
-        private const string ERROR_ACCOUNT_BLOCKED = "ACCOUNT_BLOCKED";
-        private const string ERROR_PAYLOAD_NULL = "Request payload is null.";
-        private const string ERROR_SMTP = "SMTP_ERROR";
+        public const int EMAIL_MAX_LENGTH = 320;
+        public const int DISPLAY_NAME_MAX_LENGTH = 80;
+        public const int PROFILE_URL_MAX_LENGTH = 500;
+        public const int EMAIL_CODE_LENGTH = 6;
+        public const int PASSWORD_MIN_LENGTH = 8;
 
-        private const string PARAMETER_EMAIL = "@Email";
+        public const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
+
+        public const string ERROR_CONFIG = "CONFIG_ERROR";
+        public const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
+        public const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
+        public const string ERROR_TOO_SOON = "TOO_SOON";
+        public const string ERROR_CODE_MISSING = "CODE_MISSING";
+        public const string ERROR_CODE_EXPIRED = "CODE_EXPIRED";
+        public const string ERROR_CODE_INVALID = "CODE_INVALID";
+        public const string ERROR_DB_ERROR = "DB_ERROR";
+        public const string ERROR_INVALID_CREDENTIALS = "INVALID_CREDENTIALS";
+        public const string ERROR_ACCOUNT_BLOCKED = "ACCOUNT_BLOCKED";
+        public const string ERROR_PAYLOAD_NULL = "Request payload is null.";
+        public const string ERROR_SMTP = "SMTP_ERROR";
+        public const string ERROR_EMAIL_NOT_FOUND = "EMAIL_NOT_FOUND";
+        public const string ERROR_WEAK_PASSWORD = "WEAK_PASSWORD";
+
+        public const string PARAMETER_EMAIL = "@Email";
 
         private static readonly ILog Logger = LogManager.GetLogger(typeof(AuthService));
 
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
-        private static string GetConnectionString()
+        private readonly PasswordService _passwordService;
+        private readonly IEmailService _emailService;
+        private readonly AuthDataAccess _authDataAccess = new AuthDataAccess();
+
+        private static readonly int CodeTtlMinutes =
+            ParseIntAppSetting("EmailCodeTtlMinutes", DEFAULT_CODE_TTL_MINUTES);
+
+        public static readonly int ResendCooldownSeconds =
+            ParseIntAppSetting("EmailResendCooldownSeconds", DEFAULT_RESEND_COOLDOWN_SECONDS);
+
+        public AuthService()
+            : this(new PasswordService(PASSWORD_MIN_LENGTH), new SmtpEmailService())
+        {
+        }
+
+        public AuthService(PasswordService passwordService, IEmailService emailService)
+        {
+            _passwordService = passwordService ?? throw new ArgumentNullException(nameof(passwordService));
+            _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
+        }
+
+        public static string GetConnectionString()
         {
             var connection = ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME];
 
             if (connection == null || string.IsNullOrWhiteSpace(connection.ConnectionString))
             {
                 var configurationException = new ConfigurationErrorsException(
-                    string.Format(
-                        "Missing connection string '{0}'.",
-                        MAIN_CONNECTION_STRING_NAME));
+                    string.Format("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME));
 
                 throw ThrowTechnicalFault(
                     ERROR_CONFIG,
@@ -68,9 +92,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return connection.ConnectionString;
         }
-
-        private static readonly int CodeTtlMinutes = ParseIntAppSetting("EmailCodeTtlMinutes", DEFAULT_CODE_TTL_MINUTES);
-        private static readonly int ResendCooldownSeconds = ParseIntAppSetting("EmailResendCooldownSeconds", DEFAULT_RESEND_COOLDOWN_SECONDS);
 
         private static int ParseIntAppSetting(string key, int @default)
         {
@@ -88,67 +109,17 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public BeginRegisterResponse BeginRegister(BeginRegisterRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request?.Email))
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "Email is required.");
-            }
+            string email = NormalizeRequiredEmail(request?.Email, "Email is required.");
 
-            string email = request.Email.Trim();
             string code = SecurityUtil.CreateNumericCode(EMAIL_CODE_LENGTH);
             byte[] codeHash = SecurityUtil.Sha256(code);
             DateTime expiresAtUtc = DateTime.UtcNow.AddMinutes(CodeTtlMinutes);
 
-            using (var connection = new SqlConnection(GetConnectionString()))
-            {
-                connection.Open();
-
-                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                {
-                    using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
-                    {
-                        exists.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        var found = exists.ExecuteScalar();
-                        if (found != null)
-                        {
-                            throw ThrowFault(ERROR_EMAIL_TAKEN, "Email is already registered.");
-                        }
-                    }
-
-                    using (var last = new SqlCommand(AuthSql.Text.LAST_VERIFICATION, connection, transaction))
-                    {
-                        last.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        object lastObj = last.ExecuteScalar();
-                        DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
-
-                        bool isInCooldown = lastUtc.HasValue &&
-                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < ResendCooldownSeconds;
-                        if (isInCooldown)
-                        {
-                            throw ThrowFault(ERROR_TOO_SOON, "Please wait before requesting another code.");
-                        }
-                    }
-
-                    using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_VERIFICATIONS, connection, transaction))
-                    {
-                        invalidate.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        invalidate.ExecuteNonQuery();
-                    }
-
-                    using (var insert = new SqlCommand(AuthSql.Text.INSERT_VERIFICATION, connection, transaction))
-                    {
-                        insert.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
-                        insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
-                        insert.ExecuteNonQuery();
-                    }
-
-                    transaction.Commit();
-                }
-            }
+            _authDataAccess.CreateRegisterVerification(email, codeHash, expiresAtUtc);
 
             try
             {
-                EmailSender.SendVerificationCode(email, code, CodeTtlMinutes);
+                _emailService.SendVerificationCode(email, code, CodeTtlMinutes);
             }
             catch (SmtpException ex)
             {
@@ -165,7 +136,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 ResendAfterSeconds = ResendCooldownSeconds
             };
         }
-       
+
         public RegisterResponse CompleteRegister(CompleteRegisterRequest request)
         {
             if (request == null)
@@ -186,112 +157,42 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_INVALID_REQUEST, "Email, display name, password and code are required.");
             }
 
+            ValidatePasswordOrThrow(password);
+
+            byte[] codeHash = SecurityUtil.Sha256(code);
+
             int verificationId;
             DateTime expiresAtUtc;
             bool used;
 
-            byte[] codeHash = SecurityUtil.Sha256(code);
+            _authDataAccess.ReadLatestVerification(email, out verificationId, out expiresAtUtc, out used);
+            EnsureCodeNotExpired(expiresAtUtc, used, "Verification code expired. Request a new one.");
 
-            using (var connection = new SqlConnection(GetConnectionString()))
-            using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_VERIFICATION, connection))
+            int newAccountId;
+
+            try
             {
-                pick.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                connection.Open();
+                // Valida código y, si pasa, crea cuenta + usuario y marca verificación usada.
+                _authDataAccess.ValidateVerificationCodeOrThrow(verificationId, codeHash);
 
-                using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
-                {
-                    if (!reader.Read())
-                    {
-                        throw ThrowFault(ERROR_CODE_MISSING, "No pending code. Request a new one.");
-                    }
+                string passwordHash = _passwordService.Hash(password);
 
-                    verificationId = reader.GetInt32(0);
-                    expiresAtUtc = reader.GetDateTime(1);
-                    used = reader.GetBoolean(2);
-                }
+                _authDataAccess.EnsureAccountDoesNotExist(email);
+                newAccountId = _authDataAccess.CreateAccountAndUser(
+                    email,
+                    passwordHash,
+                    displayName,
+                    request.ProfileImageUrl);
+
+                _authDataAccess.MarkVerificationUsed(verificationId);
             }
-
-            if (used || expiresAtUtc <= DateTime.UtcNow)
+            catch (SqlException ex)
             {
-                throw ThrowFault(ERROR_CODE_EXPIRED, "Verification code expired. Request a new one.");
-            }
-
-            int newAccountId = -1;
-
-            using (var connection = new SqlConnection(GetConnectionString()))
-            {
-                connection.Open();
-
-                using (var validate = new SqlCommand(AuthSql.Text.VALIDATE_VERIFICATION, connection))
-                {
-                    validate.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
-                    validate.Parameters.Add("@Hash", SqlDbType.VarBinary, 32).Value = codeHash;
-
-                    bool ok = Convert.ToInt32(validate.ExecuteScalar()) == 1;
-                    if (!ok)
-                    {
-                        using (var inc = new SqlCommand(AuthSql.Text.INCREMENT_ATTEMPTS, connection))
-                        {
-                            inc.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
-                            inc.ExecuteNonQuery();
-                        }
-
-                        ThrowFault(ERROR_CODE_INVALID, "Invalid verification code.");
-                    }
-                }
-
-                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                {
-                    try
-                    {
-                        using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
-                        {
-                            check.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                            var exists = check.ExecuteScalar();
-                            if (exists != null)
-                            {
-                                throw ThrowFault(ERROR_EMAIL_TAKEN, "Email is already registered.");
-                            }
-                        }
-
-                        string passwordHash = HashPasswordBc(password);
-
-                        using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
-                        {
-                            insertAcc.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                            insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
-                            insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = ACCOUNT_STATUS_ACTIVE;
-                            newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
-                        }
-
-                        using (var insertUser = new SqlCommand(AuthSql.Text.INSERT_USER, connection, transaction))
-                        {
-                            insertUser.Parameters.Add("@UserId", SqlDbType.Int).Value = newAccountId;
-                            insertUser.Parameters.Add("@DisplayName", SqlDbType.NVarChar, DISPLAY_NAME_MAX_LENGTH).Value = displayName;
-                            insertUser.Parameters.Add("@ProfileImageUrl", SqlDbType.NVarChar, PROFILE_URL_MAX_LENGTH).Value =
-                                string.IsNullOrWhiteSpace(request.ProfileImageUrl)
-                                    ? (object)DBNull.Value
-                                    : request.ProfileImageUrl;
-                            insertUser.ExecuteNonQuery();
-                        }
-
-                        using (var mark = new SqlCommand(AuthSql.Text.MARK_VERIFICATION_USED, connection, transaction))
-                        {
-                            mark.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
-                            mark.ExecuteNonQuery();
-                        }
-
-                        transaction.Commit();
-                    }
-                    catch (SqlException ex)
-                    {
-                        throw ThrowTechnicalFault(
-                            ERROR_DB_ERROR,
-                            "Unexpected database error while completing registration.",
-                            "CompleteRegister.Tx",
-                            ex);
-                    }
-                }
+                throw ThrowTechnicalFault(
+                    ERROR_DB_ERROR,
+                    "Unexpected database error while completing registration.",
+                    "CompleteRegister.Tx",
+                    ex);
             }
 
             if (newAccountId <= 0)
@@ -310,59 +211,27 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_PAYLOAD_NULL);
             }
 
-            using (var connection = new SqlConnection(GetConnectionString()))
-            using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection))
-            {
-                check.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
-                connection.Open();
+            ValidatePasswordOrThrow(request.Password);
 
-                var exists = check.ExecuteScalar();
-                if (exists != null)
-                {
-                    throw ThrowFault(ERROR_EMAIL_TAKEN, "Email is already registered.");
-                }
+            string passwordHash = _passwordService.Hash(request.Password);
+            int newAccountId;
+
+            try
+            {
+                _authDataAccess.EnsureAccountDoesNotExist(request.Email);
+                newAccountId = _authDataAccess.CreateAccountAndUser(
+                    request.Email,
+                    passwordHash,
+                    request.DisplayName,
+                    request.ProfileImageUrl);
             }
-
-            int newAccountId = -1;
-            string passwordHash = HashPasswordBc(request.Password);
-
-            using (var connection = new SqlConnection(GetConnectionString()))
+            catch (SqlException ex)
             {
-                connection.Open();
-
-                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                {
-                    try
-                    {
-                        using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
-                        {
-                            insertAcc.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
-                            insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
-                            insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = ACCOUNT_STATUS_ACTIVE;
-                            newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
-                        }
-
-                        using (var insertUser = new SqlCommand(AuthSql.Text.INSERT_USER, connection, transaction))
-                        {
-                            insertUser.Parameters.Add("@UserId", SqlDbType.Int).Value = newAccountId;
-                            insertUser.Parameters.Add("@DisplayName", SqlDbType.NVarChar, DISPLAY_NAME_MAX_LENGTH).Value =
-                                string.IsNullOrWhiteSpace(request.DisplayName) ? (object)DBNull.Value : request.DisplayName;
-                            insertUser.Parameters.Add("@ProfileImageUrl", SqlDbType.NVarChar, PROFILE_URL_MAX_LENGTH).Value =
-                                string.IsNullOrWhiteSpace(request.ProfileImageUrl) ? (object)DBNull.Value : request.ProfileImageUrl;
-                            insertUser.ExecuteNonQuery();
-                        }
-
-                        transaction.Commit();
-                    }
-                    catch (SqlException ex)
-                    {
-                        throw ThrowTechnicalFault(
-                            ERROR_DB_ERROR,
-                            "Unexpected database error while registering.",
-                            "Register.Tx",
-                            ex);
-                    }
-                }
+                throw ThrowTechnicalFault(
+                    ERROR_DB_ERROR,
+                    "Unexpected database error while registering.",
+                    "Register.Tx",
+                    ex);
             }
 
             var token = IssueToken(newAccountId);
@@ -382,24 +251,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                using (var connection = new SqlConnection(GetConnectionString()))
-                using (var get = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
-                {
-                    get.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = request.Email;
-                    connection.Open();
-
-                    using (var reader = get.ExecuteReader(CommandBehavior.SingleRow))
-                    {
-                        if (!reader.Read())
-                        {
-                            throw ThrowFault(ERROR_INVALID_CREDENTIALS, "Email or password is incorrect.");
-                        }
-
-                        userId = reader.GetInt32(0);
-                        storedHash = reader.GetString(1);
-                        status = reader.GetByte(2);
-                    }
-                }
+                _authDataAccess.GetAccountForLogin(request.Email, out userId, out storedHash, out status);
             }
             catch (SqlException ex)
             {
@@ -415,7 +267,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_ACCOUNT_BLOCKED, "Account is blocked.");
             }
 
-            if (!VerifyPasswordBc(request.Password, storedHash))
+            if (!_passwordService.Verify(request.Password, storedHash))
             {
                 throw ThrowFault(ERROR_INVALID_CREDENTIALS, "Email or password is incorrect.");
             }
@@ -435,14 +287,7 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 try
                 {
-                    using (var connection = new SqlConnection(GetConnectionString()))
-                    using (var cmd = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", connection))
-                    {
-                        cmd.CommandType = CommandType.StoredProcedure;
-                        cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = removed.UserId;
-                        connection.Open();
-                        cmd.ExecuteNonQuery();
-                    }
+                    _authDataAccess.LeaveAllLobbiesForUser(removed.UserId);
                 }
                 catch (SqlException ex)
                 {
@@ -457,74 +302,21 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public BeginPasswordResetResponse BeginPasswordReset(BeginPasswordResetRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request?.Email))
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "Email is required.");
-            }
-
-            string email = request.Email.Trim();
+            string email = NormalizeRequiredEmail(request?.Email, "Email is required.");
             string code = SecurityUtil.CreateNumericCode(EMAIL_CODE_LENGTH);
             byte[] codeHash = SecurityUtil.Sha256(code);
             DateTime expiresAtUtc = DateTime.UtcNow.AddMinutes(CodeTtlMinutes);
 
-            using (var connection = new SqlConnection(GetConnectionString()))
-            {
-                connection.Open();
-
-                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                {
-                    using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
-                    {
-                        exists.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        var found = exists.ExecuteScalar();
-                        if (found == null)
-                        {
-                            throw ThrowFault("EMAIL_NOT_FOUND", "No account is registered with that email.");
-                        }
-                    }
-
-                    using (var last = new SqlCommand(AuthSql.Text.LAST_RESET_REQUEST, connection, transaction))
-                    {
-                        last.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        object lastObj = last.ExecuteScalar();
-                        DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
-
-                        bool isInCooldown = lastUtc.HasValue &&
-                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < ResendCooldownSeconds;
-                        if (isInCooldown)
-                        {
-                            throw ThrowFault("TOO_SOON", "Please wait before requesting another code.");
-                        }
-                    }
-
-                    // 3) Invalidar solicitudes anteriores
-                    using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_RESETS, connection, transaction))
-                    {
-                        invalidate.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        invalidate.ExecuteNonQuery();
-                    }
-
-                    // 4) Insertar nueva solicitud de reset
-                    using (var insert = new SqlCommand(AuthSql.Text.INSERT_RESET_REQUEST, connection, transaction))
-                    {
-                        insert.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                        insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
-                        insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
-                        insert.ExecuteNonQuery();
-                    }
-
-                    transaction.Commit();
-                }
-            }
+            _authDataAccess.CreatePasswordResetRequest(email, codeHash, expiresAtUtc);
 
             try
             {
-                EmailSender.SendPasswordResetCode(email, code, CodeTtlMinutes);
+                _emailService.SendPasswordResetCode(email, code, CodeTtlMinutes);
             }
             catch (SmtpException ex)
             {
                 throw ThrowTechnicalFault(
-                    "SMTP_ERROR",
+                    ERROR_SMTP,
                     "Failed to send password reset email. Please try again later.",
                     "BeginPasswordReset.EmailSender",
                     ex);
@@ -555,106 +347,44 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_INVALID_REQUEST, "Email, code and new password are required.");
             }
 
-            if (newPassword.Length < PASSWORD_MIN_LENGTH)
-            {
-                throw ThrowFault("WEAK_PASSWORD", "New password does not meet the minimum length requirements.");
-            }
+            ValidatePasswordOrThrow(newPassword);
+
+            byte[] codeHash = SecurityUtil.Sha256(code);
 
             int resetId;
             DateTime expiresAtUtc;
             bool used;
 
-            byte[] codeHash = SecurityUtil.Sha256(code);
+            _authDataAccess.ReadLatestReset(email, out resetId, out expiresAtUtc, out used);
+            EnsureCodeNotExpired(expiresAtUtc, used, "Reset code expired. Request a new one.");
 
-            using (var connection = new SqlConnection(GetConnectionString()))
-            using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_RESET, connection))
+            try
             {
-                pick.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                connection.Open();
+                _authDataAccess.ValidateResetCodeOrThrow(resetId, codeHash);
 
-                using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
+                string passwordHash = _passwordService.Hash(newPassword);
+
+                int rows = _authDataAccess.UpdateAccountPassword(email, passwordHash);
+
+                if (rows <= 0)
                 {
-                    if (!reader.Read())
-                    {
-                        throw ThrowFault("CODE_MISSING", "No pending reset code. Request a new one.");
-                    }
-
-                    resetId = reader.GetInt32(0);
-                    expiresAtUtc = reader.GetDateTime(1);
-                    used = reader.GetBoolean(2);
+                    throw ThrowFault(ERROR_EMAIL_NOT_FOUND, "No account is registered with that email.");
                 }
+
+                _authDataAccess.MarkResetUsed(resetId);
             }
-
-            if (used || expiresAtUtc <= DateTime.UtcNow)
+            catch (SqlException ex)
             {
-                throw ThrowFault("CODE_EXPIRED", "Reset code expired. Request a new one.");
-            }
+                string userMessage =
+                    $"Unexpected database error while completing password reset. (Sql {ex.Number}: {ex.Message})";
 
-            using (var connection = new SqlConnection(GetConnectionString()))
-            {
-                connection.Open();
-
-                using (var validate = new SqlCommand(AuthSql.Text.VALIDATE_RESET, connection))
-                {
-                    validate.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
-                    validate.Parameters.Add("@Hash", SqlDbType.VarBinary, 32).Value = codeHash;
-
-                    bool ok = Convert.ToInt32(validate.ExecuteScalar()) == 1;
-                    if (!ok)
-                    {
-                        using (var inc = new SqlCommand(AuthSql.Text.INCREMENT_RESET_ATTEMPTS, connection))
-                        {
-                            inc.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
-                            inc.ExecuteNonQuery();
-                        }
-
-                        throw ThrowFault("CODE_INVALID", "Invalid reset code.");
-                    }
-                }
-
-                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
-                {
-                    try
-                    {
-                        string passwordHash = HashPasswordBc(newPassword);
-
-                        using (var updatePwd = new SqlCommand(AuthSql.Text.UPDATE_ACCOUNT_PASSWORD, connection, transaction))
-                        {
-                            updatePwd.Parameters.Add(PARAMETER_EMAIL, SqlDbType.NVarChar, EMAIL_MAX_LENGTH).Value = email;
-                            updatePwd.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
-                            int rows = updatePwd.ExecuteNonQuery();
-
-                            if (rows <= 0)
-                            {
-                                throw ThrowFault("EMAIL_NOT_FOUND", "No account is registered with that email.");
-                            }
-                        }
-
-                        using (var mark = new SqlCommand(AuthSql.Text.MARK_RESET_USED, connection, transaction))
-                        {
-                            mark.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
-                            mark.ExecuteNonQuery();
-                        }
-
-                        transaction.Commit();
-                    }
-                    catch (SqlException ex)
-                    {
-                        string userMessage =
-                            $"Unexpected database error while completing password reset. " +
-                            $"(Sql {ex.Number}: {ex.Message})";
-
-                        throw ThrowTechnicalFault(
-                            "DB_ERROR",
-                            userMessage,
-                            "CompletePasswordReset.Tx",
-                            ex);
-                    }
-                }
+                throw ThrowTechnicalFault(
+                    ERROR_DB_ERROR,
+                    userMessage,
+                    "CompletePasswordReset.Tx",
+                    ex);
             }
         }
-
-
 
         private static AuthToken IssueToken(int userId)
         {
@@ -672,7 +402,17 @@ namespace ServicesTheWeakestRival.Server.Services
             return token;
         }
 
-        private static FaultException<ServiceFault> ThrowFault(string code, string message)
+        private void ValidatePasswordOrThrow(string password)
+        {
+            if (!_passwordService.IsValid(password))
+            {
+                throw ThrowFault(
+                    ERROR_WEAK_PASSWORD,
+                    $"Password does not meet the minimum length requirements ({PASSWORD_MIN_LENGTH} characters).");
+            }
+        }
+
+        public static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
             Logger.WarnFormat(
                 "Business fault. Code={0}. Message={1}.",
@@ -688,7 +428,7 @@ namespace ServicesTheWeakestRival.Server.Services
             return new FaultException<ServiceFault>(fault, new FaultReason(message));
         }
 
-        private static FaultException<ServiceFault> ThrowTechnicalFault(
+        public static FaultException<ServiceFault> ThrowTechnicalFault(
             string technicalCode,
             string userMessage,
             string context,
@@ -705,19 +445,22 @@ namespace ServicesTheWeakestRival.Server.Services
             return new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
         }
 
-        private static string HashPasswordBc(string password)
+        private static string NormalizeRequiredEmail(string email, string missingMessage)
         {
-            return BCrypt.Net.BCrypt.HashPassword(password ?? string.Empty, workFactor: BCRYPT_WORK_FACTOR);
-        }
-
-        private static bool VerifyPasswordBc(string password, string storedHash)
-        {
-            if (string.IsNullOrEmpty(storedHash))
+            if (string.IsNullOrWhiteSpace(email))
             {
-                return false;
+                throw ThrowFault(ERROR_INVALID_REQUEST, missingMessage);
             }
 
-            return BCrypt.Net.BCrypt.Verify(password ?? string.Empty, storedHash);
+            return email.Trim();
+        }
+
+        private static void EnsureCodeNotExpired(DateTime expiresAtUtc, bool used, string expiredMessage)
+        {
+            if (used || expiresAtUtc <= DateTime.UtcNow)
+            {
+                throw ThrowFault(ERROR_CODE_EXPIRED, expiredMessage);
+            }
         }
     }
 }

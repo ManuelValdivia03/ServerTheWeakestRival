@@ -13,7 +13,8 @@ using TheWeakestRival.Data;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerSession, ConcurrencyMode = ConcurrencyMode.Multiple)]
+    [ServiceBehavior(InstanceContextMode = InstanceContextMode.Single,
+                 ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class LobbyService : ILobbyService
     {
         private const int MAX_DISPLAY_NAME_LENGTH = 80;

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 
-// alias opcional
 using ContractsToken = ServicesTheWeakestRival.Contracts.Data.AuthToken;
 
 namespace ServicesTheWeakestRival.Server.Services

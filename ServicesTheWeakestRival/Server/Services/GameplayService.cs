@@ -59,15 +59,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public SubmitAnswerResponse SubmitAnswer(SubmitAnswerRequest request)
         {
-            if (request == null)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
-
-            if (request.MatchId == Guid.Empty)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
-            }
+            ValidateSubmitAnswerRequest(request);
 
             int userId = Authenticate(request.Token);
 
@@ -90,7 +82,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
 
                 bool isTimeout = string.IsNullOrWhiteSpace(request.AnswerText);
-
                 bool isCorrect = false;
 
                 if (!isTimeout)
@@ -106,16 +97,15 @@ namespace ServicesTheWeakestRival.Server.Services
                     isCorrect = selectedAnswer.IsCorrect;
                 }
 
-                if (isCorrect)
+                decimal chainIncrement = 0m;
+
+                if (isCorrect && state.CurrentStreak < CHAIN_STEPS.Length)
                 {
-                    if (state.CurrentStreak < CHAIN_STEPS.Length)
-                    {
-                        decimal increment = CHAIN_STEPS[state.CurrentStreak];
-                        state.CurrentChain += increment;
-                        state.CurrentStreak++;
-                    }
+                    chainIncrement = CHAIN_STEPS[state.CurrentStreak];
+                    state.CurrentChain += chainIncrement;
+                    state.CurrentStreak++;
                 }
-                else
+                else if (!isCorrect)
                 {
                     state.CurrentChain = 0m;
                     state.CurrentStreak = 0;
@@ -125,13 +115,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     QuestionId = request.QuestionId,
                     IsCorrect = isCorrect,
-                    ChainIncrement = state.CurrentStreak > 0 && isCorrect
-                    ? CHAIN_STEPS[state.CurrentStreak - 1]
-                    : 0m,
+                    ChainIncrement = chainIncrement,
                     CurrentChain = state.CurrentChain,
                     BankedPoints = state.BankedPoints
                 };
-
 
                 var playerSummary = new PlayerSummary
                 {
@@ -155,17 +142,29 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                var response = new SubmitAnswerResponse
-                {
-                    Result = result
-                };
-
                 state.AdvanceTurn();
                 SendNextQuestion(state);
 
-                return response;
+                return new SubmitAnswerResponse
+                {
+                    Result = result
+                };
             }
         }
+
+        private void ValidateSubmitAnswerRequest(SubmitAnswerRequest request)
+        {
+            if (request == null)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
+            }
+
+            if (request.MatchId == Guid.Empty)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
+            }
+        }
+
 
 
         public BankResponse Bank(BankRequest request)
