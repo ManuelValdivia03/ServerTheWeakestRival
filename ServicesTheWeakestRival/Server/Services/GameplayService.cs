@@ -54,6 +54,12 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE =
             "El jugador {0} ha ganado un comodín relámpago.";
 
+        private const string SPECIAL_EVENT_EXTRA_WILDCARD_CODE =
+            "EXTRA_WILDCARD_AWARDED";
+
+        private const string SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE =
+            "El jugador {0} ha recibido un comodín extra.";
+
         private const int DEFAULT_MAX_QUESTIONS = 40;
         private const int NEXT_QUESTION_DELAY_MS = 2000;
 
@@ -65,11 +71,15 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int COIN_FLIP_RANDOM_MAX_VALUE = 100;
         private const int COIN_FLIP_THRESHOLD_VALUE = 50;
 
-        private const int LIGHTNING_PROBABILITY_PERCENT = 100;
+        private const int LIGHTNING_PROBABILITY_PERCENT = 20;
         private const int LIGHTNING_TOTAL_QUESTIONS = 3;
         private const int LIGHTNING_TOTAL_TIME_SECONDS = 30;
         private const int LIGHTNING_RANDOM_MIN_VALUE = 0;
         private const int LIGHTNING_RANDOM_MAX_VALUE = 100;
+
+        private const int EXTRA_WILDCARD_RANDOM_MIN_VALUE = 0;
+        private const int EXTRA_WILDCARD_RANDOM_MAX_VALUE = 100;
+        private const int EXTRA_WILDCARD_PROBABILITY_PERCENT = 100;
 
         private static readonly decimal[] CHAIN_STEPS =
         {
@@ -622,8 +632,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         state.VotersThisRound.Clear();
                         state.VotesThisRound.Clear();
 
-                        // Si quieres mapear el Match GUID a un MatchId int para wildcards,
-                        // llena aquí state.WildcardMatchId con el valor correspondiente.
+                        TryStartExtraWildcardEvent(state);
 
                         bool lightningStarted = TryStartLightningChallenge(state);
                         if (!lightningStarted)
@@ -1082,6 +1091,7 @@ namespace ServicesTheWeakestRival.Server.Services
             state.DuelTargetUserId = null;
             state.VotersThisRound.Clear();
             state.VotesThisRound.Clear();
+            state.HasSpecialEventThisRound = false;
 
             if (state.CurrentPlayerIndex < 0 ||
                 state.CurrentPlayerIndex >= state.Players.Count ||
@@ -1105,7 +1115,13 @@ namespace ServicesTheWeakestRival.Server.Services
                 state.RoundNumber,
                 state.Players[state.CurrentPlayerIndex].UserId);
 
-            SendNextQuestion(state);
+            TryStartExtraWildcardEvent(state);
+
+            bool lightningStarted = TryStartLightningChallenge(state);
+            if (!lightningStarted)
+            {
+                SendNextQuestion(state);
+            }
         }
 
         private static List<QuestionWithAnswersDto> LoadQuestions(byte difficulty, string localeCode, int maxQuestions)
@@ -1375,7 +1391,6 @@ namespace ServicesTheWeakestRival.Server.Services
             };
         }
 
-
         private static bool IsLightningActive(MatchRuntimeState state)
         {
             return state != null &&
@@ -1388,6 +1403,15 @@ namespace ServicesTheWeakestRival.Server.Services
             if (state == null)
             {
                 throw new ArgumentNullException(nameof(state));
+            }
+
+            if (state.HasSpecialEventThisRound)
+            {
+                Logger.InfoFormat(
+                    "Skipping lightning challenge: special event already triggered this round. MatchId={0}, Round={1}",
+                    state.MatchId,
+                    state.RoundNumber);
+                return false;
             }
 
             if (IsLightningActive(state))
@@ -1432,6 +1456,8 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             state.ActiveSpecialEvent = SpecialEventType.LightningChallenge;
+            state.HasSpecialEventThisRound = true;
+
             state.LightningChallenge = new LightningChallengeState(
                 state.MatchId,
                 Guid.NewGuid(),
@@ -1652,8 +1678,12 @@ namespace ServicesTheWeakestRival.Server.Services
             SendNextQuestion(state);
         }
 
-
-        private static void TryAwardLightningWildcard(MatchRuntimeState state, int playerUserId)
+        private static void AwardWildcard(
+            MatchRuntimeState state,
+            int playerUserId,
+            string logContext,
+            string specialEventCode,
+            string descriptionTemplate)
         {
             if (state == null)
             {
@@ -1666,36 +1696,39 @@ namespace ServicesTheWeakestRival.Server.Services
             if (targetPlayer == null)
             {
                 Logger.WarnFormat(
-                    "TryAwardLightningWildcard: player not found. MatchId={0}, UserId={1}",
+                    "{0}: player not found. MatchId={1}, UserId={2}",
+                    logContext,
                     state.MatchId,
                     playerUserId);
                 return;
             }
 
-            // ⚡ 1) Dar comodín real en BD
             try
             {
                 if (state.WildcardMatchId > 0)
                 {
                     WildcardService.GrantLightningWildcard(state.WildcardMatchId, playerUserId);
-                    Logger.InfoFormat("Lightning wildcard GRANTED. MatchDbId={0}, UserId={1}",
-                        state.WildcardMatchId, playerUserId);
+                    Logger.InfoFormat(
+                        "{0}: wildcard GRANTED. MatchDbId={1}, UserId={2}",
+                        logContext,
+                        state.WildcardMatchId,
+                        playerUserId);
                 }
                 else
                 {
                     Logger.ErrorFormat(
-                        "Lightning wildcard NOT GRANTED: WildcardMatchId no asignado. MatchGuid={0}",
+                        "{0}: wildcard NOT GRANTED: WildcardMatchId no asignado. MatchGuid={1}",
+                        logContext,
                         state.MatchId);
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error("Error otorgando comodín relámpago en BD", ex);
+                Logger.Error(logContext + ": error otorgando comodín en BD", ex);
             }
 
-            // ⚡ 2) Notificar visualmente al cliente
             string description = string.Format(
-                SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE,
+                descriptionTemplate,
                 targetPlayer.DisplayName);
 
             foreach (MatchPlayerRuntime player in state.Players)
@@ -1704,14 +1737,81 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     player.Callback.OnSpecialEvent(
                         state.MatchId,
-                        SPECIAL_EVENT_LIGHTNING_WILDCARD_CODE,
+                        specialEventCode,
                         description);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn("Error al notificar OnSpecialEvent (lightning wildcard).", ex);
+                    Logger.Warn(logContext + ": error al notificar OnSpecialEvent.", ex);
                 }
             }
+        }
+
+        private static void TryAwardLightningWildcard(MatchRuntimeState state, int playerUserId)
+        {
+            AwardWildcard(
+                state,
+                playerUserId,
+                "LightningWildcard",
+                SPECIAL_EVENT_LIGHTNING_WILDCARD_CODE,
+                SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE);
+        }
+
+        private static void TryAwardExtraWildcard(MatchRuntimeState state, int playerUserId)
+        {
+            AwardWildcard(
+                state,
+                playerUserId,
+                "ExtraWildcard",
+                SPECIAL_EVENT_EXTRA_WILDCARD_CODE,
+                SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE);
+        }
+
+        private static bool TryStartExtraWildcardEvent(MatchRuntimeState state)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            if (state.HasSpecialEventThisRound)
+            {
+                return false;
+            }
+
+            if (IsLightningActive(state))
+            {
+                return false;
+            }
+
+            List<MatchPlayerRuntime> candidates = state.Players
+                .Where(p => !p.IsEliminated)
+                .ToList();
+
+            if (candidates.Count == 0)
+            {
+                return false;
+            }
+
+            int probabilityValue = RandomGenerator.Next(EXTRA_WILDCARD_RANDOM_MIN_VALUE, EXTRA_WILDCARD_RANDOM_MAX_VALUE);
+            if (probabilityValue >= EXTRA_WILDCARD_PROBABILITY_PERCENT)
+            {
+                return false;
+            }
+
+            int candidateIndex = RandomGenerator.Next(0, candidates.Count);
+            MatchPlayerRuntime targetPlayer = candidates[candidateIndex];
+
+            Logger.InfoFormat(
+                "Extra wildcard event started. MatchId={0}, Round={1}, TargetUserId={2}",
+                state.MatchId,
+                state.RoundNumber,
+                targetPlayer.UserId);
+
+            TryAwardExtraWildcard(state, targetPlayer.UserId);
+            state.HasSpecialEventThisRound = true;
+
+            return true;
         }
     }
 
@@ -1743,6 +1843,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
             ActiveSpecialEvent = SpecialEventType.None;
             WildcardMatchId = 0;
+
+            HasSpecialEventThisRound = false;
         }
 
         public Guid MatchId { get; }
@@ -1795,11 +1897,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public LightningChallengeState LightningChallenge { get; set; }
 
-        /// <summary>
-        /// Id entero del match usado en el módulo de comodines (tabla PlayerWildcards).
-        /// Tiene que mapearse externamente MatchId (GUID) -> WildcardMatchId (int).
-        /// </summary>
         public int WildcardMatchId { get; set; }
+
+        public bool HasSpecialEventThisRound { get; set; }
 
         public bool IsLightningActive =>
             ActiveSpecialEvent == SpecialEventType.LightningChallenge &&
@@ -1837,6 +1937,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
             IsFinished = false;
             WinnerUserId = null;
+
+            HasSpecialEventThisRound = false;
 
             ResetLightningChallenge();
         }
