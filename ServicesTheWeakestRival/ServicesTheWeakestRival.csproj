@@ -77,8 +77,11 @@
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Server\Infraestructure\EmailSender.cs" />
+    <Compile Include="Server\Infraestructure\EmailService.cs" />
     <Compile Include="Server\Infraestructure\SecurityUtil.cs" />
     <Compile Include="Server\Services\AuthService.cs" />
+    <Compile Include="Server\Services\Auth\AuthDataAccess.cs" />
+    <Compile Include="Server\Services\Auth\PasswordService.cs" />
     <Compile Include="Server\Services\ChatService.cs" />
     <Compile Include="Server\Services\FriendService.cs" />
     <Compile Include="Server\Services\GameplayService.cs" />

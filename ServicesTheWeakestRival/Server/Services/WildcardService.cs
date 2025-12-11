@@ -12,7 +12,9 @@ using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerCall)]
+    [ServiceBehavior(
+    InstanceContextMode = InstanceContextMode.Single,
+    ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class WildcardService : IWildcardService
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(WildcardService));

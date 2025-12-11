@@ -13,7 +13,9 @@ using log4net;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerCall)]
+    [ServiceBehavior(
+    InstanceContextMode = InstanceContextMode.Single,
+    ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class ChatService : IChatService
     {
         private const int MAX_MESSAGE_LENGTH = 500;

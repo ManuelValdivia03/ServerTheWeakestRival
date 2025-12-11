@@ -549,6 +549,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     state.Players.Add(player);
                 }
+                Logger.InfoFormat(
+                    "JoinMatch: MatchId={0}, UserId={1}, PlayersInState={2}",
+                    request.MatchId,
+                    userId,
+                    state.Players.Count);
             }
 
             PlayerMatchByUserId[userId] = request.MatchId;

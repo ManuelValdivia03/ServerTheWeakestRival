@@ -1,31 +1,43 @@
 ﻿using System;
 using System.ServiceModel;
+using ServicesTheWeakestRival.Server.Services;
 
 namespace ConsoleServer
 {
     public static class Program
     {
-        static void Main()
+        public static void Main()
         {
             var hosts = new ServiceHost[]
             {
-                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.AuthService)),
-                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.LobbyService)),
-                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.MatchmakingService)),
-                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.GameplayService)),
-                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.StatsService)),
-                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.FriendService)),
-                new ServiceHost(typeof(ServicesTheWeakestRival.Server.Services.WildcardService)),
+                new ServiceHost(typeof(AuthService)),
+                new ServiceHost(typeof(LobbyService)),
+                new ServiceHost(typeof(MatchmakingService)),
+                new ServiceHost(typeof(GameplayService)),
+                new ServiceHost(typeof(StatsService)),
+                new ServiceHost(typeof(FriendService)),
+                new ServiceHost(typeof(WildcardService)),
             };
 
+            try
+            {
+                foreach (var h in hosts)
+                {
+                    h.Open();
+                    Console.WriteLine("Servicio iniciado: " + h.Description.ServiceType.FullName);
+                }
 
-            foreach (var h in hosts) h.Open();
-            foreach (var h in hosts) Console.WriteLine(h.Description.ServiceType.FullName);
-
-            Console.WriteLine("Servicios WCF corriendo en http://localhost:8082/");
-            Console.ReadLine();
-
-            foreach (var h in hosts) h.Close();
+                Console.WriteLine("Servicios WCF corriendo. Presiona ENTER para salir.");
+                Console.ReadLine();
+            }
+            finally
+            {
+                foreach (var h in hosts)
+                {
+                    try { h.Close(); }
+                    catch { h.Abort(); }
+                }
+            }
         }
     }
 }
