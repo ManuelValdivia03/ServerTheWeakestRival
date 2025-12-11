@@ -8,7 +8,7 @@ namespace ServicesTheWeakestRival.Contracts.Data
     {
         [DataMember(Order = 1, IsRequired = true)] public string Token { get; set; }
         [DataMember(Order = 2, IsRequired = true)] public Guid MatchId { get; set; }
-        [DataMember(Order = 3, IsRequired = true)] public Guid QuestionId { get; set; }
+        [DataMember(Order = 3, IsRequired = true)] public int QuestionId { get; set; }
         [DataMember(Order = 4, IsRequired = true)] public string AnswerText { get; set; }
         [DataMember(Order = 5)] public TimeSpan ResponseTime { get; set; }
     }
@@ -22,7 +22,7 @@ namespace ServicesTheWeakestRival.Contracts.Data
     [DataContract]
     public sealed class AnswerResult
     {
-        [DataMember(Order = 1)] public Guid QuestionId { get; set; }
+        [DataMember(Order = 1)] public int QuestionId { get; set; }
         [DataMember(Order = 2)] public bool IsCorrect { get; set; }
         [DataMember(Order = 3)] public decimal ChainIncrement { get; set; }
         [DataMember(Order = 4)] public decimal CurrentChain { get; set; }
@@ -68,16 +68,23 @@ namespace ServicesTheWeakestRival.Contracts.Data
     [DataContract]
     public sealed class CastVoteRequest
     {
-        [DataMember(Order = 1, IsRequired = true)] public string Token { get; set; }
-        [DataMember(Order = 2, IsRequired = true)] public Guid MatchId { get; set; }
-        [DataMember(Order = 3, IsRequired = true)] public Guid ToPlayerId { get; set; }
+        [DataMember(Order = 1, IsRequired = true)]
+        public string Token { get; set; }
+
+        [DataMember(Order = 2, IsRequired = true)]
+        public Guid MatchId { get; set; }
+
+        [DataMember(Order = 3, EmitDefaultValue = true)]
+        public int? TargetUserId { get; set; }
     }
 
     [DataContract]
     public sealed class CastVoteResponse
     {
-        [DataMember(Order = 1)] public bool Accepted { get; set; }
+        [DataMember(Order = 1)]
+        public bool Accepted { get; set; }
     }
+
 
     [DataContract]
     public sealed class AckEventSeenRequest

@@ -802,9 +802,17 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 if (TryGetLobbyUidForCurrentSession(out var lobbyUid))
                 {
+                    var lobbyId = GetLobbyIdFromUid(lobbyUid);
+                    var members = GetLobbyMembers(lobbyId);
+                    var avatarSql = new UserAvatarSql(Connection);
+                    var accountMinis = MapToAccountMini(members, avatarSql);
+
+                    match.Players = MapToPlayerSummaries(accountMinis);
+
                     Logger.InfoFormat(
-                        "StartLobbyMatch: broadcasting OnMatchStarted. LobbyUid={0}",
-                        lobbyUid);
+                        "StartLobbyMatch: broadcasting OnMatchStarted. LobbyUid={0}, PlayersCount={1}",
+                        lobbyUid,
+                        match.Players != null ? match.Players.Count : 0);
 
                     BroadcastToLobby(
                         lobbyUid,
@@ -832,7 +840,6 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (FaultException<ServiceFault>)
             {
-                // Faults de negocio ya construidos, solo los propagamos
                 throw;
             }
             catch (SqlException ex)
@@ -852,6 +859,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     ex);
             }
         }
+
 
         private static FaultException<ServiceFault> ThrowTechnicalFault(
             string code,
@@ -968,6 +976,31 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return accountMinis;
         }
+
+        private static List<PlayerSummary> MapToPlayerSummaries(List<AccountMini> accounts)
+        {
+            var players = new List<PlayerSummary>();
+
+            if (accounts == null)
+            {
+                return players;
+            }
+
+            foreach (var account in accounts)
+            {
+                players.Add(
+                    new PlayerSummary
+                    {
+                        UserId = account.AccountId,
+                        DisplayName = account.DisplayName,
+                        IsOnline = true,
+                        Avatar = account.Avatar
+                    });
+            }
+
+            return players;
+        }
+
 
         private static List<LobbyMembers> GetLobbyMembers(int lobbyId)
         {

@@ -89,7 +89,9 @@
     <Compile Include="Server\Services\Logic\AuthSql.cs" />
     <Compile Include="Server\Services\Logic\ChatSql.cs" />
     <Compile Include="Server\Services\Logic\FriendSql.cs" />
+    <Compile Include="Server\Services\Logic\LightningChallengeState.cs" />
     <Compile Include="Server\Services\Logic\LobbySql.cs" />
+    <Compile Include="Server\Services\Logic\MatchRuntimeState.cs" />
     <Compile Include="Server\Services\Logic\MatchSql.cs" />
     <Compile Include="Server\Services\Logic\QuestionsSql.cs" />
     <Compile Include="Server\Services\Logic\UserAvatarSql.cs" />
