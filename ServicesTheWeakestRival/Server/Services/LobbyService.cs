@@ -435,10 +435,18 @@ namespace ServicesTheWeakestRival.Server.Services
                 info.AccessCode = accessCode;
             }
 
-            callback.OnLobbyUpdated(info);
+            try
+            {
+                callback.OnLobbyUpdated(info);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("CreateLobby: error enviando OnLobbyUpdated al cliente.", ex);
+            }
 
             return new CreateLobbyResponse { Lobby = info };
         }
+
 
         public JoinByCodeResponse JoinByCode(JoinByCodeRequest request)
         {
