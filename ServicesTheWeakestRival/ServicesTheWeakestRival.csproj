@@ -106,10 +106,14 @@
     <Compile Include="Server\Services\Logic\MatchRuntimeState.cs" />
     <Compile Include="Server\Services\Logic\MatchSql.cs" />
     <Compile Include="Server\Services\Logic\QuestionsSql.cs" />
+    <Compile Include="Server\Services\Logic\ReportSql.cs" />
     <Compile Include="Server\Services\Logic\UserAvatarSql.cs" />
     <Compile Include="Server\Services\Logic\WildcardSql.cs" />
     <Compile Include="Server\Services\MatchmakingService.cs" />
     <Compile Include="Server\Services\MatchManager.cs" />
+    <Compile Include="Server\Services\ReportService.cs" />
+    <Compile Include="Server\Services\Reports\ReportRequestLogic.cs" />
+    <Compile Include="Server\Services\Reports\ReportServiceContext.cs" />
     <Compile Include="Server\Services\StatsService.cs" />
     <Compile Include="Server\Services\TokenStore.cs" />
     <Compile Include="Server\Services\WildcardService.cs" />

@@ -17,6 +17,7 @@ namespace ConsoleServer
                 new ServiceHost(typeof(StatsService)),
                 new ServiceHost(typeof(FriendService)),
                 new ServiceHost(typeof(WildcardService)),
+                new ServiceHost(typeof(ReportService)),
             };
 
             try
