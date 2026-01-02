@@ -1,6 +1,6 @@
-﻿using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
-using System.Collections.Generic;
+using ServicesTheWeakestRival.Server.Services.Stats;
 using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services
@@ -8,22 +8,23 @@ namespace ServicesTheWeakestRival.Server.Services
     [ServiceBehavior(
     InstanceContextMode = InstanceContextMode.Single,
     ConcurrencyMode = ConcurrencyMode.Multiple)]
-    public class StatsService : IStatsService
+    public sealed class StatsService : IStatsService
     {
+        private readonly StatsLogic _statsLogic;
+
+        public StatsService()
+        {
+            _statsLogic = new StatsLogic();
+        }
+
         public GetLeaderboardResponse GetLeaderboard(GetLeaderboardRequest request)
         {
-            return new GetLeaderboardResponse
-            {
-                Entries = new List<LeaderboardEntry>()
-            };
+            return _statsLogic.GetLeaderboard(request);
         }
 
         public GetPlayerStatsResponse GetPlayerStats(GetPlayerStatsRequest request)
         {
-            return new GetPlayerStatsResponse
-            {
-                Stats = new LeaderboardEntry { PlayerName = request.PlayerName, Wins = 0, BestBank = 0m }
-            };
+            return _statsLogic.GetPlayerStats(request);
         }
     }
 }
