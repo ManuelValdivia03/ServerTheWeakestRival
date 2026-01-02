@@ -89,12 +89,14 @@
     <Compile Include="Data\SendFriendRequestRequest.cs" />
     <Compile Include="Data\ServiceFault.cs" />
     <Compile Include="Data\StatsDtos.cs" />
+    <Compile Include="Data\SubmitPlayerReportDtos.cs" />
     <Compile Include="Data\TurnOrderDto.cs" />
     <Compile Include="Data\UpdateAccountDtos.cs" />
     <Compile Include="Data\UpdateAvatarRequest.cs" />
     <Compile Include="Data\UserAvatarEntity.cs" />
     <Compile Include="Data\WildcardDtos.cs" />
     <Compile Include="Enums\CoinFlipResultType.cs" />
+    <Compile Include="Enums\ReportReasonCode.cs" />
     <Compile Include="Enums\SpecialEventType.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\IAuthService.cs" />
@@ -104,6 +106,7 @@
     <Compile Include="Services\IGameplayServiceCallback.cs" />
     <Compile Include="Services\ILobbyService.cs" />
     <Compile Include="Services\IMatchmakingService.cs" />
+    <Compile Include="Services\IReportService.cs" />
     <Compile Include="Services\IStatsService.cs" />
     <Compile Include="Services\IWildcardService.cs" />
   </ItemGroup>

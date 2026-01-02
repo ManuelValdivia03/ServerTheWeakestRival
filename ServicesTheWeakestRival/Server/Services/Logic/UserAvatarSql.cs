@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
+using System.Text;
 using ServicesTheWeakestRival.Contracts.Data;
 
 namespace ServicesTheWeakestRival.Server.Services.Logic
@@ -15,21 +17,9 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
         private const string PARAM_FACE_TYPE = "@FaceType";
         private const string PARAM_USE_PROFILE_PHOTO = "@UseProfilePhoto";
 
-        private readonly string connectionString;
+        private const string PARAM_IN_PREFIX = "@p";
 
-        public UserAvatarSql(string connectionString)
-        {
-            if (string.IsNullOrWhiteSpace(connectionString))
-            {
-                throw new ArgumentException("Connection string is required.", nameof(connectionString));
-            }
-
-            this.connectionString = connectionString;
-        }
-
-        public UserAvatarEntity GetByUserId(int userId)
-        {
-            const string sql = @"
+        private const string SQL_SELECT_BY_USER_ID = @"
 SELECT user_id,
        body_color,
        pants_color,
@@ -40,8 +30,35 @@ SELECT user_id,
 FROM dbo.UserAvatar
 WHERE user_id = @UserId;";
 
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            using (SqlCommand command = new SqlCommand(sql, connection))
+        private const string SQL_SELECT_BY_USER_IDS_PREFIX = @"
+SELECT user_id,
+       body_color,
+       pants_color,
+       hat_type,
+       hat_color,
+       face_type,
+       use_profile_photo
+FROM dbo.UserAvatar
+WHERE user_id IN (";
+
+        private const string SQL_SELECT_BY_USER_IDS_SUFFIX = ");";
+
+        private readonly string _connectionString;
+
+        public UserAvatarSql(string connectionString)
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new ArgumentException("Connection string is required.", nameof(connectionString));
+            }
+
+            _connectionString = connectionString;
+        }
+
+        public UserAvatarEntity GetByUserId(int userId)
+        {
+            using (SqlConnection connection = new SqlConnection(_connectionString))
+            using (SqlCommand command = new SqlCommand(SQL_SELECT_BY_USER_ID, connection))
             {
                 command.CommandType = CommandType.Text;
                 command.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
@@ -55,18 +72,46 @@ WHERE user_id = @UserId;";
                         return null;
                     }
 
-                    return new UserAvatarEntity
-                    {
-                        UserId = reader.GetInt32(reader.GetOrdinal("user_id")),
-                        BodyColor = reader.GetByte(reader.GetOrdinal("body_color")),
-                        PantsColor = reader.GetByte(reader.GetOrdinal("pants_color")),
-                        HatType = reader.GetByte(reader.GetOrdinal("hat_type")),
-                        HatColor = reader.GetByte(reader.GetOrdinal("hat_color")),
-                        FaceType = reader.GetByte(reader.GetOrdinal("face_type")),
-                        UseProfilePhoto = reader.GetBoolean(reader.GetOrdinal("use_profile_photo"))
-                    };
+                    return MapEntity(reader);
                 }
             }
+        }
+
+        public Dictionary<int, UserAvatarEntity> GetByUserIds(int[] userIds)
+        {
+            int[] ids = userIds ?? Array.Empty<int>();
+
+            var result = new Dictionary<int, UserAvatarEntity>();
+            if (ids.Length == 0)
+            {
+                return result;
+            }
+
+            string sql = BuildGetByUserIdsQuery(ids.Length);
+
+            using (SqlConnection connection = new SqlConnection(_connectionString))
+            using (SqlCommand command = new SqlCommand(sql, connection))
+            {
+                command.CommandType = CommandType.Text;
+
+                for (int i = 0; i < ids.Length; i++)
+                {
+                    command.Parameters.Add(PARAM_IN_PREFIX + i, SqlDbType.Int).Value = ids[i];
+                }
+
+                connection.Open();
+
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        UserAvatarEntity entity = MapEntity(reader);
+                        result[entity.UserId] = entity;
+                    }
+                }
+            }
+
+            return result;
         }
 
         public void Save(UserAvatarEntity avatar)
@@ -92,7 +137,7 @@ WHEN NOT MATCHED THEN
     INSERT (user_id, body_color, pants_color, hat_type, hat_color, face_type, use_profile_photo)
     VALUES (@UserId, @BodyColor, @PantsColor, @HatType, @HatColor, @FaceType, @UseProfilePhoto);";
 
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = new SqlConnection(_connectionString))
             using (SqlCommand command = new SqlCommand(sql, connection))
             {
                 command.CommandType = CommandType.Text;
@@ -108,6 +153,41 @@ WHEN NOT MATCHED THEN
                 connection.Open();
                 command.ExecuteNonQuery();
             }
+        }
+
+        private static string BuildGetByUserIdsQuery(int count)
+        {
+            var builder = new StringBuilder();
+            builder.Append(SQL_SELECT_BY_USER_IDS_PREFIX);
+
+            for (int i = 0; i < count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append(PARAM_IN_PREFIX);
+                builder.Append(i);
+            }
+
+            builder.Append(SQL_SELECT_BY_USER_IDS_SUFFIX);
+
+            return builder.ToString();
+        }
+
+        private static UserAvatarEntity MapEntity(SqlDataReader reader)
+        {
+            return new UserAvatarEntity
+            {
+                UserId = reader.GetInt32(reader.GetOrdinal("user_id")),
+                BodyColor = reader.GetByte(reader.GetOrdinal("body_color")),
+                PantsColor = reader.GetByte(reader.GetOrdinal("pants_color")),
+                HatType = reader.GetByte(reader.GetOrdinal("hat_type")),
+                HatColor = reader.GetByte(reader.GetOrdinal("hat_color")),
+                FaceType = reader.GetByte(reader.GetOrdinal("face_type")),
+                UseProfilePhoto = reader.GetBoolean(reader.GetOrdinal("use_profile_photo"))
+            };
         }
     }
 }
