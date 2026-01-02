@@ -89,6 +89,7 @@
     <Compile Include="Data\SendFriendRequestRequest.cs" />
     <Compile Include="Data\ServiceFault.cs" />
     <Compile Include="Data\StatsDtos.cs" />
+    <Compile Include="Data\TurnOrderDto.cs" />
     <Compile Include="Data\UpdateAccountDtos.cs" />
     <Compile Include="Data\UpdateAvatarRequest.cs" />
     <Compile Include="Data\UserAvatarEntity.cs" />

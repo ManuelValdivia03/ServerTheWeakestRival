@@ -1,6 +1,6 @@
-﻿using System;
+﻿using ServicesTheWeakestRival.Contracts.Data;
+using System;
 using System.ServiceModel;
-using ServicesTheWeakestRival.Contracts.Data;
 
 namespace ServicesTheWeakestRival.Contracts.Services
 {
@@ -16,46 +16,28 @@ namespace ServicesTheWeakestRival.Contracts.Services
             decimal banked);
 
         [OperationContract(IsOneWay = true)]
-        void OnAnswerEvaluated(
-            Guid matchId,
-            PlayerSummary player,
-            AnswerResult result);
+        void OnAnswerEvaluated(Guid matchId, PlayerSummary player, AnswerResult result);
 
         [OperationContract(IsOneWay = true)]
-        void OnBankUpdated(
-            Guid matchId,
-            BankState bank);
+        void OnBankUpdated(Guid matchId, BankState bank);
 
         [OperationContract(IsOneWay = true)]
-        void OnVotePhaseStarted(
-            Guid matchId,
-            TimeSpan timeLimit);
+        void OnVotePhaseStarted(Guid matchId, TimeSpan timeLimit);
 
         [OperationContract(IsOneWay = true)]
-        void OnElimination(
-            Guid matchId,
-            PlayerSummary eliminatedPlayer);
+        void OnElimination(Guid matchId, PlayerSummary eliminatedPlayer);
 
         [OperationContract(IsOneWay = true)]
-        void OnSpecialEvent(
-            Guid matchId,
-            string eventName,
-            string description);
+        void OnSpecialEvent(Guid matchId, string eventName, string description);
 
         [OperationContract(IsOneWay = true)]
-        void OnCoinFlipResolved(
-            Guid matchId,
-            CoinFlipResolvedDto coinFlip);
+        void OnCoinFlipResolved(Guid matchId, CoinFlipResolvedDto coinFlip);
 
         [OperationContract(IsOneWay = true)]
-        void OnDuelCandidates(
-            Guid matchId,
-            DuelCandidatesDto duelCandidates);
+        void OnDuelCandidates(Guid matchId, DuelCandidatesDto duelCandidates);
 
         [OperationContract(IsOneWay = true)]
-        void OnMatchFinished(
-            Guid matchId,
-            PlayerSummary winner);
+        void OnMatchFinished(Guid matchId, PlayerSummary winner);
 
         [OperationContract(IsOneWay = true)]
         void OnLightningChallengeStarted(
@@ -78,5 +60,11 @@ namespace ServicesTheWeakestRival.Contracts.Services
             Guid roundId,
             int correctAnswers,
             bool isSuccess);
+
+        [OperationContract(IsOneWay = true)]
+        void OnTurnOrderInitialized(Guid matchId, TurnOrderDto turnOrder);
+
+        [OperationContract(IsOneWay = true)]
+        void OnTurnOrderChanged(Guid matchId, TurnOrderDto turnOrder, string reasonCode);
     }
 }

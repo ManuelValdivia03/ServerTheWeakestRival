@@ -34,6 +34,10 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_DUEL_NOT_ACTIVE = "DUEL_NOT_ACTIVE";
         private const string ERROR_NOT_WEAKEST_RIVAL = "NOT_WEAKEST_RIVAL";
         private const string ERROR_INVALID_DUEL_TARGET = "INVALID_DUEL_TARGET";
+        private const string ERROR_MATCH_ALREADY_STARTED = "MATCH_ALREADY_STARTED";
+        private const string ERROR_NO_QUESTIONS = "NO_QUESTIONS";
+        private const string ERROR_NO_QUESTIONS_MESSAGE = "No se encontraron preguntas para la dificultad/idioma solicitados.";
+        private const string FALLBACK_LOCALE_EN_US = "en-US";
 
         private const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
         private const string ERROR_MATCH_NOT_FOUND_MESSAGE = "Match not found.";
@@ -41,6 +45,7 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_DUEL_NOT_ACTIVE_MESSAGE = "Duel is not active.";
         private const string ERROR_NOT_WEAKEST_RIVAL_MESSAGE = "Only weakest rival can choose duel opponent.";
         private const string ERROR_INVALID_DUEL_TARGET_MESSAGE = "Invalid duel opponent.";
+        private const string ERROR_MATCH_ALREADY_STARTED_MESSAGE = "Match already started. Joining is not allowed.";
 
         private const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
@@ -60,9 +65,19 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE =
             "El jugador {0} ha recibido un comodín extra.";
 
-        private const int DEFAULT_MAX_QUESTIONS = 40;
-        private const int NEXT_QUESTION_DELAY_MS = 2000;
+        private const string SPECIAL_EVENT_BOMB_QUESTION_CODE =
+            "BOMB_QUESTION";
 
+        private const string SPECIAL_EVENT_BOMB_QUESTION_DESCRIPTION_TEMPLATE =
+            "Pregunta bomba para {0}. Acierto: +{1} a la banca. Fallo: -{1} de lo bancado.";
+
+        private const string SPECIAL_EVENT_BOMB_QUESTION_APPLIED_CODE =
+            "BOMB_QUESTION_APPLIED";
+
+        private const string SPECIAL_EVENT_BOMB_QUESTION_APPLIED_DESCRIPTION_TEMPLATE =
+            "Pregunta bomba resuelta por {0}. Cambio en banca: {1}. Banca actual: {2}.";
+
+        private const int DEFAULT_MAX_QUESTIONS = 40;
         private const int QUESTIONS_PER_PLAYER_PER_ROUND = 2;
         private const int VOTE_PHASE_TIME_LIMIT_SECONDS = 30;
         private const int MIN_PLAYERS_TO_CONTINUE = 2;
@@ -71,7 +86,7 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int COIN_FLIP_RANDOM_MAX_VALUE = 100;
         private const int COIN_FLIP_THRESHOLD_VALUE = 50;
 
-        private const int LIGHTNING_PROBABILITY_PERCENT = 20;
+        private const int LIGHTNING_PROBABILITY_PERCENT = 0;
         private const int LIGHTNING_TOTAL_QUESTIONS = 3;
         private const int LIGHTNING_TOTAL_TIME_SECONDS = 30;
         private const int LIGHTNING_RANDOM_MIN_VALUE = 0;
@@ -79,7 +94,18 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const int EXTRA_WILDCARD_RANDOM_MIN_VALUE = 0;
         private const int EXTRA_WILDCARD_RANDOM_MAX_VALUE = 100;
-        private const int EXTRA_WILDCARD_PROBABILITY_PERCENT = 100;
+        private const int EXTRA_WILDCARD_PROBABILITY_PERCENT = 0;
+
+        private const int BOMB_QUESTION_RANDOM_MIN_VALUE = 0;
+        private const int BOMB_QUESTION_RANDOM_MAX_VALUE = 100;
+        private const int BOMB_QUESTION_PROBABILITY_PERCENT = 20;
+
+        private const decimal BOMB_BANK_DELTA = 0.50m;
+        private const decimal MIN_BANKED_POINTS = 0.00m;
+
+        private const decimal INITIAL_BANKED_POINTS = 5.00m;
+
+        private const int TURN_USER_ID_NONE = 0;
 
         private static readonly decimal[] CHAIN_STEPS =
         {
@@ -96,251 +122,123 @@ namespace ServicesTheWeakestRival.Server.Services
         private static readonly ConcurrentDictionary<int, Guid> PlayerMatchByUserId =
             new ConcurrentDictionary<int, Guid>();
 
-        private static readonly Random RandomGenerator = new Random();
+        // FIX: jugadores permitidos por match (los del lobby). Evita tocar MatchRuntimeState.
+        private static readonly ConcurrentDictionary<Guid, ConcurrentDictionary<int, byte>> ExpectedPlayersByMatchId =
+            new ConcurrentDictionary<Guid, ConcurrentDictionary<int, byte>>();
+
+        private static readonly Random randomGenerator = new Random();
+        private static readonly object randomSyncRoot = new object();
+
+        private const string LOG_CTX_SUBMIT_ANSWER = "GameplayService.SubmitAnswer";
+        private const string LOG_CTX_BANK = "GameplayService.Bank";
+        private const string LOG_CTX_CAST_VOTE = "GameplayService.CastVote";
+        private const string LOG_CTX_JOIN_MATCH = "GameplayService.JoinMatch";
+        private const string LOG_CTX_START_MATCH = "GameplayService.StartMatch";
+        private const string LOG_CTX_CHOOSE_DUEL = "GameplayService.ChooseDuelOpponent";
+        private const string LOG_CTX_SEND_NEXT_QUESTION = "GameplayService.SendNextQuestion";
+        private const string LOG_CTX_VOTE_PHASE = "GameplayService.VotePhase";
+        private const string LOG_CTX_BOMB = "GameplayService.BombQuestion";
+        private const string LOG_CTX_TURN_ORDER = "GameplayService.TurnOrder";
 
         public SubmitAnswerResponse SubmitAnswer(SubmitAnswerRequest request)
         {
-            if (request == null)
+            try
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
+                ValidateNotNullRequest(request);
+                ValidateMatchId(request.MatchId);
 
-            if (request.MatchId == Guid.Empty)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
-            }
+                int userId = Authenticate(request.Token);
+                MatchRuntimeState state = GetMatchOrThrow(request.MatchId);
 
-            int userId = Authenticate(request.Token);
-
-            if (!Matches.TryGetValue(request.MatchId, out MatchRuntimeState state))
-            {
-                throw ThrowFault(ERROR_MATCH_NOT_FOUND, ERROR_MATCH_NOT_FOUND_MESSAGE);
-            }
-
-            lock (state.SyncRoot)
-            {
-                if (state.IsInVotePhase)
+                lock (state.SyncRoot)
                 {
-                    throw ThrowFault(ERROR_INVALID_REQUEST, "Round is in vote phase. No questions available.");
-                }
+                    EnsureNotInVotePhase(state, "Round is in vote phase. No questions available.");
 
-                MatchPlayerRuntime currentPlayer = state.GetCurrentPlayer();
-                if (currentPlayer == null || currentPlayer.UserId != userId)
-                {
-                    throw ThrowFault(ERROR_NOT_PLAYER_TURN, ERROR_NOT_PLAYER_TURN_MESSAGE);
-                }
+                    MatchPlayerRuntime currentPlayer = GetCurrentPlayerOrThrow(state, userId);
 
-                if (IsLightningActive(state))
-                {
-                    return HandleLightningSubmitAnswer(request, state, currentPlayer);
-                }
-
-                if (!state.QuestionsById.TryGetValue(state.CurrentQuestionId, out QuestionWithAnswersDto question))
-                {
-                    throw ThrowFault(ERROR_INVALID_REQUEST, "Current question not found for this match.");
-                }
-
-                bool isTimeout = string.IsNullOrWhiteSpace(request.AnswerText);
-                bool isCorrect = false;
-
-                if (!isTimeout)
-                {
-                    AnswerDto selectedAnswer = question.Answers.Find(
-                        a => string.Equals(a.Text, request.AnswerText, StringComparison.Ordinal));
-
-                    if (selectedAnswer == null)
+                    if (IsLightningActive(state))
                     {
-                        throw ThrowFault(ERROR_INVALID_REQUEST, "Answer not found for current question.");
+                        return HandleLightningSubmitAnswer(request, state, currentPlayer);
                     }
 
-                    isCorrect = selectedAnswer.IsCorrect;
-                }
+                    QuestionWithAnswersDto question = GetCurrentQuestionOrThrow(state);
+                    bool isCorrect = EvaluateAnswerOrThrow(question, request.AnswerText);
 
-                if (isCorrect)
-                {
-                    if (state.CurrentStreak < CHAIN_STEPS.Length)
+                    UpdateChainState(state, isCorrect);
+                    ApplyBombQuestionEffectIfNeeded(state, currentPlayer, isCorrect);
+
+                    AnswerResult result = BuildAnswerResult(request.QuestionId, state, isCorrect);
+                    PlayerSummary playerSummary = BuildPlayerSummary(currentPlayer, isOnline: true);
+
+                    Broadcast(
+                        state,
+                        cb => cb.OnAnswerEvaluated(state.MatchId, playerSummary, result),
+                        LOG_CTX_SUBMIT_ANSWER);
+
+                    SubmitAnswerResponse response = new SubmitAnswerResponse
                     {
-                        decimal increment = CHAIN_STEPS[state.CurrentStreak];
-                        state.CurrentChain += increment;
-                        state.CurrentStreak++;
-                    }
-                }
-                else
-                {
-                    state.CurrentChain = 0m;
-                    state.CurrentStreak = 0;
-                }
+                        Result = result
+                    };
 
-                AnswerResult result = new AnswerResult
-                {
-                    QuestionId = request.QuestionId,
-                    IsCorrect = isCorrect,
-                    ChainIncrement = state.CurrentStreak > 0 && isCorrect
-                        ? CHAIN_STEPS[state.CurrentStreak - 1]
-                        : 0m,
-                    CurrentChain = state.CurrentChain,
-                    BankedPoints = state.BankedPoints
-                };
-
-                PlayerSummary playerSummary = new PlayerSummary
-                {
-                    UserId = currentPlayer.UserId,
-                    DisplayName = currentPlayer.DisplayName,
-                    Avatar = currentPlayer.Avatar
-                };
-
-                foreach (MatchPlayerRuntime player in state.Players)
-                {
-                    try
+                    if (ShouldHandleDuelTurn(state, currentPlayer))
                     {
-                        player.Callback.OnAnswerEvaluated(
-                            state.MatchId,
-                            playerSummary,
-                            result);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn("Error al notificar OnAnswerEvaluated.", ex);
-                    }
-                }
-
-                SubmitAnswerResponse response = new SubmitAnswerResponse
-                {
-                    Result = result
-                };
-
-                if (state.IsInDuelPhase &&
-                    state.WeakestRivalUserId.HasValue &&
-                    state.DuelTargetUserId.HasValue &&
-                    (currentPlayer.UserId == state.WeakestRivalUserId.Value ||
-                     currentPlayer.UserId == state.DuelTargetUserId.Value))
-                {
-                    if (!isCorrect)
-                    {
-                        currentPlayer.IsEliminated = true;
-
-                        PlayerSummary eliminatedSummary = new PlayerSummary
-                        {
-                            UserId = currentPlayer.UserId,
-                            DisplayName = currentPlayer.DisplayName,
-                            IsOnline = true,
-                            Avatar = currentPlayer.Avatar
-                        };
-
-                        foreach (MatchPlayerRuntime player in state.Players)
-                        {
-                            try
-                            {
-                                player.Callback.OnElimination(
-                                    state.MatchId,
-                                    eliminatedSummary);
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.Warn("Error al notificar OnElimination en duelo.", ex);
-                            }
-                        }
-
-                        Logger.InfoFormat(
-                            "Player eliminated by duel. MatchId={0}, Round={1}, EliminatedUserId={2}",
-                            state.MatchId,
-                            state.RoundNumber,
-                            currentPlayer.UserId);
-
-                        state.IsInDuelPhase = false;
-                        state.WeakestRivalUserId = null;
-                        state.DuelTargetUserId = null;
-
-                        FinishMatchWithWinnerIfApplicable(state);
-                        if (state.IsFinished)
-                        {
-                            return response;
-                        }
-
-                        StartNextRound(state);
+                        HandleDuelTurn(state, currentPlayer, isCorrect);
                         return response;
                     }
 
-                    int nextUserId = currentPlayer.UserId == state.WeakestRivalUserId.Value
-                        ? state.DuelTargetUserId.Value
-                        : state.WeakestRivalUserId.Value;
+                    state.QuestionsAskedThisRound++;
 
-                    int nextIndex = state.Players.FindIndex(
-                        p => p.UserId == nextUserId && !p.IsEliminated);
+                    int alivePlayersCount = CountAlivePlayersOrFallbackToTotal(state);
+                    int maxQuestionsThisRound = alivePlayersCount * QUESTIONS_PER_PLAYER_PER_ROUND;
+                    bool hasNoMoreQuestions = state.Questions.Count == 0;
 
-                    if (nextIndex >= 0)
+                    if (state.QuestionsAskedThisRound >= maxQuestionsThisRound || hasNoMoreQuestions)
                     {
-                        state.CurrentPlayerIndex = nextIndex;
-                        SendNextQuestion(state);
+                        Logger.InfoFormat(
+                            "End of round reached. MatchId={0}, Round={1}, QuestionsAskedThisRound={2}, AlivePlayers={3}, NoMoreQuestions={4}",
+                            state.MatchId,
+                            state.RoundNumber,
+                            state.QuestionsAskedThisRound,
+                            alivePlayersCount,
+                            hasNoMoreQuestions);
+
+                        StartVotePhase(state);
+                        return response;
                     }
+
+                    state.AdvanceTurn();
+                    SendNextQuestion(state);
 
                     return response;
                 }
-
-                state.QuestionsAskedThisRound++;
-
-                int alivePlayersCount = state.Players.Count(p => !p.IsEliminated);
-                if (alivePlayersCount <= 0)
-                {
-                    alivePlayersCount = state.Players.Count;
-                }
-
-                int maxQuestionsThisRound = alivePlayersCount * QUESTIONS_PER_PLAYER_PER_ROUND;
-                bool noMoreQuestions = state.Questions.Count == 0;
-
-                if (state.QuestionsAskedThisRound >= maxQuestionsThisRound || noMoreQuestions)
-                {
-                    Logger.InfoFormat(
-                        "End of round reached. MatchId={0}, Round={1}, QuestionsAskedThisRound={2}, AlivePlayers={3}, NoMoreQuestions={4}",
-                        state.MatchId,
-                        state.RoundNumber,
-                        state.QuestionsAskedThisRound,
-                        alivePlayersCount,
-                        noMoreQuestions);
-
-                    StartVotePhase(state);
-                }
-                else
-                {
-                    state.AdvanceTurn();
-                    SendNextQuestion(state);
-                }
-
-                return response;
+            }
+            catch (FaultException<ServiceFault>)
+            {
+                throw;
+            }
+            catch (SqlException ex)
+            {
+                throw ThrowTechnicalFault(ERROR_DB, MESSAGE_DB_ERROR, LOG_CTX_SUBMIT_ANSWER, ex);
+            }
+            catch (Exception ex)
+            {
+                throw ThrowTechnicalFault(ERROR_UNEXPECTED, MESSAGE_UNEXPECTED_ERROR, LOG_CTX_SUBMIT_ANSWER, ex);
             }
         }
 
         public BankResponse Bank(BankRequest request)
         {
-            if (request == null)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
-
-            if (request.MatchId == Guid.Empty)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
-            }
+            ValidateNotNullRequest(request);
+            ValidateMatchId(request.MatchId);
 
             int userId = Authenticate(request.Token);
-
-            if (!Matches.TryGetValue(request.MatchId, out MatchRuntimeState state))
-            {
-                throw ThrowFault(ERROR_MATCH_NOT_FOUND, ERROR_MATCH_NOT_FOUND_MESSAGE);
-            }
+            MatchRuntimeState state = GetMatchOrThrow(request.MatchId);
 
             lock (state.SyncRoot)
             {
-                if (state.IsInVotePhase)
-                {
-                    throw ThrowFault(ERROR_INVALID_REQUEST, "Round is in vote phase. Banking is not allowed.");
-                }
+                EnsureNotInVotePhase(state, "Round is in vote phase. Banking is not allowed.");
 
-                MatchPlayerRuntime currentPlayer = state.GetCurrentPlayer();
-                if (currentPlayer == null || currentPlayer.UserId != userId)
-                {
-                    throw ThrowFault(ERROR_NOT_PLAYER_TURN, ERROR_NOT_PLAYER_TURN_MESSAGE);
-                }
+                GetCurrentPlayerOrThrow(state, userId);
 
                 state.BankedPoints += state.CurrentChain;
                 state.CurrentChain = 0m;
@@ -353,17 +251,10 @@ namespace ServicesTheWeakestRival.Server.Services
                     BankedPoints = state.BankedPoints
                 };
 
-                foreach (MatchPlayerRuntime player in state.Players)
-                {
-                    try
-                    {
-                        player.Callback.OnBankUpdated(state.MatchId, bankState);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn("Error al notificar OnBankUpdated.", ex);
-                    }
-                }
+                Broadcast(
+                    state,
+                    cb => cb.OnBankUpdated(state.MatchId, bankState),
+                    LOG_CTX_BANK);
 
                 return new BankResponse
                 {
@@ -382,22 +273,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public CastVoteResponse CastVote(CastVoteRequest request)
         {
-            if (request == null)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
-
-            if (request.MatchId == Guid.Empty)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
-            }
+            ValidateNotNullRequest(request);
+            ValidateMatchId(request.MatchId);
 
             int userId = Authenticate(request.Token);
-
-            if (!Matches.TryGetValue(request.MatchId, out MatchRuntimeState state))
-            {
-                throw ThrowFault(ERROR_MATCH_NOT_FOUND, ERROR_MATCH_NOT_FOUND_MESSAGE);
-            }
+            MatchRuntimeState state = GetMatchOrThrow(request.MatchId);
 
             lock (state.SyncRoot)
             {
@@ -428,7 +308,6 @@ namespace ServicesTheWeakestRival.Server.Services
                     targetUserId.HasValue ? targetUserId.Value : 0);
 
                 int alivePlayersCount = alivePlayers.Count;
-
                 if (alivePlayersCount <= 0)
                 {
                     alivePlayersCount = state.Players.Count;
@@ -463,12 +342,9 @@ namespace ServicesTheWeakestRival.Server.Services
         public GetQuestionsResponse GetQuestions(GetQuestionsRequest request)
         {
             ValidateGetQuestionsRequest(request);
-
             Authenticate(request.Token);
 
-            int maxQuestions = request.MaxQuestions.HasValue && request.MaxQuestions.Value > 0
-                ? request.MaxQuestions.Value
-                : DEFAULT_MAX_QUESTIONS;
+            int maxQuestions = GetMaxQuestionsOrDefault(request.MaxQuestions);
 
             try
             {
@@ -510,15 +386,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public GameplayJoinMatchResponse JoinMatch(GameplayJoinMatchRequest request)
         {
-            if (request == null)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
-
-            if (request.MatchId == Guid.Empty)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
-            }
+            ValidateNotNullRequest(request);
+            ValidateMatchId(request.MatchId);
 
             int userId = Authenticate(request.Token);
 
@@ -527,8 +396,34 @@ namespace ServicesTheWeakestRival.Server.Services
 
             MatchRuntimeState state = Matches.GetOrAdd(request.MatchId, id => new MatchRuntimeState(id));
 
+            bool hasStarted;
+
             lock (state.SyncRoot)
             {
+                hasStarted = state.HasStarted || state.IsInitialized;
+
+                if (hasStarted)
+                {
+                    if (ExpectedPlayersByMatchId.TryGetValue(request.MatchId, out ConcurrentDictionary<int, byte> expectedPlayers) &&
+                        expectedPlayers != null &&
+                        expectedPlayers.Count > 0)
+                    {
+                        if (!expectedPlayers.ContainsKey(userId))
+                        {
+                            throw ThrowFault(ERROR_MATCH_ALREADY_STARTED, ERROR_MATCH_ALREADY_STARTED_MESSAGE);
+                        }
+                    }
+                    else
+                    {
+                        // Legacy fallback: permite reconectar solo si ya existía en runtime
+                        MatchPlayerRuntime existing = state.Players.Find(p => p.UserId == userId);
+                        if (existing == null)
+                        {
+                            throw ThrowFault(ERROR_MATCH_ALREADY_STARTED, ERROR_MATCH_ALREADY_STARTED_MESSAGE);
+                        }
+                    }
+                }
+
                 MatchPlayerRuntime existingPlayer = state.Players.Find(p => p.UserId == userId);
                 if (existingPlayer != null)
                 {
@@ -536,7 +431,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
                 else
                 {
-                    string displayName = "Jugador " + userId;
+                    string displayName = string.Format("Jugador {0}", userId);
 
                     UserAvatarSql avatarSql = new UserAvatarSql(GetConnectionString());
                     UserAvatarEntity avatarEntity = avatarSql.GetByUserId(userId);
@@ -549,11 +444,18 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     state.Players.Add(player);
                 }
+
                 Logger.InfoFormat(
-                    "JoinMatch: MatchId={0}, UserId={1}, PlayersInState={2}",
+                    "JoinMatch: MatchId={0}, UserId={1}, PlayersInState={2}, HasStarted={3}",
                     request.MatchId,
                     userId,
-                    state.Players.Count);
+                    state.Players.Count,
+                    hasStarted);
+
+                if (hasStarted && state.IsInitialized)
+                {
+                    TrySendSnapshotToJoiningPlayer(state, userId);
+                }
             }
 
             PlayerMatchByUserId[userId] = request.MatchId;
@@ -566,15 +468,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public GameplayStartMatchResponse StartMatch(GameplayStartMatchRequest request)
         {
-            if (request == null)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
-
-            if (request.MatchId == Guid.Empty)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
-            }
+            ValidateNotNullRequest(request);
+            ValidateMatchId(request.MatchId);
 
             if (request.Difficulty <= 0)
             {
@@ -588,69 +483,74 @@ namespace ServicesTheWeakestRival.Server.Services
 
             int userId = Authenticate(request.Token);
 
-            int maxQuestions = request.MaxQuestions.HasValue && request.MaxQuestions.Value > 0
-                ? request.MaxQuestions.Value
-                : DEFAULT_MAX_QUESTIONS;
-
+            int maxQuestions = GetMaxQuestionsOrDefault(request.MaxQuestions);
             MatchRuntimeState state = Matches.GetOrAdd(request.MatchId, id => new MatchRuntimeState(id));
 
             try
             {
                 lock (state.SyncRoot)
                 {
-                    if (!state.IsInitialized)
+                    // FIX: si ya inició, NO falla; solo asegura que exista el set de esperados.
+                    if (state.HasStarted || state.IsInitialized)
                     {
-                        List<QuestionWithAnswersDto> questions =
-                            LoadQuestions(request.Difficulty, request.LocaleCode, maxQuestions);
+                        StoreOrMergeExpectedPlayers(request.MatchId, request.ExpectedPlayerUserIds, userId);
 
-                        state.Initialize(request.Difficulty, request.LocaleCode, questions);
+                        return new GameplayStartMatchResponse
+                        {
+                            Started = true
+                        };
+                    }
+
+                    state.HasStarted = true;
+
+                    try
+                    {
+                        StoreOrMergeExpectedPlayers(request.MatchId, request.ExpectedPlayerUserIds, userId);
+
+                        List<QuestionWithAnswersDto> questions = LoadQuestionsWithLocaleFallback(
+                            request.Difficulty,
+                            request.LocaleCode,
+                            maxQuestions);
+
+                        if (questions == null || questions.Count == 0)
+                        {
+                            throw ThrowFault(ERROR_NO_QUESTIONS, ERROR_NO_QUESTIONS_MESSAGE);
+                        }
+
+                        state.Initialize(
+                            request.Difficulty,
+                            request.LocaleCode,
+                            questions,
+                            INITIAL_BANKED_POINTS);
 
                         state.WildcardMatchId = request.MatchDbId;
 
-                        if (state.Players.Count == 0)
-                        {
-                            IGameplayServiceCallback callback =
-                                OperationContext.Current.GetCallbackChannel<IGameplayServiceCallback>();
+                        EnsureHostPlayerRegistered(state, userId);
+                        ResetRoundStateForStart(state);
 
-                            string displayName = "Jugador " + userId;
+                        ShufflePlayersForStart(state);
 
-                            UserAvatarSql avatarSql = new UserAvatarSql(GetConnectionString());
-                            UserAvatarEntity avatarEntity = avatarSql.GetByUserId(userId);
-                            AvatarAppearanceDto avatar = MapAvatar(avatarEntity);
-
-                            MatchPlayerRuntime player = new MatchPlayerRuntime(userId, displayName, callback)
-                            {
-                                Avatar = avatar
-                            };
-
-                            state.Players.Add(player);
-                            PlayerMatchByUserId[userId] = request.MatchId;
-                        }
-
-                        state.CurrentPlayerIndex = 0;
-                        state.QuestionsAskedThisRound = 0;
-                        state.RoundNumber = 1;
-                        state.IsInVotePhase = false;
-                        state.IsInDuelPhase = false;
-                        state.WeakestRivalUserId = null;
-                        state.DuelTargetUserId = null;
-                        state.VotersThisRound.Clear();
-                        state.VotesThisRound.Clear();
+                        BroadcastTurnOrderInitialized(state);
 
                         TryStartExtraWildcardEvent(state);
 
-                        bool lightningStarted = TryStartLightningChallenge(state);
-                        if (!lightningStarted)
+                        bool hasLightningStarted = TryStartLightningChallenge(state);
+                        if (!hasLightningStarted)
                         {
                             SendNextQuestion(state);
                         }
+
+                        return new GameplayStartMatchResponse
+                        {
+                            Started = true
+                        };
+                    }
+                    catch
+                    {
+                        state.HasStarted = false;
+                        throw;
                     }
                 }
-
-                return new GameplayStartMatchResponse
-                {
-                    Started = true
-                };
             }
             catch (FaultException<ServiceFault>)
             {
@@ -676,10 +576,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public ChooseDuelOpponentResponse ChooseDuelOpponent(ChooseDuelOpponentRequest request)
         {
-            if (request == null)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
+            ValidateNotNullRequest(request);
 
             if (request.TargetUserId <= 0)
             {
@@ -693,10 +590,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_MATCH_NOT_FOUND, ERROR_MATCH_NOT_FOUND_MESSAGE);
             }
 
-            if (!Matches.TryGetValue(matchId, out MatchRuntimeState state))
-            {
-                throw ThrowFault(ERROR_MATCH_NOT_FOUND, ERROR_MATCH_NOT_FOUND_MESSAGE);
-            }
+            MatchRuntimeState state = GetMatchOrThrow(matchId);
 
             lock (state.SyncRoot)
             {
@@ -732,12 +626,12 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 state.DuelTargetUserId = request.TargetUserId;
 
-                int indexWeakest = state.Players.FindIndex(
+                int weakestIndex = state.Players.FindIndex(
                     p => p.UserId == state.WeakestRivalUserId.Value && !p.IsEliminated);
 
-                if (indexWeakest >= 0)
+                if (weakestIndex >= 0)
                 {
-                    state.CurrentPlayerIndex = indexWeakest;
+                    state.CurrentPlayerIndex = weakestIndex;
                     SendNextQuestion(state);
                 }
 
@@ -752,6 +646,446 @@ namespace ServicesTheWeakestRival.Server.Services
                     Accepted = true
                 };
             }
+        }
+
+        // ---------------------------------------------------------------
+        // TURNOS: Shuffle inicial + broadcast
+        // ---------------------------------------------------------------
+        private static void ShufflePlayersForStart(MatchRuntimeState state)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            if (state.Players.Count <= 1)
+            {
+                state.CurrentPlayerIndex = 0;
+                return;
+            }
+
+            for (int i = state.Players.Count - 1; i > 0; i--)
+            {
+                int j = NextRandom(0, i + 1);
+
+                MatchPlayerRuntime temp = state.Players[i];
+                state.Players[i] = state.Players[j];
+                state.Players[j] = temp;
+            }
+
+            state.CurrentPlayerIndex = 0;
+
+            MatchPlayerRuntime current = state.GetCurrentPlayer();
+            Logger.InfoFormat(
+                "{0}: players shuffled for start. MatchId={1}, Players={2}, CurrentUserId={3}",
+                LOG_CTX_TURN_ORDER,
+                state.MatchId,
+                state.Players.Count,
+                current != null ? current.UserId : TURN_USER_ID_NONE);
+        }
+
+        private static void BroadcastTurnOrderInitialized(MatchRuntimeState state)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            int[] orderedAliveUserIds = state.Players
+                .Where(p => p != null && !p.IsEliminated)
+                .Select(p => p.UserId)
+                .ToArray();
+
+            int currentUserId = TURN_USER_ID_NONE;
+            MatchPlayerRuntime current = state.GetCurrentPlayer();
+            if (current != null)
+            {
+                currentUserId = current.UserId;
+            }
+
+            TurnOrderDto dto = new TurnOrderDto
+            {
+                OrderedAliveUserIds = orderedAliveUserIds,
+                CurrentTurnUserId = currentUserId,
+                ServerUtcTicks = DateTime.UtcNow.Ticks
+            };
+
+            Broadcast(
+                state,
+                cb => cb.OnTurnOrderInitialized(state.MatchId, dto),
+                LOG_CTX_TURN_ORDER);
+        }
+
+        // ---------------------------------------------------------------
+        // FIX: Snapshot al que entra tarde (pero permitido)
+        // ---------------------------------------------------------------
+        private static void TrySendSnapshotToJoiningPlayer(MatchRuntimeState state, int userId)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            MatchPlayerRuntime joiningPlayer = state.Players.FirstOrDefault(p => p.UserId == userId);
+            if (joiningPlayer == null || joiningPlayer.Callback == null)
+            {
+                return;
+            }
+
+            try
+            {
+                int[] orderedAliveUserIds = state.Players
+                    .Where(p => p != null && !p.IsEliminated)
+                    .Select(p => p.UserId)
+                    .ToArray();
+
+                MatchPlayerRuntime current = state.GetCurrentPlayer();
+
+                TurnOrderDto turnOrder = new TurnOrderDto
+                {
+                    OrderedAliveUserIds = orderedAliveUserIds,
+                    CurrentTurnUserId = current != null ? current.UserId : TURN_USER_ID_NONE,
+                    ServerUtcTicks = DateTime.UtcNow.Ticks
+                };
+
+                joiningPlayer.Callback.OnTurnOrderInitialized(state.MatchId, turnOrder);
+
+                if (state.IsInVotePhase)
+                {
+                    joiningPlayer.Callback.OnVotePhaseStarted(
+                        state.MatchId,
+                        TimeSpan.FromSeconds(VOTE_PHASE_TIME_LIMIT_SECONDS));
+                    return;
+                }
+
+                if (current != null &&
+                    state.CurrentQuestionId > 0 &&
+                    state.QuestionsById.TryGetValue(state.CurrentQuestionId, out QuestionWithAnswersDto question))
+                {
+                    PlayerSummary currentSummary = BuildPlayerSummary(current, isOnline: true);
+
+                    joiningPlayer.Callback.OnNextQuestion(
+                        state.MatchId,
+                        currentSummary,
+                        question,
+                        state.CurrentChain,
+                        state.BankedPoints);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("TrySendSnapshotToJoiningPlayer failed.", ex);
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // FIX: store/merge expected players
+        // ---------------------------------------------------------------
+        private static void StoreOrMergeExpectedPlayers(Guid matchId, int[] expectedPlayerUserIds, int callerUserId)
+        {
+            if (matchId == Guid.Empty)
+            {
+                return;
+            }
+
+            ConcurrentDictionary<int, byte> set = ExpectedPlayersByMatchId.GetOrAdd(
+                matchId,
+                _ => new ConcurrentDictionary<int, byte>());
+
+            if (expectedPlayerUserIds != null && expectedPlayerUserIds.Length > 0)
+            {
+                foreach (int id in expectedPlayerUserIds)
+                {
+                    if (id > 0)
+                    {
+                        set.TryAdd(id, 0);
+                    }
+                }
+            }
+
+            if (callerUserId > 0)
+            {
+                set.TryAdd(callerUserId, 0);
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // VALIDACIONES / HELPERS EXISTENTES
+        // ---------------------------------------------------------------
+        private static void ValidateNotNullRequest(object request)
+        {
+            if (request == null)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
+            }
+        }
+
+        private static void ValidateMatchId(Guid matchId)
+        {
+            if (matchId == Guid.Empty)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
+            }
+        }
+
+        private static MatchRuntimeState GetMatchOrThrow(Guid matchId)
+        {
+            if (!Matches.TryGetValue(matchId, out MatchRuntimeState state))
+            {
+                throw ThrowFault(ERROR_MATCH_NOT_FOUND, ERROR_MATCH_NOT_FOUND_MESSAGE);
+            }
+
+            return state;
+        }
+
+        private static void EnsureNotInVotePhase(MatchRuntimeState state, string message)
+        {
+            if (state.IsInVotePhase)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, message);
+            }
+        }
+
+        private static MatchPlayerRuntime GetCurrentPlayerOrThrow(MatchRuntimeState state, int userId)
+        {
+            MatchPlayerRuntime currentPlayer = state.GetCurrentPlayer();
+
+            if (currentPlayer == null || currentPlayer.UserId != userId)
+            {
+                throw ThrowFault(ERROR_NOT_PLAYER_TURN, ERROR_NOT_PLAYER_TURN_MESSAGE);
+            }
+
+            return currentPlayer;
+        }
+
+        private static QuestionWithAnswersDto GetCurrentQuestionOrThrow(MatchRuntimeState state)
+        {
+            if (!state.QuestionsById.TryGetValue(state.CurrentQuestionId, out QuestionWithAnswersDto question))
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Current question not found for this match.");
+            }
+
+            return question;
+        }
+
+        private static bool EvaluateAnswerOrThrow(QuestionWithAnswersDto question, string answerText)
+        {
+            bool isTimeout = string.IsNullOrWhiteSpace(answerText);
+            if (isTimeout)
+            {
+                return false;
+            }
+
+            AnswerDto selectedAnswer = question.Answers.Find(
+                a => string.Equals(a.Text, answerText, StringComparison.Ordinal));
+
+            if (selectedAnswer == null)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Answer not found for current question.");
+            }
+
+            return selectedAnswer.IsCorrect;
+        }
+
+        private static void UpdateChainState(MatchRuntimeState state, bool isCorrect)
+        {
+            if (isCorrect)
+            {
+                if (state.CurrentStreak < CHAIN_STEPS.Length)
+                {
+                    decimal increment = CHAIN_STEPS[state.CurrentStreak];
+                    state.CurrentChain += increment;
+                    state.CurrentStreak++;
+                }
+
+                return;
+            }
+
+            state.CurrentChain = 0m;
+            state.CurrentStreak = 0;
+        }
+
+        private static AnswerResult BuildAnswerResult(int questionId, MatchRuntimeState state, bool isCorrect)
+        {
+            return new AnswerResult
+            {
+                QuestionId = questionId,
+                IsCorrect = isCorrect,
+                ChainIncrement = state.CurrentStreak > 0 && isCorrect
+                    ? CHAIN_STEPS[state.CurrentStreak - 1]
+                    : 0m,
+                CurrentChain = state.CurrentChain,
+                BankedPoints = state.BankedPoints
+            };
+        }
+
+        private static PlayerSummary BuildPlayerSummary(MatchPlayerRuntime player, bool isOnline)
+        {
+            return new PlayerSummary
+            {
+                UserId = player.UserId,
+                DisplayName = player.DisplayName,
+                IsOnline = isOnline,
+                Avatar = player.Avatar
+            };
+        }
+
+        private static void Broadcast(MatchRuntimeState state, Action<IGameplayServiceCallback> action, string logContext)
+        {
+            foreach (MatchPlayerRuntime player in state.Players)
+            {
+                if (player == null || player.Callback == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    action(player.Callback);
+                }
+                catch (Exception ex)
+                {
+                    Logger.WarnFormat(
+                        "{0}: callback notification failed. PlayerUserId={1}",
+                        logContext,
+                        player.UserId);
+
+                    Logger.Warn(logContext, ex);
+                }
+            }
+        }
+
+        private static int NextRandom(int minInclusive, int maxExclusive)
+        {
+            lock (randomSyncRoot)
+            {
+                return randomGenerator.Next(minInclusive, maxExclusive);
+            }
+        }
+
+        private static int GetMaxQuestionsOrDefault(int? requested)
+        {
+            if (requested.HasValue && requested.Value > 0)
+            {
+                return requested.Value;
+            }
+
+            return DEFAULT_MAX_QUESTIONS;
+        }
+
+        private static void EnsureHostPlayerRegistered(MatchRuntimeState state, int userId)
+        {
+            if (state.Players.Count != 0)
+            {
+                return;
+            }
+
+            IGameplayServiceCallback callback =
+                OperationContext.Current.GetCallbackChannel<IGameplayServiceCallback>();
+
+            string displayName = string.Format("Jugador {0}", userId);
+
+            UserAvatarSql avatarSql = new UserAvatarSql(GetConnectionString());
+            UserAvatarEntity avatarEntity = avatarSql.GetByUserId(userId);
+            AvatarAppearanceDto avatar = MapAvatar(avatarEntity);
+
+            MatchPlayerRuntime player = new MatchPlayerRuntime(userId, displayName, callback)
+            {
+                Avatar = avatar
+            };
+
+            state.Players.Add(player);
+            PlayerMatchByUserId[userId] = state.MatchId;
+        }
+
+        private static void ResetRoundStateForStart(MatchRuntimeState state)
+        {
+            state.CurrentPlayerIndex = 0;
+            state.QuestionsAskedThisRound = 0;
+            state.RoundNumber = 1;
+            state.IsInVotePhase = false;
+            state.IsInDuelPhase = false;
+            state.WeakestRivalUserId = null;
+            state.DuelTargetUserId = null;
+            state.VotersThisRound.Clear();
+            state.VotesThisRound.Clear();
+            state.BombQuestionId = 0;
+            state.HasSpecialEventThisRound = false;
+
+            state.RestoreTurnAfterLightning();
+            state.ResetLightningChallenge();
+        }
+
+        private static bool ShouldHandleDuelTurn(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            if (!state.IsInDuelPhase ||
+                !state.WeakestRivalUserId.HasValue ||
+                !state.DuelTargetUserId.HasValue)
+            {
+                return false;
+            }
+
+            return currentPlayer.UserId == state.WeakestRivalUserId.Value ||
+                   currentPlayer.UserId == state.DuelTargetUserId.Value;
+        }
+
+        private static void HandleDuelTurn(MatchRuntimeState state, MatchPlayerRuntime currentPlayer, bool isCorrect)
+        {
+            if (!isCorrect)
+            {
+                currentPlayer.IsEliminated = true;
+
+                PlayerSummary eliminatedSummary = BuildPlayerSummary(currentPlayer, isOnline: true);
+
+                Broadcast(
+                    state,
+                    cb => cb.OnElimination(state.MatchId, eliminatedSummary),
+                    "GameplayService.DuelElimination");
+
+                Logger.InfoFormat(
+                    "Player eliminated by duel. MatchId={0}, Round={1}, EliminatedUserId={2}",
+                    state.MatchId,
+                    state.RoundNumber,
+                    currentPlayer.UserId);
+
+                state.IsInDuelPhase = false;
+                state.WeakestRivalUserId = null;
+                state.DuelTargetUserId = null;
+                state.BombQuestionId = 0;
+
+                FinishMatchWithWinnerIfApplicable(state);
+                if (state.IsFinished)
+                {
+                    return;
+                }
+
+                StartNextRound(state);
+                return;
+            }
+
+            int nextUserId = currentPlayer.UserId == state.WeakestRivalUserId.Value
+                ? state.DuelTargetUserId.Value
+                : state.WeakestRivalUserId.Value;
+
+            int nextIndex = state.Players.FindIndex(
+                p => p.UserId == nextUserId && !p.IsEliminated);
+
+            if (nextIndex >= 0)
+            {
+                state.CurrentPlayerIndex = nextIndex;
+                SendNextQuestion(state);
+            }
+        }
+
+        private static int CountAlivePlayersOrFallbackToTotal(MatchRuntimeState state)
+        {
+            int alivePlayersCount = state.Players.Count(p => !p.IsEliminated);
+            if (alivePlayersCount <= 0)
+            {
+                alivePlayersCount = state.Players.Count;
+            }
+
+            return alivePlayersCount;
         }
 
         private static void SendNextQuestion(MatchRuntimeState state)
@@ -772,30 +1106,20 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
-            PlayerSummary targetSummary = new PlayerSummary
-            {
-                UserId = targetPlayer.UserId,
-                DisplayName = targetPlayer.DisplayName,
-                IsOnline = true,
-                Avatar = targetPlayer.Avatar
-            };
+            state.BombQuestionId = 0;
+            TryStartBombQuestionEvent(state, targetPlayer, question.QuestionId);
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnNextQuestion(
-                        state.MatchId,
-                        targetSummary,
-                        question,
-                        state.CurrentChain,
-                        state.BankedPoints);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnNextQuestion.", ex);
-                }
-            }
+            PlayerSummary targetSummary = BuildPlayerSummary(targetPlayer, isOnline: true);
+
+            Broadcast(
+                state,
+                cb => cb.OnNextQuestion(
+                    state.MatchId,
+                    targetSummary,
+                    question,
+                    state.CurrentChain,
+                    state.BankedPoints),
+                LOG_CTX_SEND_NEXT_QUESTION);
         }
 
         private static void StartVotePhase(MatchRuntimeState state)
@@ -806,27 +1130,20 @@ namespace ServicesTheWeakestRival.Server.Services
             state.DuelTargetUserId = null;
             state.VotersThisRound.Clear();
             state.VotesThisRound.Clear();
+            state.BombQuestionId = 0;
 
             TimeSpan timeLimit = TimeSpan.FromSeconds(VOTE_PHASE_TIME_LIMIT_SECONDS);
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnVotePhaseStarted(
-                        state.MatchId,
-                        timeLimit);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnVotePhaseStarted.", ex);
-                }
-            }
+            Broadcast(
+                state,
+                cb => cb.OnVotePhaseStarted(state.MatchId, timeLimit),
+                LOG_CTX_VOTE_PHASE);
         }
 
         private static void ResolveEliminationOrStartDuel(MatchRuntimeState state)
         {
             state.IsInVotePhase = false;
+            state.BombQuestionId = 0;
 
             List<MatchPlayerRuntime> alivePlayers = state.Players
                 .Where(p => !p.IsEliminated)
@@ -844,6 +1161,59 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
+            Dictionary<int, int> voteCounts = CountVotesForAlivePlayers(state, alivePlayers);
+
+            if (voteCounts.Count == 0)
+            {
+                Logger.InfoFormat(
+                    "No valid votes registered. No elimination this round. MatchId={0}, Round={1}",
+                    state.MatchId,
+                    state.RoundNumber);
+
+                StartNextRound(state);
+                return;
+            }
+
+            int weakestRivalUserId = ResolveWeakestRivalUserId(voteCounts, state);
+
+            MatchPlayerRuntime weakestRivalPlayer = state.Players.FirstOrDefault(p => p.UserId == weakestRivalUserId);
+            if (weakestRivalPlayer == null)
+            {
+                Logger.WarnFormat(
+                    "ResolveEliminationOrStartDuel: weakest rival not found in players. MatchId={0}, WeakestRivalUserId={1}",
+                    state.MatchId,
+                    weakestRivalUserId);
+
+                StartNextRound(state);
+                return;
+            }
+
+            CoinFlipResolvedDto coinFlip = PerformCoinFlip(state, weakestRivalUserId);
+
+            Broadcast(
+                state,
+                cb => cb.OnCoinFlipResolved(state.MatchId, coinFlip),
+                "GameplayService.CoinFlip");
+
+            if (!coinFlip.ShouldEnableDuel)
+            {
+                EliminatePlayerByVoteNoDuel(state, weakestRivalPlayer);
+                return;
+            }
+
+            List<DuelCandidateDto> duelCandidates = BuildDuelCandidates(state, weakestRivalUserId);
+
+            if (duelCandidates.Count == 0)
+            {
+                EliminatePlayerByVoteNoDuel(state, weakestRivalPlayer);
+                return;
+            }
+
+            StartDuel(state, weakestRivalPlayer, weakestRivalUserId, duelCandidates);
+        }
+
+        private static Dictionary<int, int> CountVotesForAlivePlayers(MatchRuntimeState state, List<MatchPlayerRuntime> alivePlayers)
+        {
             Dictionary<int, int> voteCounts = new Dictionary<int, int>();
 
             foreach (KeyValuePair<int, int?> kvp in state.VotesThisRound)
@@ -867,17 +1237,11 @@ namespace ServicesTheWeakestRival.Server.Services
                 voteCounts[targetUserId.Value] = count + 1;
             }
 
-            if (voteCounts.Count == 0)
-            {
-                Logger.InfoFormat(
-                    "No valid votes registered. No elimination this round. MatchId={0}, Round={1}",
-                    state.MatchId,
-                    state.RoundNumber);
+            return voteCounts;
+        }
 
-                StartNextRound(state);
-                return;
-            }
-
+        private static int ResolveWeakestRivalUserId(Dictionary<int, int> voteCounts, MatchRuntimeState state)
+        {
             int maxVotes = voteCounts.Values.Max();
 
             List<int> candidates = voteCounts
@@ -885,94 +1249,92 @@ namespace ServicesTheWeakestRival.Server.Services
                 .Select(kvp => kvp.Key)
                 .ToList();
 
-            int weakestRivalUserId;
-
             if (candidates.Count == 1)
             {
-                weakestRivalUserId = candidates[0];
-            }
-            else
-            {
-                int randomIndex = RandomGenerator.Next(0, candidates.Count);
-                weakestRivalUserId = candidates[randomIndex];
-
-                Logger.InfoFormat(
-                    "Tie in votes. Random weakest rival selected. MatchId={0}, CandidatesCount={1}, WeakestRivalUserId={2}",
-                    state.MatchId,
-                    candidates.Count,
-                    weakestRivalUserId);
+                return candidates[0];
             }
 
-            MatchPlayerRuntime weakestRivalPlayer = state.Players.FirstOrDefault(p => p.UserId == weakestRivalUserId);
-            if (weakestRivalPlayer == null)
-            {
-                Logger.WarnFormat(
-                    "ResolveEliminationOrStartDuel: weakest rival not found in players. MatchId={0}, WeakestRivalUserId={1}",
-                    state.MatchId,
-                    weakestRivalUserId);
+            int randomIndex = NextRandom(0, candidates.Count);
+            int weakestRivalUserId = candidates[randomIndex];
 
-                StartNextRound(state);
+            Logger.InfoFormat(
+                "Tie in votes. Random weakest rival selected. MatchId={0}, CandidatesCount={1}, WeakestRivalUserId={2}",
+                state.MatchId,
+                candidates.Count,
+                weakestRivalUserId);
+
+            return weakestRivalUserId;
+        }
+
+        private static List<QuestionWithAnswersDto> LoadQuestionsWithLocaleFallback(byte difficulty, string localeCode, int maxQuestions)
+        {
+            List<QuestionWithAnswersDto> questions = LoadQuestions(difficulty, localeCode, maxQuestions);
+            if (questions.Count > 0)
+            {
+                return questions;
+            }
+
+            string languageOnly = ExtractLanguageCode(localeCode);
+            if (!string.IsNullOrWhiteSpace(languageOnly) &&
+                !string.Equals(languageOnly, localeCode, StringComparison.OrdinalIgnoreCase))
+            {
+                questions = LoadQuestions(difficulty, languageOnly, maxQuestions);
+                if (questions.Count > 0)
+                {
+                    return questions;
+                }
+            }
+
+            questions = LoadQuestions(difficulty, FALLBACK_LOCALE_EN_US, maxQuestions);
+            return questions;
+        }
+
+        private static string ExtractLanguageCode(string localeCode)
+        {
+            if (string.IsNullOrWhiteSpace(localeCode))
+            {
+                return string.Empty;
+            }
+
+            string trimmed = localeCode.Trim();
+            int dashIndex = trimmed.IndexOf('-');
+
+            if (dashIndex <= 0)
+            {
+                return trimmed;
+            }
+
+            return trimmed.Substring(0, dashIndex);
+        }
+
+        private static void EliminatePlayerByVoteNoDuel(MatchRuntimeState state, MatchPlayerRuntime weakestRivalPlayer)
+        {
+            weakestRivalPlayer.IsEliminated = true;
+
+            PlayerSummary eliminatedSummary = BuildPlayerSummary(weakestRivalPlayer, isOnline: true);
+
+            Broadcast(
+                state,
+                cb => cb.OnElimination(state.MatchId, eliminatedSummary),
+                "GameplayService.Elimination");
+
+            Logger.InfoFormat(
+                "Player eliminated by vote (no duel). MatchId={0}, Round={1}, EliminatedUserId={2}",
+                state.MatchId,
+                state.RoundNumber,
+                weakestRivalPlayer.UserId);
+
+            FinishMatchWithWinnerIfApplicable(state);
+            if (state.IsFinished)
+            {
                 return;
             }
 
-            CoinFlipResolvedDto coinFlip = PerformCoinFlip(state, weakestRivalUserId);
+            StartNextRound(state);
+        }
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnCoinFlipResolved(
-                        state.MatchId,
-                        coinFlip);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnCoinFlipResolved.", ex);
-                }
-            }
-
-            if (!coinFlip.ShouldEnableDuel)
-            {
-                weakestRivalPlayer.IsEliminated = true;
-
-                PlayerSummary eliminatedSummary = new PlayerSummary
-                {
-                    UserId = weakestRivalUserId,
-                    DisplayName = weakestRivalPlayer.DisplayName,
-                    IsOnline = true,
-                    Avatar = weakestRivalPlayer.Avatar
-                };
-
-                foreach (MatchPlayerRuntime player in state.Players)
-                {
-                    try
-                    {
-                        player.Callback.OnElimination(
-                            state.MatchId,
-                            eliminatedSummary);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn("Error al notificar OnElimination.", ex);
-                    }
-                }
-
-                Logger.InfoFormat(
-                    "Player eliminated by vote (no duel). MatchId={0}, Round={1}, EliminatedUserId={2}",
-                    state.MatchId,
-                    state.RoundNumber,
-                    weakestRivalUserId);
-
-                FinishMatchWithWinnerIfApplicable(state);
-                if (state.IsFinished)
-                {
-                    return;
-                }
-
-                StartNextRound(state);
-                return;
-            }
-
+        private static List<DuelCandidateDto> BuildDuelCandidates(MatchRuntimeState state, int weakestRivalUserId)
+        {
             List<int> votersAgainstWeakest = state.VotesThisRound
                 .Where(kvp => kvp.Value.HasValue && kvp.Value.Value == weakestRivalUserId)
                 .Select(kvp => kvp.Key)
@@ -997,51 +1359,19 @@ namespace ServicesTheWeakestRival.Server.Services
                     });
             }
 
-            if (duelCandidates.Count == 0)
-            {
-                weakestRivalPlayer.IsEliminated = true;
+            return duelCandidates;
+        }
 
-                PlayerSummary eliminatedSummaryNoDuel = new PlayerSummary
-                {
-                    UserId = weakestRivalUserId,
-                    DisplayName = weakestRivalPlayer.DisplayName,
-                    IsOnline = true,
-                    Avatar = weakestRivalPlayer.Avatar
-                };
-
-                foreach (MatchPlayerRuntime player in state.Players)
-                {
-                    try
-                    {
-                        player.Callback.OnElimination(
-                            state.MatchId,
-                            eliminatedSummaryNoDuel);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn("Error al notificar OnElimination (no duel candidates).", ex);
-                    }
-                }
-
-                Logger.InfoFormat(
-                    "Player eliminated by vote (no valid duel candidates). MatchId={0}, Round={1}, EliminatedUserId={2}",
-                    state.MatchId,
-                    state.RoundNumber,
-                    weakestRivalUserId);
-
-                FinishMatchWithWinnerIfApplicable(state);
-                if (state.IsFinished)
-                {
-                    return;
-                }
-
-                StartNextRound(state);
-                return;
-            }
-
+        private static void StartDuel(
+            MatchRuntimeState state,
+            MatchPlayerRuntime weakestRivalPlayer,
+            int weakestRivalUserId,
+            List<DuelCandidateDto> duelCandidates)
+        {
             state.IsInDuelPhase = true;
             state.WeakestRivalUserId = weakestRivalUserId;
             state.DuelTargetUserId = null;
+            state.BombQuestionId = 0;
 
             DuelCandidatesDto duelDto = new DuelCandidatesDto
             {
@@ -1051,9 +1381,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                weakestRivalPlayer.Callback.OnDuelCandidates(
-                    state.MatchId,
-                    duelDto);
+                weakestRivalPlayer.Callback.OnDuelCandidates(state.MatchId, duelDto);
             }
             catch (Exception ex)
             {
@@ -1097,6 +1425,10 @@ namespace ServicesTheWeakestRival.Server.Services
             state.VotersThisRound.Clear();
             state.VotesThisRound.Clear();
             state.HasSpecialEventThisRound = false;
+            state.BombQuestionId = 0;
+
+            state.RestoreTurnAfterLightning();
+            state.ResetLightningChallenge();
 
             if (state.CurrentPlayerIndex < 0 ||
                 state.CurrentPlayerIndex >= state.Players.Count ||
@@ -1105,9 +1437,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 int firstAlive = state.Players.FindIndex(p => !p.IsEliminated);
                 if (firstAlive < 0)
                 {
-                    Logger.WarnFormat(
-                        "StartNextRound: no alive players found. MatchId={0}",
-                        state.MatchId);
+                    Logger.WarnFormat("StartNextRound: no alive players found. MatchId={0}", state.MatchId);
                     return;
                 }
 
@@ -1122,8 +1452,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
             TryStartExtraWildcardEvent(state);
 
-            bool lightningStarted = TryStartLightningChallenge(state);
-            if (!lightningStarted)
+            bool hasLightningStarted = TryStartLightningChallenge(state);
+            if (!hasLightningStarted)
             {
                 SendNextQuestion(state);
             }
@@ -1195,10 +1525,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static void ValidateGetQuestionsRequest(GetQuestionsRequest request)
         {
-            if (request == null)
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
+            ValidateNotNullRequest(request);
 
             if (request.Difficulty <= 0)
             {
@@ -1233,9 +1560,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static CoinFlipResolvedDto PerformCoinFlip(MatchRuntimeState state, int weakestRivalUserId)
         {
-            int randomValue = RandomGenerator.Next(
-                COIN_FLIP_RANDOM_MIN_VALUE,
-                COIN_FLIP_RANDOM_MAX_VALUE);
+            int randomValue = NextRandom(COIN_FLIP_RANDOM_MIN_VALUE, COIN_FLIP_RANDOM_MAX_VALUE);
 
             bool shouldEnableDuel = randomValue >= COIN_FLIP_THRESHOLD_VALUE;
 
@@ -1285,27 +1610,12 @@ namespace ServicesTheWeakestRival.Server.Services
             state.WinnerUserId = winner.UserId;
             winner.IsWinner = true;
 
-            PlayerSummary winnerSummary = new PlayerSummary
-            {
-                UserId = winner.UserId,
-                DisplayName = winner.DisplayName,
-                IsOnline = true,
-                Avatar = winner.Avatar
-            };
+            PlayerSummary winnerSummary = BuildPlayerSummary(winner, isOnline: true);
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnMatchFinished(
-                        state.MatchId,
-                        winnerSummary);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnMatchFinished.", ex);
-                }
-            }
+            Broadcast(
+                state,
+                cb => cb.OnMatchFinished(state.MatchId, winnerSummary),
+                "GameplayService.MatchFinished");
 
             Logger.InfoFormat(
                 "Match finished. MatchId={0}, WinnerUserId={1}",
@@ -1313,6 +1623,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 winner.UserId);
 
             Matches.TryRemove(state.MatchId, out _);
+            ExpectedPlayersByMatchId.TryRemove(state.MatchId, out _);
 
             foreach (MatchPlayerRuntime player in state.Players)
             {
@@ -1403,6 +1714,127 @@ namespace ServicesTheWeakestRival.Server.Services
                    state.LightningChallenge != null;
         }
 
+        private static bool TryStartBombQuestionEvent(MatchRuntimeState state, MatchPlayerRuntime targetPlayer, int questionId)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            if (targetPlayer == null)
+            {
+                throw new ArgumentNullException(nameof(targetPlayer));
+            }
+
+            if (questionId <= 0)
+            {
+                return false;
+            }
+
+            if (state.HasSpecialEventThisRound)
+            {
+                return false;
+            }
+
+            if (IsLightningActive(state))
+            {
+                return false;
+            }
+
+            int randomValue = NextRandom(BOMB_QUESTION_RANDOM_MIN_VALUE, BOMB_QUESTION_RANDOM_MAX_VALUE);
+            if (randomValue >= BOMB_QUESTION_PROBABILITY_PERCENT)
+            {
+                return false;
+            }
+
+            state.BombQuestionId = questionId;
+            state.HasSpecialEventThisRound = true;
+
+            string deltaDisplay = BOMB_BANK_DELTA.ToString("0.00");
+            string description = string.Format(
+                SPECIAL_EVENT_BOMB_QUESTION_DESCRIPTION_TEMPLATE,
+                targetPlayer.DisplayName,
+                deltaDisplay);
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_BOMB_QUESTION_CODE, description),
+                "GameplayService.OnSpecialEvent.BombQuestion");
+
+            Logger.InfoFormat(
+                "{0}: BombQuestion started. MatchId={1}, Round={2}, QuestionId={3}, TargetUserId={4}, RandomValue={5}",
+                LOG_CTX_BOMB,
+                state.MatchId,
+                state.RoundNumber,
+                questionId,
+                targetPlayer.UserId,
+                randomValue);
+
+            return true;
+        }
+
+        private static void ApplyBombQuestionEffectIfNeeded(MatchRuntimeState state, MatchPlayerRuntime currentPlayer, bool isCorrect)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            if (currentPlayer == null)
+            {
+                throw new ArgumentNullException(nameof(currentPlayer));
+            }
+
+            if (state.BombQuestionId <= 0 || state.BombQuestionId != state.CurrentQuestionId)
+            {
+                return;
+            }
+
+            decimal previousBank = state.BankedPoints;
+            if (previousBank < MIN_BANKED_POINTS)
+            {
+                previousBank = MIN_BANKED_POINTS;
+            }
+
+            decimal delta = isCorrect ? BOMB_BANK_DELTA : -BOMB_BANK_DELTA;
+
+            decimal updatedBank = previousBank + delta;
+            if (updatedBank < MIN_BANKED_POINTS)
+            {
+                updatedBank = MIN_BANKED_POINTS;
+            }
+
+            state.BankedPoints = updatedBank;
+            state.BombQuestionId = 0;
+
+            string deltaDisplay = delta.ToString("+0.00;-0.00;0.00");
+            string bankDisplay = state.BankedPoints.ToString("0.00");
+
+            string description = string.Format(
+                SPECIAL_EVENT_BOMB_QUESTION_APPLIED_DESCRIPTION_TEMPLATE,
+                currentPlayer.DisplayName,
+                deltaDisplay,
+                bankDisplay);
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_BOMB_QUESTION_APPLIED_CODE, description),
+                "GameplayService.OnSpecialEvent.BombQuestion.Applied");
+
+            Logger.InfoFormat(
+                "{0}: BombQuestion applied. MatchId={1}, UserId={2}, IsCorrect={3}, Bank {4} -> {5}, Delta={6}",
+                LOG_CTX_BOMB,
+                state.MatchId,
+                currentPlayer.UserId,
+                isCorrect,
+                previousBank,
+                state.BankedPoints,
+                delta);
+        }
+
+        // ---------------------------------------------------------------
+        // LIGHTNING
+        // ---------------------------------------------------------------
         private static bool TryStartLightningChallenge(MatchRuntimeState state)
         {
             if (state == null)
@@ -1429,7 +1861,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int randomValue = RandomGenerator.Next(LIGHTNING_RANDOM_MIN_VALUE, LIGHTNING_RANDOM_MAX_VALUE);
+            int randomValue = NextRandom(LIGHTNING_RANDOM_MIN_VALUE, LIGHTNING_RANDOM_MAX_VALUE);
             if (randomValue >= LIGHTNING_PROBABILITY_PERCENT)
             {
                 return false;
@@ -1444,8 +1876,14 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int candidateIndex = RandomGenerator.Next(0, candidates.Count);
+            int candidateIndex = NextRandom(0, candidates.Count);
             MatchPlayerRuntime targetPlayer = candidates[candidateIndex];
+
+            int targetPlayerIndex = state.Players.FindIndex(p => p.UserId == targetPlayer.UserId);
+            if (targetPlayerIndex < 0)
+            {
+                return false;
+            }
 
             List<QuestionWithAnswersDto> lightningQuestions = new List<QuestionWithAnswersDto>();
 
@@ -1460,6 +1898,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 lightningQuestions.Add(question);
             }
 
+            state.OverrideTurnForLightning(targetPlayerIndex);
+
             state.ActiveSpecialEvent = SpecialEventType.LightningChallenge;
             state.HasSpecialEventThisRound = true;
 
@@ -1472,48 +1912,28 @@ namespace ServicesTheWeakestRival.Server.Services
 
             state.SetLightningQuestions(lightningQuestions);
 
-            PlayerSummary targetSummary = new PlayerSummary
-            {
-                UserId = targetPlayer.UserId,
-                DisplayName = targetPlayer.DisplayName,
-                IsOnline = true,
-                Avatar = targetPlayer.Avatar
-            };
+            PlayerSummary targetSummary = BuildPlayerSummary(targetPlayer, isOnline: true);
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnLightningChallengeStarted(
-                        state.MatchId,
-                        state.LightningChallenge.RoundId,
-                        targetSummary,
-                        LIGHTNING_TOTAL_QUESTIONS,
-                        LIGHTNING_TOTAL_TIME_SECONDS);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnLightningChallengeStarted.", ex);
-                }
-            }
+            Broadcast(
+                state,
+                cb => cb.OnLightningChallengeStarted(
+                    state.MatchId,
+                    state.LightningChallenge.RoundId,
+                    targetSummary,
+                    LIGHTNING_TOTAL_QUESTIONS,
+                    LIGHTNING_TOTAL_TIME_SECONDS),
+                "GameplayService.OnLightningChallengeStarted");
 
             QuestionWithAnswersDto firstQuestion = state.GetCurrentLightningQuestion();
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnLightningChallengeQuestion(
-                        state.MatchId,
-                        state.LightningChallenge.RoundId,
-                        1,
-                        firstQuestion);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnLightningChallengeQuestion.", ex);
-                }
-            }
+            Broadcast(
+                state,
+                cb => cb.OnLightningChallengeQuestion(
+                    state.MatchId,
+                    state.LightningChallenge.RoundId,
+                    1,
+                    firstQuestion),
+                "GameplayService.OnLightningChallengeQuestion");
 
             return true;
         }
@@ -1583,27 +2003,12 @@ namespace ServicesTheWeakestRival.Server.Services
                 BankedPoints = state.BankedPoints
             };
 
-            PlayerSummary playerSummary = new PlayerSummary
-            {
-                UserId = currentPlayer.UserId,
-                DisplayName = currentPlayer.DisplayName,
-                Avatar = currentPlayer.Avatar
-            };
+            PlayerSummary playerSummary = BuildPlayerSummary(currentPlayer, isOnline: false);
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnAnswerEvaluated(
-                        state.MatchId,
-                        playerSummary,
-                        result);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnAnswerEvaluated (lightning).", ex);
-                }
-            }
+            Broadcast(
+                state,
+                cb => cb.OnAnswerEvaluated(state.MatchId, playerSummary, result),
+                "GameplayService.OnAnswerEvaluated.Lightning");
 
             if (challenge.RemainingQuestions <= 0)
             {
@@ -1617,21 +2022,14 @@ namespace ServicesTheWeakestRival.Server.Services
                 QuestionWithAnswersDto nextQuestion = state.GetCurrentLightningQuestion();
                 int questionIndex = LIGHTNING_TOTAL_QUESTIONS - challenge.RemainingQuestions;
 
-                foreach (MatchPlayerRuntime player in state.Players)
-                {
-                    try
-                    {
-                        player.Callback.OnLightningChallengeQuestion(
-                            state.MatchId,
-                            challenge.RoundId,
-                            questionIndex,
-                            nextQuestion);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn("Error al notificar OnLightningChallengeQuestion (next).", ex);
-                    }
-                }
+                Broadcast(
+                    state,
+                    cb => cb.OnLightningChallengeQuestion(
+                        state.MatchId,
+                        challenge.RoundId,
+                        questionIndex,
+                        nextQuestion),
+                    "GameplayService.OnLightningChallengeQuestion.Next");
             }
 
             return new SubmitAnswerResponse
@@ -1648,7 +2046,6 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             LightningChallengeState challenge = state.LightningChallenge;
-
             if (challenge == null)
             {
                 return;
@@ -1657,27 +2054,21 @@ namespace ServicesTheWeakestRival.Server.Services
             challenge.IsCompleted = true;
             challenge.IsSuccess = isSuccess;
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnLightningChallengeFinished(
-                        state.MatchId,
-                        challenge.RoundId,
-                        challenge.CorrectAnswers,
-                        isSuccess);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error al notificar OnLightningChallengeFinished.", ex);
-                }
-            }
+            Broadcast(
+                state,
+                cb => cb.OnLightningChallengeFinished(
+                    state.MatchId,
+                    challenge.RoundId,
+                    challenge.CorrectAnswers,
+                    isSuccess),
+                "GameplayService.OnLightningChallengeFinished");
 
             if (isSuccess)
             {
                 TryAwardLightningWildcard(state, challenge.PlayerId);
             }
 
+            state.RestoreTurnAfterLightning();
             state.ResetLightningChallenge();
 
             SendNextQuestion(state);
@@ -1695,16 +2086,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw new ArgumentNullException(nameof(state));
             }
 
-            MatchPlayerRuntime targetPlayer = state.Players
-                .FirstOrDefault(p => p.UserId == playerUserId);
-
+            MatchPlayerRuntime targetPlayer = state.Players.FirstOrDefault(p => p.UserId == playerUserId);
             if (targetPlayer == null)
             {
-                Logger.WarnFormat(
-                    "{0}: player not found. MatchId={1}, UserId={2}",
-                    logContext,
-                    state.MatchId,
-                    playerUserId);
+                Logger.WarnFormat("{0}: player not found. MatchId={1}, UserId={2}", logContext, state.MatchId, playerUserId);
                 return;
             }
 
@@ -1713,6 +2098,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 if (state.WildcardMatchId > 0)
                 {
                     WildcardService.GrantLightningWildcard(state.WildcardMatchId, playerUserId);
+
                     Logger.InfoFormat(
                         "{0}: wildcard GRANTED. MatchDbId={1}, UserId={2}",
                         logContext,
@@ -1729,27 +2115,16 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                Logger.Error(logContext + ": error otorgando comodín en BD", ex);
+                Logger.ErrorFormat("{0}: error otorgando comodín en BD", logContext);
+                Logger.Error(logContext, ex);
             }
 
-            string description = string.Format(
-                descriptionTemplate,
-                targetPlayer.DisplayName);
+            string description = string.Format(descriptionTemplate, targetPlayer.DisplayName);
 
-            foreach (MatchPlayerRuntime player in state.Players)
-            {
-                try
-                {
-                    player.Callback.OnSpecialEvent(
-                        state.MatchId,
-                        specialEventCode,
-                        description);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(logContext + ": error al notificar OnSpecialEvent.", ex);
-                }
-            }
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, specialEventCode, description),
+                "GameplayService.OnSpecialEvent");
         }
 
         private static void TryAwardLightningWildcard(MatchRuntimeState state, int playerUserId)
@@ -1798,13 +2173,13 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int probabilityValue = RandomGenerator.Next(EXTRA_WILDCARD_RANDOM_MIN_VALUE, EXTRA_WILDCARD_RANDOM_MAX_VALUE);
+            int probabilityValue = NextRandom(EXTRA_WILDCARD_RANDOM_MIN_VALUE, EXTRA_WILDCARD_RANDOM_MAX_VALUE);
             if (probabilityValue >= EXTRA_WILDCARD_PROBABILITY_PERCENT)
             {
                 return false;
             }
 
-            int candidateIndex = RandomGenerator.Next(0, candidates.Count);
+            int candidateIndex = NextRandom(0, candidates.Count);
             MatchPlayerRuntime targetPlayer = candidates[candidateIndex];
 
             Logger.InfoFormat(
@@ -1818,269 +2193,5 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return true;
         }
-    }
-
-    internal sealed class MatchRuntimeState
-    {
-        private readonly List<QuestionWithAnswersDto> _lightningQuestions =
-            new List<QuestionWithAnswersDto>();
-
-        private int _currentLightningQuestionIndex;
-
-        public MatchRuntimeState(Guid matchId)
-        {
-            MatchId = matchId;
-            Questions = new Queue<QuestionWithAnswersDto>();
-            QuestionsById = new Dictionary<int, QuestionWithAnswersDto>();
-            Players = new List<MatchPlayerRuntime>();
-            SyncRoot = new object();
-            QuestionsAskedThisRound = 0;
-            RoundNumber = 1;
-            IsInVotePhase = false;
-            IsInDuelPhase = false;
-            WeakestRivalUserId = null;
-            DuelTargetUserId = null;
-            VotersThisRound = new HashSet<int>();
-            VotesThisRound = new Dictionary<int, int?>();
-
-            IsFinished = false;
-            WinnerUserId = null;
-
-            ActiveSpecialEvent = SpecialEventType.None;
-            WildcardMatchId = 0;
-
-            HasSpecialEventThisRound = false;
-        }
-
-        public Guid MatchId { get; }
-
-        public byte Difficulty { get; private set; }
-
-        public string LocaleCode { get; private set; }
-
-        public Queue<QuestionWithAnswersDto> Questions { get; }
-
-        public Dictionary<int, QuestionWithAnswersDto> QuestionsById { get; }
-
-        public List<MatchPlayerRuntime> Players { get; }
-
-        public int CurrentPlayerIndex { get; set; }
-
-        public int CurrentStreak { get; set; }
-
-        public decimal CurrentChain { get; set; }
-
-        public decimal BankedPoints { get; set; }
-
-        public int CurrentQuestionId { get; set; }
-
-        public bool IsInitialized { get; private set; }
-
-        public object SyncRoot { get; }
-
-        public int QuestionsAskedThisRound { get; set; }
-
-        public int RoundNumber { get; set; }
-
-        public bool IsInVotePhase { get; set; }
-
-        public bool IsInDuelPhase { get; set; }
-
-        public int? WeakestRivalUserId { get; set; }
-
-        public int? DuelTargetUserId { get; set; }
-
-        public HashSet<int> VotersThisRound { get; }
-
-        public Dictionary<int, int?> VotesThisRound { get; }
-
-        public bool IsFinished { get; set; }
-
-        public int? WinnerUserId { get; set; }
-
-        public SpecialEventType ActiveSpecialEvent { get; set; }
-
-        public LightningChallengeState LightningChallenge { get; set; }
-
-        public int WildcardMatchId { get; set; }
-
-        public bool HasSpecialEventThisRound { get; set; }
-
-        public bool IsLightningActive =>
-            ActiveSpecialEvent == SpecialEventType.LightningChallenge &&
-            LightningChallenge != null;
-
-        public void Initialize(byte difficulty, string localeCode, List<QuestionWithAnswersDto> questions)
-        {
-            Difficulty = difficulty;
-            LocaleCode = localeCode;
-
-            Questions.Clear();
-            QuestionsById.Clear();
-
-            foreach (QuestionWithAnswersDto question in questions)
-            {
-                Questions.Enqueue(question);
-                QuestionsById[question.QuestionId] = question;
-            }
-
-            CurrentPlayerIndex = 0;
-            CurrentStreak = 0;
-            CurrentChain = 0m;
-            BankedPoints = 0m;
-            CurrentQuestionId = 0;
-            IsInitialized = true;
-
-            QuestionsAskedThisRound = 0;
-            RoundNumber = 1;
-            IsInVotePhase = false;
-            IsInDuelPhase = false;
-            WeakestRivalUserId = null;
-            DuelTargetUserId = null;
-            VotersThisRound.Clear();
-            VotesThisRound.Clear();
-
-            IsFinished = false;
-            WinnerUserId = null;
-
-            HasSpecialEventThisRound = false;
-
-            ResetLightningChallenge();
-        }
-
-        public MatchPlayerRuntime GetCurrentPlayer()
-        {
-            if (Players.Count == 0)
-            {
-                return null;
-            }
-
-            if (CurrentPlayerIndex < 0 || CurrentPlayerIndex >= Players.Count)
-            {
-                CurrentPlayerIndex = 0;
-            }
-
-            return Players[CurrentPlayerIndex];
-        }
-
-        public void AdvanceTurn()
-        {
-            if (Players.Count == 0)
-            {
-                return;
-            }
-
-            int nextIndex = CurrentPlayerIndex;
-
-            if (!IsInDuelPhase || !WeakestRivalUserId.HasValue || !DuelTargetUserId.HasValue)
-            {
-                for (int index = 0; index < Players.Count; index++)
-                {
-                    nextIndex++;
-                    if (nextIndex >= Players.Count)
-                    {
-                        nextIndex = 0;
-                    }
-
-                    if (!Players[nextIndex].IsEliminated)
-                    {
-                        CurrentPlayerIndex = nextIndex;
-                        return;
-                    }
-                }
-
-                return;
-            }
-
-            HashSet<int> duelIds = new HashSet<int>
-            {
-                WeakestRivalUserId.Value,
-                DuelTargetUserId.Value
-            };
-
-            for (int index = 0; index < Players.Count; index++)
-            {
-                nextIndex++;
-                if (nextIndex >= Players.Count)
-                {
-                    nextIndex = 0;
-                }
-
-                if (!Players[nextIndex].IsEliminated &&
-                    duelIds.Contains(Players[nextIndex].UserId))
-                {
-                    CurrentPlayerIndex = nextIndex;
-                    return;
-                }
-            }
-        }
-
-        public void SetLightningQuestions(IEnumerable<QuestionWithAnswersDto> questions)
-        {
-            _lightningQuestions.Clear();
-            _currentLightningQuestionIndex = 0;
-
-            if (questions == null)
-            {
-                return;
-            }
-
-            foreach (QuestionWithAnswersDto question in questions)
-            {
-                if (question != null)
-                {
-                    _lightningQuestions.Add(question);
-                }
-            }
-        }
-
-        public QuestionWithAnswersDto GetCurrentLightningQuestion()
-        {
-            if (_currentLightningQuestionIndex < 0 ||
-                _currentLightningQuestionIndex >= _lightningQuestions.Count)
-            {
-                return null;
-            }
-
-            return _lightningQuestions[_currentLightningQuestionIndex];
-        }
-
-        public void MoveToNextLightningQuestion()
-        {
-            if (_currentLightningQuestionIndex < _lightningQuestions.Count)
-            {
-                _currentLightningQuestionIndex++;
-            }
-        }
-
-        public void ResetLightningChallenge()
-        {
-            ActiveSpecialEvent = SpecialEventType.None;
-            LightningChallenge = null;
-            _lightningQuestions.Clear();
-            _currentLightningQuestionIndex = 0;
-        }
-    }
-
-    internal sealed class MatchPlayerRuntime
-    {
-        public MatchPlayerRuntime(int userId, string displayName, IGameplayServiceCallback callback)
-        {
-            UserId = userId;
-            DisplayName = displayName;
-            Callback = callback;
-        }
-
-        public int UserId { get; }
-
-        public string DisplayName { get; }
-
-        public IGameplayServiceCallback Callback { get; set; }
-
-        public bool IsEliminated { get; set; }
-
-        public bool IsWinner { get; set; }
-
-        public AvatarAppearanceDto Avatar { get; set; }
     }
 }

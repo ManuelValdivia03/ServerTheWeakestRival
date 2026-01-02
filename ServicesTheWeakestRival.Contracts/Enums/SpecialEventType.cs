@@ -9,7 +9,10 @@ namespace ServicesTheWeakestRival.Contracts.Enums
         None = 0,
 
         [EnumMember]
-        LightningChallenge = 1
+        LightningChallenge = 1,
+
+        [EnumMember]
+        BombQuestions = 2,
 
     }
 }
