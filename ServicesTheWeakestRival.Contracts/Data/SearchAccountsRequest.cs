@@ -7,7 +7,7 @@ namespace ServicesTheWeakestRival.Contracts.Data
     public class SearchAccountsRequest
     {
         [DataMember(Order = 1)] public string Token { get; set; } = string.Empty;
-        [DataMember(Order = 2)] public string Query { get; set; } = string.Empty; // nombre o correo (parcial)
+        [DataMember(Order = 2)] public string Query { get; set; } = string.Empty;
         [DataMember(Order = 3)] public int MaxResults { get; set; } = 20;
     }
 
@@ -19,7 +19,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 3)] public string Email { get; set; } = string.Empty;
         [DataMember(Order = 4)] public string AvatarUrl { get; set; }
 
-        // flags para UI
         [DataMember(Order = 5)] public bool IsFriend { get; set; }
         [DataMember(Order = 6)] public bool HasPendingOutgoing { get; set; }
         [DataMember(Order = 7)] public bool HasPendingIncoming { get; set; }

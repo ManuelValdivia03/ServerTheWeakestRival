@@ -2,7 +2,6 @@
 
 namespace ServicesTheWeakestRival.Contracts.Data
 {
-    // ----- SendFriendRequest -----
     [DataContract]
     public class SendFriendRequestRequest
     {
@@ -18,7 +17,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 2)] public FriendRequestStatus Status { get; set; }
     }
 
-    // ----- AcceptFriendRequest -----
     [DataContract]
     public class AcceptFriendRequestRequest
     {
@@ -32,7 +30,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 1)] public FriendSummary NewFriend { get; set; } = new FriendSummary();
     }
 
-    // ----- RejectFriendRequest -----
     [DataContract]
     public class RejectFriendRequestRequest
     {
@@ -46,7 +43,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 1)] public FriendRequestStatus Status { get; set; }
     }
 
-    // ----- RemoveFriend -----
     [DataContract]
     public class RemoveFriendRequest
     {
@@ -60,7 +56,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 1)] public bool Removed { get; set; }
     }
 
-    // ----- ListFriends -----
     [DataContract]
     public class ListFriendsRequest
     {

@@ -35,7 +35,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services
                 actual = tie.InnerException;
             }
 
-            // FaultException<ServiceFault> tiene Detail
             var detailProperty = actual.GetType().GetProperty("Detail");
             Assert.IsNotNull(detailProperty, "Exception does not have Detail property.");
 

@@ -230,7 +230,6 @@ namespace ServicesTheWeakestRival.Server.Services
                     ex);
             }
 
-            // Inalcanzable, pero requerido por el compilador.
             return new BasicResponse { IsSuccess = false, Message = "Unreachable." };
         }
 

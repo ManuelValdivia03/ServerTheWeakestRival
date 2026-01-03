@@ -172,7 +172,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                // Valida código y, si pasa, crea cuenta + usuario y marca verificación usada.
                 _authDataAccess.ValidateVerificationCodeOrThrow(verificationId, codeHash);
 
                 string passwordHash = _passwordService.Hash(password);
