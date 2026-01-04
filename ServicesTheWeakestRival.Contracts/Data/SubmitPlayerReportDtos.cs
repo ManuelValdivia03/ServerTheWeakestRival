@@ -19,7 +19,7 @@ namespace ServicesTheWeakestRival.Contracts.Data
     {
         [DataMember(Order = 1, IsRequired = true)] public long ReportId { get; set; }
         [DataMember(Order = 2, IsRequired = true)] public bool SanctionApplied { get; set; }
-        [DataMember(Order = 3, IsRequired = true)] public byte SanctionType { get; set; } // 1=SUSP, 2=BAN
+        [DataMember(Order = 3, IsRequired = true)] public byte SanctionType { get; set; }
         [DataMember(Order = 4, IsRequired = false)] public DateTime? SanctionEndAtUtc { get; set; }
     }
 }

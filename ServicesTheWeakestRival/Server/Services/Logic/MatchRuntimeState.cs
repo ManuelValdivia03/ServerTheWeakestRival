@@ -3,17 +3,18 @@ using ServicesTheWeakestRival.Contracts.Enums;
 using ServicesTheWeakestRival.Contracts.Services;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using TheWeakestRival.Contracts.Enums;
+using System.Threading;
 
 namespace ServicesTheWeakestRival.Server.Services.Logic
 {
     internal sealed class MatchRuntimeState
     {
-        private readonly List<QuestionWithAnswersDto> _lightningQuestions =
+        private readonly List<QuestionWithAnswersDto> lightningQuestions =
             new List<QuestionWithAnswersDto>();
 
-        private int _currentLightningQuestionIndex;
+        private int currentLightningQuestionIndex;
+
+        private int? preLightningPlayerIndex;
 
         public MatchRuntimeState(Guid matchId)
         {
@@ -41,19 +42,21 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             WinnerUserId = null;
 
             ActiveSpecialEvent = SpecialEventType.None;
+            WildcardMatchId = 0;
+
+            HasSpecialEventThisRound = false;
+            BombQuestionId = 0;
+
+            HasStarted = false;
+
+            SurpriseExam = null;
+
+            IsDarkModeActive = false;
+            DarkModeRoundNumber = 0;
         }
 
-        // ---------------------------------------------------------------
-        // IDENTIDAD
-        // ---------------------------------------------------------------
         public Guid MatchId { get; }
 
-        // ID en DB (GameplayService lo espera)
-        public int DbMatchId { get; set; }
-
-        // ---------------------------------------------------------------
-        // PREGUNTAS
-        // ---------------------------------------------------------------
         public byte Difficulty { get; private set; }
 
         public string LocaleCode { get; private set; }
@@ -70,9 +73,6 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
 
         public int RoundNumber { get; set; }
 
-        // ---------------------------------------------------------------
-        // JUGADORES
-        // ---------------------------------------------------------------
         public List<MatchPlayerRuntime> Players { get; }
 
         public int CurrentPlayerIndex { get; set; }
@@ -89,42 +89,72 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
 
         public Dictionary<int, int?> VotesThisRound { get; }
 
-        // ---------------------------------------------------------------
-        // CADENA / BANCO
-        // ---------------------------------------------------------------
+        public bool HasStarted { get; set; }
+
         public int CurrentStreak { get; set; }
 
         public decimal CurrentChain { get; set; }
 
         public decimal BankedPoints { get; set; }
 
-        // ---------------------------------------------------------------
-        // FINALIZACIÓN
-        // ---------------------------------------------------------------
         public bool IsFinished { get; set; }
 
         public int? WinnerUserId { get; set; }
 
-        // ---------------------------------------------------------------
-        // SINCRONIZACIÓN
-        // ---------------------------------------------------------------
         public object SyncRoot { get; }
 
-        // ---------------------------------------------------------------
-        // EVENTOS ESPECIALES
-        // ---------------------------------------------------------------
         public SpecialEventType ActiveSpecialEvent { get; set; }
 
         public LightningChallengeState LightningChallenge { get; set; }
+
+        public int WildcardMatchId { get; set; }
+
+        public bool HasSpecialEventThisRound { get; set; }
+
+        public int BombQuestionId { get; set; }
+
+        public SurpriseExamState SurpriseExam { get; set; }
+
+        public bool IsDarkModeActive { get; set; }
+
+        public int DarkModeRoundNumber { get; set; }
 
         public bool IsLightningActive =>
             ActiveSpecialEvent == SpecialEventType.LightningChallenge &&
             LightningChallenge != null;
 
-        // ---------------------------------------------------------------
-        // INICIALIZACIÓN
-        // ---------------------------------------------------------------
-        public void Initialize(byte difficulty, string localeCode, List<QuestionWithAnswersDto> questions)
+        public bool IsSurpriseExamActive =>
+            ActiveSpecialEvent == SpecialEventType.SurpriseExam &&
+            SurpriseExam != null;
+
+        public void SetPreLightningTurnIndex()
+        {
+            if (!preLightningPlayerIndex.HasValue)
+            {
+                preLightningPlayerIndex = CurrentPlayerIndex;
+            }
+        }
+
+        public void OverrideTurnForLightning(int targetPlayerIndex)
+        {
+            SetPreLightningTurnIndex();
+            CurrentPlayerIndex = targetPlayerIndex;
+        }
+
+        public void RestoreTurnAfterLightning()
+        {
+            if (preLightningPlayerIndex.HasValue)
+            {
+                CurrentPlayerIndex = preLightningPlayerIndex.Value;
+                preLightningPlayerIndex = null;
+            }
+        }
+
+        public void Initialize(
+            byte difficulty,
+            string localeCode,
+            List<QuestionWithAnswersDto> questions,
+            decimal initialBankedPoints)
         {
             Difficulty = difficulty;
             LocaleCode = localeCode;
@@ -132,18 +162,26 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             Questions.Clear();
             QuestionsById.Clear();
 
-            foreach (var q in questions)
+            if (questions != null)
             {
-                Questions.Enqueue(q);
-                QuestionsById[q.QuestionId] = q;
+                foreach (QuestionWithAnswersDto question in questions)
+                {
+                    if (question == null)
+                    {
+                        continue;
+                    }
+
+                    Questions.Enqueue(question);
+                    QuestionsById[question.QuestionId] = question;
+                }
             }
 
             CurrentPlayerIndex = 0;
             CurrentStreak = 0;
             CurrentChain = 0m;
-            BankedPoints = 0m;
-
+            BankedPoints = initialBankedPoints;
             CurrentQuestionId = 0;
+
             IsInitialized = true;
 
             QuestionsAskedThisRound = 0;
@@ -151,6 +189,7 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
 
             IsInVotePhase = false;
             IsInDuelPhase = false;
+
             WeakestRivalUserId = null;
             DuelTargetUserId = null;
 
@@ -160,19 +199,28 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             IsFinished = false;
             WinnerUserId = null;
 
+            HasSpecialEventThisRound = false;
+            BombQuestionId = 0;
+
+            IsDarkModeActive = false;
+            DarkModeRoundNumber = 0;
+
+            ResetSurpriseExam();
+            RestoreTurnAfterLightning();
             ResetLightningChallenge();
         }
 
-        // ---------------------------------------------------------------
-        // TURNOS
-        // ---------------------------------------------------------------
         public MatchPlayerRuntime GetCurrentPlayer()
         {
             if (Players.Count == 0)
+            {
                 return null;
+            }
 
             if (CurrentPlayerIndex < 0 || CurrentPlayerIndex >= Players.Count)
+            {
                 CurrentPlayerIndex = 0;
+            }
 
             return Players[CurrentPlayerIndex];
         }
@@ -180,11 +228,12 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
         public void AdvanceTurn()
         {
             if (Players.Count == 0)
+            {
                 return;
+            }
 
             int nextIndex = CurrentPlayerIndex;
 
-            // Turno normal
             if (!IsInDuelPhase || !WeakestRivalUserId.HasValue || !DuelTargetUserId.HasValue)
             {
                 for (int i = 0; i < Players.Count; i++)
@@ -192,7 +241,9 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                     nextIndex++;
 
                     if (nextIndex >= Players.Count)
+                    {
                         nextIndex = 0;
+                    }
 
                     if (!Players[nextIndex].IsEliminated)
                     {
@@ -200,11 +251,11 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                         return;
                     }
                 }
+
                 return;
             }
 
-            // Turno de duelo
-            var duelPlayers = new HashSet<int>
+            HashSet<int> duelPlayers = new HashSet<int>
             {
                 WeakestRivalUserId.Value,
                 DuelTargetUserId.Value
@@ -215,7 +266,9 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                 nextIndex++;
 
                 if (nextIndex >= Players.Count)
+                {
                     nextIndex = 0;
+                }
 
                 if (!Players[nextIndex].IsEliminated &&
                     duelPlayers.Contains(Players[nextIndex].UserId))
@@ -226,43 +279,72 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             }
         }
 
-        // ---------------------------------------------------------------
-        // LIGHTNING CHALLENGE
-        // ---------------------------------------------------------------
         public void SetLightningQuestions(IEnumerable<QuestionWithAnswersDto> questions)
         {
-            _lightningQuestions.Clear();
-            _currentLightningQuestionIndex = 0;
+            lightningQuestions.Clear();
+            currentLightningQuestionIndex = 0;
 
-            foreach (var q in questions)
+            if (questions == null)
             {
-                if (q != null)
-                    _lightningQuestions.Add(q);
+                return;
+            }
+
+            foreach (QuestionWithAnswersDto question in questions)
+            {
+                if (question != null)
+                {
+                    lightningQuestions.Add(question);
+                }
             }
         }
 
         public QuestionWithAnswersDto GetCurrentLightningQuestion()
         {
-            if (_currentLightningQuestionIndex < 0 ||
-                _currentLightningQuestionIndex >= _lightningQuestions.Count)
+            if (currentLightningQuestionIndex < 0 ||
+                currentLightningQuestionIndex >= lightningQuestions.Count)
+            {
                 return null;
+            }
 
-            return _lightningQuestions[_currentLightningQuestionIndex];
+            return lightningQuestions[currentLightningQuestionIndex];
         }
 
         public void MoveToNextLightningQuestion()
         {
-            if (_currentLightningQuestionIndex < _lightningQuestions.Count)
-                _currentLightningQuestionIndex++;
+            if (currentLightningQuestionIndex < lightningQuestions.Count)
+            {
+                currentLightningQuestionIndex++;
+            }
         }
 
         public void ResetLightningChallenge()
         {
-            ActiveSpecialEvent = SpecialEventType.None;
+            if (ActiveSpecialEvent == SpecialEventType.LightningChallenge)
+            {
+                ActiveSpecialEvent = SpecialEventType.None;
+            }
+
             LightningChallenge = null;
 
-            _lightningQuestions.Clear();
-            _currentLightningQuestionIndex = 0;
+            lightningQuestions.Clear();
+            currentLightningQuestionIndex = 0;
+
+            RestoreTurnAfterLightning();
+        }
+
+        public void ResetSurpriseExam()
+        {
+            if (SurpriseExam != null)
+            {
+                SurpriseExam.DisposeTimerSafely();
+            }
+
+            SurpriseExam = null;
+
+            if (ActiveSpecialEvent == SpecialEventType.SurpriseExam)
+            {
+                ActiveSpecialEvent = SpecialEventType.None;
+            }
         }
     }
 
@@ -286,5 +368,41 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
         public bool IsWinner { get; set; }
 
         public AvatarAppearanceDto Avatar { get; set; }
+    }
+
+    internal sealed class SurpriseExamState
+    {
+        public SurpriseExamState(DateTime utcDeadline)
+        {
+            UtcDeadline = utcDeadline;
+        }
+
+        public DateTime UtcDeadline { get; }
+
+        public Dictionary<int, int> QuestionIdByUserId { get; } = new Dictionary<int, int>();
+
+        public Dictionary<int, bool> IsCorrectByUserId { get; } = new Dictionary<int, bool>();
+
+        public HashSet<int> PendingUserIds { get; } = new HashSet<int>();
+
+        public bool IsResolved { get; set; }
+
+        public Timer Timer { get; private set; }
+
+        public void AttachTimer(Timer timer)
+        {
+            Timer = timer;
+        }
+
+        public void DisposeTimerSafely()
+        {
+            Timer timer = Timer;
+            Timer = null;
+
+            if (timer != null)
+            {
+                timer.Dispose();
+            }
+        }
     }
 }

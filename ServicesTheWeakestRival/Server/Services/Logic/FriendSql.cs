@@ -162,9 +162,6 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                 ORDER BY display_name;";
         }
 
-        /// <summary>
-        /// Construye el SQL para GetAccountsByIds con @p0, @p1, ... @pn.
-        /// </summary>
         public static string BuildGetAccountsByIdsQuery(int paramCount)
         {
             var builder = new StringBuilder();

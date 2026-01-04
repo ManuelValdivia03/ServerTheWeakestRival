@@ -100,6 +100,19 @@
     <Compile Include="Server\Services\Friends\Infrastructure\FriendRequestRepository.cs" />
     <Compile Include="Server\Services\Friends\Infrastructure\FriendRequestRow.cs" />
     <Compile Include="Server\Services\GameplayService.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayEngine.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayEventLogic.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayMatchLogic.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayQuestionsLogic.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayRuntimeStore.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayServiceContext.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayTurnLogic.cs" />
+    <Compile Include="Server\Services\Gameplay\IAvatarRepository.cs" />
+    <Compile Include="Server\Services\Gameplay\IGameplayQuestionsRepository.cs" />
+    <Compile Include="Server\Services\Gameplay\Infraestructure\AvatarRepository.cs" />
+    <Compile Include="Server\Services\Gameplay\Infraestructure\GameplayQuestionsRepository.cs" />
+    <Compile Include="Server\Services\Gameplay\Infraestructure\WildcardRepository.cs" />
+    <Compile Include="Server\Services\Gameplay\IWildcardRepository.cs" />
     <Compile Include="Server\Services\LobbyService.cs" />
     <Compile Include="Server\Services\Logic\AuthSql.cs" />
     <Compile Include="Server\Services\Logic\ChatSql.cs" />
@@ -118,6 +131,7 @@
     <Compile Include="Server\Services\Reports\ReportRequestLogic.cs" />
     <Compile Include="Server\Services\Reports\ReportServiceContext.cs" />
     <Compile Include="Server\Services\StatsService.cs" />
+    <Compile Include="Server\Services\Stats\StatsLogic.cs" />
     <Compile Include="Server\Services\TokenStore.cs" />
     <Compile Include="Server\Services\WildcardService.cs" />
   </ItemGroup>

@@ -44,7 +44,6 @@ namespace ServicesTheWeakestRival.Contracts.Data
         public int? ConsumedInRound { get; set; }
     }
 
-    // ===== Requests / Responses del servicio =====
 
     public sealed class ListWildcardTypesRequest
     {
