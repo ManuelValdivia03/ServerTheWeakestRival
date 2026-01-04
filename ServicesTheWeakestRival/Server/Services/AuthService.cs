@@ -22,7 +22,13 @@ namespace ServicesTheWeakestRival.Server.Services
         public const int TOKEN_TTL_HOURS = 24;
 
         public const byte ACCOUNT_STATUS_ACTIVE = 1;
-        public const byte ACCOUNT_STATUS_BLOCKED = 0;
+        public const byte ACCOUNT_STATUS_INACTIVE = 2;
+        public const byte ACCOUNT_STATUS_SUSPENDED = 3;
+        public const byte ACCOUNT_STATUS_BANNED = 4;
+
+        public const string ERROR_ACCOUNT_INACTIVE = "ACCOUNT_INACTIVE";
+        public const string ERROR_ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED";
+        public const string ERROR_ACCOUNT_BANNED = "ACCOUNT_BANNED";
 
         public const int EMAIL_MAX_LENGTH = 320;
         public const int DISPLAY_NAME_MAX_LENGTH = 80;
@@ -172,7 +178,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                // Valida código y, si pasa, crea cuenta + usuario y marca verificación usada.
                 _authDataAccess.ValidateVerificationCodeOrThrow(verificationId, codeHash);
 
                 string passwordHash = _passwordService.Hash(password);
@@ -262,19 +267,35 @@ namespace ServicesTheWeakestRival.Server.Services
                     ex);
             }
 
-            if (status == ACCOUNT_STATUS_BLOCKED)
-            {
-                throw ThrowFault(ERROR_ACCOUNT_BLOCKED, "Account is blocked.");
-            }
-
             if (!_passwordService.Verify(request.Password, storedHash))
             {
                 throw ThrowFault(ERROR_INVALID_CREDENTIALS, "Email or password is incorrect.");
             }
 
+            if (status == ACCOUNT_STATUS_INACTIVE)
+            {
+                throw ThrowFault(ERROR_ACCOUNT_INACTIVE, "Account is not active.");
+            }
+
+            if (status == ACCOUNT_STATUS_SUSPENDED)
+            {
+                throw ThrowFault(ERROR_ACCOUNT_SUSPENDED, "Account is suspended.");
+            }
+
+            if (status == ACCOUNT_STATUS_BANNED)
+            {
+                throw ThrowFault(ERROR_ACCOUNT_BANNED, "Account is banned.");
+            }
+
+            if (status != ACCOUNT_STATUS_ACTIVE)
+            {
+                throw ThrowFault(ERROR_ACCOUNT_INACTIVE, "Account is not active.");
+            }
+
             var token = IssueToken(userId);
             return new LoginResponse { Token = token };
         }
+
 
         public void Logout(LogoutRequest request)
         {

@@ -1,13 +1,25 @@
 ﻿using System;
+using System.Configuration;
 using System.ServiceModel;
+using log4net;
+using ServicesTheWeakestRival.Server.Infrastructure;
 using ServicesTheWeakestRival.Server.Services;
 
 namespace ConsoleServer
 {
     public static class Program
     {
+        private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
+
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(Program));
+
         public static void Main()
         {
+            string connectionString =
+                ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME].ConnectionString;
+
+            var reconciler = new SanctionReconciler(connectionString, Logger);
+
             var hosts = new ServiceHost[]
             {
                 new ServiceHost(typeof(AuthService)),
@@ -22,6 +34,8 @@ namespace ConsoleServer
 
             try
             {
+                reconciler.Start();
+
                 foreach (var h in hosts)
                 {
                     h.Open();
@@ -33,6 +47,9 @@ namespace ConsoleServer
             }
             finally
             {
+                try { reconciler.Dispose(); }
+                catch { }
+
                 foreach (var h in hosts)
                 {
                     try { h.Close(); }

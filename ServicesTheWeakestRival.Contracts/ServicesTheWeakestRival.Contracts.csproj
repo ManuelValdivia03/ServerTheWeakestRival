@@ -73,6 +73,7 @@
     <Compile Include="Data\DuelCandidateDto.cs" />
     <Compile Include="Data\DuelOutcome.cs" />
     <Compile Include="Data\EmailVerificationDtos.cs" />
+    <Compile Include="Data\ForcedLogoutNotification.cs" />
     <Compile Include="Data\FriendRequestStatus.cs" />
     <Compile Include="Data\FriendSummary.cs" />
     <Compile Include="Data\GameplayDtos.cs" />

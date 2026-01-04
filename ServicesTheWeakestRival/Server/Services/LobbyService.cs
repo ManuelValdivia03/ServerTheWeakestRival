@@ -1,14 +1,15 @@
-﻿using System;
+﻿using log4net;
+using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services.Logic;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.ServiceModel;
-using log4net;
-using ServicesTheWeakestRival.Contracts.Data;
-using ServicesTheWeakestRival.Contracts.Services;
-using ServicesTheWeakestRival.Server.Services.Logic;
 using TheWeakestRival.Data;
 
 namespace ServicesTheWeakestRival.Server.Services
@@ -31,6 +32,8 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_VALIDATION_ERROR = "VALIDATION_ERROR";
         private const string ERROR_UNAUTHORIZED = "UNAUTHORIZED";
         private const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
+        private const string CONTEXT_ENSURE_AUTH = "LobbyService.EnsureAuthorizedAndGetUserId";
+        private const string CONTEXT_REGISTER_CALLBACK = "LobbyService.TryRegisterLobbyCallback";
 
         private const string ERROR_DB = "DB_ERROR";
         private const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
@@ -48,6 +51,15 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string PARAM_ACCESS_CODE = "@AccessCode";
         private const string PARAM_LOBBY_UID = "@u";
         private const string PARAM_LOBBY_ID_BY_ID = "@id";
+
+        private const string FORCED_LOGOUT_CODE_SANCTION = "SANCTION_APPLIED";
+
+        private static readonly ConcurrentDictionary<int, Guid> AccountLobbyUids =
+            new ConcurrentDictionary<int, Guid>();
+
+        private static readonly ConcurrentDictionary<int, string> AccountSessionIds =
+            new ConcurrentDictionary<int, string>();
+
 
         private static readonly ILog Logger = LogManager.GetLogger(typeof(LobbyService));
 
@@ -93,40 +105,70 @@ namespace ServicesTheWeakestRival.Server.Services
             };
         }
 
-        private static void AddCallbackForLobby(Guid lobbyUid, ILobbyClientCallback callback)
+        private static void AddCallbackForLobby(Guid lobbyUid, int accountId, ILobbyClientCallback callback)
         {
             var bucket = CallbackBuckets.GetOrAdd(
                 lobbyUid,
                 _ => new ConcurrentDictionary<string, ILobbyClientCallback>());
 
-            bucket[CurrentSessionId] = callback;
+            string sessionId = CurrentSessionId;
+
+            bucket[sessionId] = callback;
+
+            if (accountId > 0)
+            {
+                AccountLobbyUids[accountId] = lobbyUid;
+                AccountSessionIds[accountId] = sessionId;
+            }
 
             Logger.DebugFormat(
-                "AddCallbackForLobby: LobbyUid={0}, SessionId={1}, BucketCount={2}",
+                "AddCallbackForLobby: LobbyUid={0}, AccountId={1}, SessionId={2}, BucketCount={3}",
                 lobbyUid,
-                CurrentSessionId,
+                accountId,
+                sessionId,
                 bucket.Count);
         }
 
-        private static void RemoveCallbackForLobby(Guid lobbyUid)
+
+        private static void RemoveCallbackForLobby(Guid lobbyUid, int accountId)
         {
             if (!CallbackBuckets.TryGetValue(lobbyUid, out var bucket))
             {
+                AccountLobbyUids.TryRemove(accountId, out _);
+                AccountSessionIds.TryRemove(accountId, out _);
                 return;
             }
 
-            bucket.TryRemove(CurrentSessionId, out _);
+            string sessionId = null;
+
+            if (accountId > 0)
+            {
+                AccountSessionIds.TryGetValue(accountId, out sessionId);
+            }
+
+            if (string.IsNullOrWhiteSpace(sessionId))
+            {
+                sessionId = CurrentSessionId;
+            }
+
+            bucket.TryRemove(sessionId, out _);
+
             if (bucket.Count == 0)
             {
                 CallbackBuckets.TryRemove(lobbyUid, out _);
             }
 
+            AccountLobbyUids.TryRemove(accountId, out _);
+            AccountSessionIds.TryRemove(accountId, out _);
+
             Logger.DebugFormat(
-                "RemoveCallbackForLobby: LobbyUid={0}, SessionId={1}, RemainingInBucket={2}",
+                "RemoveCallbackForLobby: LobbyUid={0}, AccountId={1}, SessionId={2}, RemainingInBucket={3}",
                 lobbyUid,
-                CurrentSessionId,
+                accountId,
+                sessionId,
                 bucket.Count);
         }
+
 
         private static void BroadcastToLobby(Guid lobbyUid, Action<ILobbyClientCallback> send)
         {
@@ -156,7 +198,15 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public JoinLobbyResponse JoinLobby(JoinLobbyRequest request)
         {
+            if (request == null)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Request nulo.");
+            }
+
+            int userId = EnsureAuthorizedAndGetUserId(request.Token);
+
             var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
+            LobbyCallbackRegistry.Upsert(userId, callback);
 
             var lobbyInfo = new LobbyInfo
             {
@@ -172,7 +222,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 lobbyInfo.LobbyId,
                 lobbyInfo.LobbyName);
 
-            AddCallbackForLobby(lobbyInfo.LobbyId, callback);
+            AddCallbackForLobby(lobbyInfo.LobbyId, userId, callback);
             callback.OnLobbyUpdated(lobbyInfo);
 
             return new JoinLobbyResponse { Lobby = lobbyInfo };
@@ -180,6 +230,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public void LeaveLobby(LeaveLobbyRequest request)
         {
+            int userId = 0;
+
             try
             {
                 if (request == null
@@ -190,7 +242,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     return;
                 }
 
-                if (!TokenStore.TryGetUserId(request.Token, out var userId))
+                if (!TokenStore.TryGetUserId(request.Token, out userId))
                 {
                     Logger.WarnFormat("LeaveLobby: invalid token. LobbyId={0}", request.LobbyId);
                     return;
@@ -223,12 +275,18 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             finally
             {
-                if (request != null && request.LobbyId != Guid.Empty)
+                if (request != null && request.LobbyId != Guid.Empty && userId > 0)
                 {
-                    RemoveCallbackForLobby(request.LobbyId);
+                    RemoveCallbackForLobby(request.LobbyId, userId);
+                }
+
+                if (userId > 0)
+                {
+                    LobbyCallbackRegistry.Remove(userId);
                 }
             }
         }
+
 
 
         public ListLobbiesResponse ListLobbies(ListLobbiesRequest request)
@@ -257,6 +315,22 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
+            try
+            {
+                var callback = OperationContext.Current != null
+                    ? OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>()
+                    : null;
+
+                if (callback != null)
+                {
+                    LobbyCallbackRegistry.Upsert(userId, callback);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("SendChatMessage: could not refresh LobbyCallbackRegistry.", ex);
+            }
+
             var senderName = GetUserDisplayName(userId);
 
             var chatMessage = new ChatMessage
@@ -275,6 +349,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             BroadcastToLobby(request.LobbyId, cb => cb.OnChatMessageReceived(chatMessage));
         }
+
 
         public UpdateAccountResponse GetMyProfile(string token)
         {
@@ -426,7 +501,8 @@ namespace ServicesTheWeakestRival.Server.Services
             var accountMinis = MapToAccountMini(members, avatarSql);
 
             var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
-            AddCallbackForLobby(lobbyUid, callback);
+            LobbyCallbackRegistry.Upsert(ownerId, callback);
+            AddCallbackForLobby(lobbyUid, ownerId, callback);
 
             var info = LoadLobbyInfoByIntId(lobbyId);
             info.Players = accountMinis;
@@ -498,7 +574,8 @@ namespace ServicesTheWeakestRival.Server.Services
             var accountMinis = MapToAccountMini(members, avatarSql);
 
             var callback = OperationContext.Current.GetCallbackChannel<ILobbyClientCallback>();
-            AddCallbackForLobby(lobbyUid, callback);
+            LobbyCallbackRegistry.Upsert(userId, callback);
+            AddCallbackForLobby(lobbyUid, userId, callback);
 
             var info = LoadLobbyInfoByIntId(lobbyId);
             info.Players = accountMinis;
@@ -534,12 +611,72 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static int EnsureAuthorizedAndGetUserId(string token)
         {
-            if (!TokenStore.TryGetUserId(token, out var userId))
+            if (string.IsNullOrWhiteSpace(token))
             {
                 throw ThrowFault(ERROR_UNAUTHORIZED, "Token inválido o expirado.");
             }
 
+            if (!TokenStore.TryGetUserId(token, out int userId) || userId <= 0)
+            {
+                throw ThrowFault(ERROR_UNAUTHORIZED, "Token inválido o expirado.");
+            }
+
+            _ = TryRegisterLobbyCallback(userId);
+
             return userId;
+        }
+
+        private static bool TryRegisterLobbyCallback(int accountId)
+        {
+            if (accountId <= 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                OperationContext context = OperationContext.Current;
+                if (context == null)
+                {
+                    Logger.Warn(CONTEXT_REGISTER_CALLBACK + ": OperationContext.Current is null.");
+                    return false;
+                }
+
+                ILobbyClientCallback callback = context.GetCallbackChannel<ILobbyClientCallback>();
+                if (callback == null)
+                {
+                    Logger.WarnFormat("{0}: callback channel is null. AccountId={1}", CONTEXT_REGISTER_CALLBACK, accountId);
+                    return false;
+                }
+
+                var channelObject = callback as ICommunicationObject;
+                if (channelObject == null)
+                {
+                    Logger.WarnFormat(
+                        "{0}: callback does not implement ICommunicationObject. AccountId={1}",
+                        CONTEXT_REGISTER_CALLBACK,
+                        accountId);
+                    return false;
+                }
+
+                if (channelObject.State == CommunicationState.Faulted || channelObject.State == CommunicationState.Closed)
+                {
+                    Logger.WarnFormat(
+                        "{0}: callback channel not alive. State={1}, AccountId={2}",
+                        CONTEXT_REGISTER_CALLBACK,
+                        channelObject.State,
+                        accountId);
+                    return false;
+                }
+
+                LobbyCallbackRegistry.Upsert(accountId, callback);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(CONTEXT_REGISTER_CALLBACK, ex);
+                return false;
+            }
         }
 
         private static void ValidateProfileChanges(
@@ -962,6 +1099,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
             foreach (var member in members)
             {
+                if (!member.is_active || member.left_at_utc.HasValue)
+                {
+                    continue;
+                }
+
                 if (member.Users == null)
                 {
                     Logger.WarnFormat(
@@ -1080,6 +1222,112 @@ namespace ServicesTheWeakestRival.Server.Services
                 Logger.Error("Error rebuilding lobby info for broadcast.", ex);
             }
         }
+
+        internal static void ForceLogoutAndKickFromLobby(int accountId, byte sanctionType, DateTime? sanctionEndAtUtc)
+        {
+            if (accountId <= 0)
+            {
+                return;
+            }
+
+            TrySendForcedLogout(accountId, sanctionType, sanctionEndAtUtc);
+
+            Guid lobbyUid;
+            if (!AccountLobbyUids.TryGetValue(accountId, out lobbyUid) || lobbyUid == Guid.Empty)
+            {
+                // Igual limpia su membership por si acaso
+                TryLeaveAllLobbiesInDb(accountId);
+                LobbyCallbackRegistry.Remove(accountId);
+                return;
+            }
+
+            int lobbyId;
+            try
+            {
+                lobbyId = GetLobbyIdFromUid(lobbyUid);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("ForceLogoutAndKickFromLobby: lobbyUid could not be resolved to lobbyId.", ex);
+                TryLeaveAllLobbiesInDb(accountId);
+                RemoveCallbackForLobby(lobbyUid, accountId);
+                LobbyCallbackRegistry.Remove(accountId);
+                return;
+            }
+
+            try
+            {
+                TryLeaveLobbyInDb(accountId, lobbyId);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("ForceLogoutAndKickFromLobby: error leaving lobby in DB.", ex);
+            }
+
+            TryBroadcastLobbyUpdated(lobbyUid, lobbyId);
+
+            RemoveCallbackForLobby(lobbyUid, accountId);
+            LobbyCallbackRegistry.Remove(accountId);
+        }
+
+        private static void TrySendForcedLogout(int accountId, byte sanctionType, DateTime? sanctionEndAtUtc)
+        {
+            try
+            {
+                if (!LobbyCallbackRegistry.TryGet(accountId, out var callback) || callback == null)
+                {
+                    return;
+                }
+
+                var notification = new ForcedLogoutNotification
+                {
+                    Code = FORCED_LOGOUT_CODE_SANCTION,
+                    SanctionType = sanctionType,
+                    SanctionEndAtUtc = sanctionEndAtUtc
+                };
+
+                callback.ForcedLogout(notification);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("TrySendForcedLogout: callback failed.", ex);
+            }
+        }
+
+        private static void TryLeaveAllLobbiesInDb(int accountId)
+        {
+            try
+            {
+                using (var sqlConnection = new SqlConnection(Connection))
+                using (var sqlCommand = new SqlCommand(LobbySql.Text.SP_LOBBY_LEAVE_ALL_BY_USER, sqlConnection))
+                {
+                    sqlCommand.CommandType = CommandType.StoredProcedure;
+                    sqlCommand.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = accountId;
+
+                    sqlConnection.Open();
+                    sqlCommand.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("TryLeaveAllLobbiesInDb: failed.", ex);
+            }
+        }
+
+        private static void TryLeaveLobbyInDb(int accountId, int lobbyId)
+        {
+            using (var sqlConnection = new SqlConnection(Connection))
+            using (var sqlCommand = new SqlCommand(LobbySql.Text.SP_LOBBY_LEAVE, sqlConnection))
+            {
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = accountId;
+                sqlCommand.Parameters.Add(PARAM_LOBBY_ID, SqlDbType.Int).Value = lobbyId;
+
+                sqlConnection.Open();
+                sqlCommand.ExecuteNonQuery();
+            }
+        }
+
 
     }
 }

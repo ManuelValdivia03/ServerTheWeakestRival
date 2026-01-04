@@ -11,8 +11,8 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract(IsOneWay = true)] void OnPlayerJoined(PlayerSummary player);
         [OperationContract(IsOneWay = true)] void OnPlayerLeft(Guid playerId);
         [OperationContract(IsOneWay = true)] void OnChatMessageReceived(ChatMessage message);
-
         [OperationContract(IsOneWay = true)] void OnMatchStarted(MatchInfo match);
+        [OperationContract(IsOneWay = true)] void ForcedLogout(ForcedLogoutNotification notification);
     }
 
     [ServiceContract(CallbackContract = typeof(ILobbyClientCallback))]
