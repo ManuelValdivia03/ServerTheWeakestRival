@@ -11,6 +11,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.ServiceModel;
+using System.Threading;
 using TheWeakestRival.Contracts.Enums;
 
 namespace ServicesTheWeakestRival.Server.Services
@@ -61,7 +62,7 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int COIN_FLIP_RANDOM_MAX_VALUE = 100;
         private const int COIN_FLIP_THRESHOLD_VALUE = 50;
 
-        private const int LIGHTNING_PROBABILITY_PERCENT = 0;
+        private const int LIGHTNING_PROBABILITY_PERCENT = 20;
         private const int LIGHTNING_TOTAL_QUESTIONS = 3;
         private const int LIGHTNING_TOTAL_TIME_SECONDS = 30;
         private const int LIGHTNING_RANDOM_MIN_VALUE = 0;
@@ -69,11 +70,26 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const int EXTRA_WILDCARD_RANDOM_MIN_VALUE = 0;
         private const int EXTRA_WILDCARD_RANDOM_MAX_VALUE = 100;
-        private const int EXTRA_WILDCARD_PROBABILITY_PERCENT = 0;
+        private const int EXTRA_WILDCARD_PROBABILITY_PERCENT = 20;
 
         private const int BOMB_QUESTION_RANDOM_MIN_VALUE = 0;
         private const int BOMB_QUESTION_RANDOM_MAX_VALUE = 100;
         private const int BOMB_QUESTION_PROBABILITY_PERCENT = 20;
+
+        private const int SURPRISE_EXAM_RANDOM_MIN_VALUE = 0;
+        private const int SURPRISE_EXAM_RANDOM_MAX_VALUE = 100;
+        private const int SURPRISE_EXAM_PROBABILITY_PERCENT = 20;
+
+        private const int SURPRISE_EXAM_TIME_LIMIT_SECONDS = 20;
+
+        private const decimal SURPRISE_EXAM_SUCCESS_BONUS = 2.00m;
+        private const decimal SURPRISE_EXAM_FAILURE_PENALTY = 3.00m;
+
+        private const string SURPRISE_EXAM_RESOLVE_REASON_TIMEOUT = "TIMEOUT";
+        private const string SURPRISE_EXAM_RESOLVE_REASON_ALL_ANSWERED = "ALL_ANSWERED";
+
+        private const string SURPRISE_EXAM_BANKING_NOT_ALLOWED_MESSAGE =
+            "Special event in progress. Banking is not allowed.";
 
         private const decimal BOMB_BANK_DELTA = 0.50m;
         private const decimal MIN_BANKED_POINTS = 0.00m;
@@ -94,6 +110,36 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string SPECIAL_EVENT_BOMB_QUESTION_APPLIED_CODE = "BOMB_QUESTION_APPLIED";
         private const string SPECIAL_EVENT_BOMB_QUESTION_APPLIED_DESCRIPTION_TEMPLATE =
             "Pregunta bomba resuelta por {0}. Cambio en banca: {1}. Banca actual: {2}.";
+
+        private const string SPECIAL_EVENT_SURPRISE_EXAM_STARTED_CODE = "SURPRISE_EXAM_STARTED";
+        private const string SPECIAL_EVENT_SURPRISE_EXAM_STARTED_DESCRIPTION =
+            "¡Examen sorpresa! Cada jugador debe responder su pregunta.";
+
+        private const string SPECIAL_EVENT_SURPRISE_EXAM_RESOLVED_CODE = "SURPRISE_EXAM_RESOLVED";
+        private const string SPECIAL_EVENT_SURPRISE_EXAM_OUTCOME_ALL_CORRECT = "Todos acertaron";
+        private const string SPECIAL_EVENT_SURPRISE_EXAM_OUTCOME_SOME_FAILED = "Al menos uno falló";
+
+        private const string SPECIAL_EVENT_SURPRISE_EXAM_RESOLVED_DESCRIPTION_TEMPLATE =
+            "Examen sorpresa resuelto. {0} ({1}/{2}). Cambio en banca: {3}. Banca actual: {4}.";
+
+        private const int DARK_MODE_RANDOM_MIN_VALUE = 0;
+        private const int DARK_MODE_RANDOM_MAX_VALUE = 100;
+        private const int DARK_MODE_PROBABILITY_PERCENT = 100;
+
+        private const string SPECIAL_EVENT_DARK_MODE_STARTED_CODE = "DARK_MODE_STARTED";
+        private const string SPECIAL_EVENT_DARK_MODE_STARTED_DESCRIPTION =
+            "¡A oscuras! Los lugares se han revuelto y la identidad de los jugadores está oculta.";
+
+        private const string SPECIAL_EVENT_DARK_MODE_ENDED_CODE = "DARK_MODE_ENDED";
+        private const string SPECIAL_EVENT_DARK_MODE_ENDED_DESCRIPTION =
+            "Las luces vuelven. Ahora puedes ver por quién votaste.";
+
+        private const string SPECIAL_EVENT_DARK_MODE_VOTE_REVEAL_CODE = "DARK_MODE_VOTE_REVEAL";
+        private const string SPECIAL_EVENT_DARK_MODE_VOTE_REVEAL_DESCRIPTION_TEMPLATE =
+            "Votaste por {0}.";
+
+        private const string DARK_MODE_NO_VOTE_DISPLAY_NAME = "Nadie";
+        private const string DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE = "Jugador {0}";
 
         private static readonly decimal[] CHAIN_STEPS =
         {
@@ -121,7 +167,6 @@ namespace ServicesTheWeakestRival.Server.Services
         private GameplayEngine()
         {
         }
-
 
         internal GetQuestionsResponse GetQuestions(GetQuestionsRequest request)
         {
@@ -227,7 +272,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
                 else
                 {
-                    string displayName = string.Format("Jugador {0}", userId);
+                    string displayName = string.Format(DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE, userId);
 
                     UserAvatarEntity avatarEntity = new UserAvatarSql(GetConnectionString()).GetByUserId(userId);
 
@@ -285,7 +330,14 @@ namespace ServicesTheWeakestRival.Server.Services
 
                         InitializeMatchState(state, request, hostUserId, questions);
 
+                        TryStartDarkModeEvent(state);
+
                         TryStartExtraWildcardEvent(state);
+
+                        if (TryStartSurpriseExamEvent(state))
+                        {
+                            return;
+                        }
 
                         bool hasLightningStarted = TryStartLightningChallenge(state);
                         if (!hasLightningStarted)
@@ -420,6 +472,11 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 EnsureNotInVotePhase(state, "Round is in vote phase. No questions available.");
 
+                if (state.IsSurpriseExamActive)
+                {
+                    return HandleSurpriseExamSubmitAnswer(state, userId, request);
+                }
+
                 MatchPlayerRuntime currentPlayer = GetCurrentPlayerOrThrow(state, userId);
 
                 if (IsLightningActive(state))
@@ -478,6 +535,11 @@ namespace ServicesTheWeakestRival.Server.Services
             lock (state.SyncRoot)
             {
                 EnsureNotInVotePhase(state, "Round is in vote phase. Banking is not allowed.");
+
+                if (state.IsSurpriseExamActive)
+                {
+                    throw ThrowFault(ERROR_INVALID_REQUEST, SURPRISE_EXAM_BANKING_NOT_ALLOWED_MESSAGE);
+                }
 
                 GetCurrentPlayerOrThrow(state, userId);
 
@@ -558,6 +620,14 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
+                if (state.IsDarkModeActive)
+                {
+                    joiningPlayer.Callback.OnSpecialEvent(
+                        state.MatchId,
+                        SPECIAL_EVENT_DARK_MODE_STARTED_CODE,
+                        SPECIAL_EVENT_DARK_MODE_STARTED_DESCRIPTION);
+                }
+
                 int[] orderedAliveUserIds = state.Players
                     .Where(p => p != null && !p.IsEliminated)
                     .Select(p => p.UserId)
@@ -573,6 +643,31 @@ namespace ServicesTheWeakestRival.Server.Services
                 };
 
                 joiningPlayer.Callback.OnTurnOrderInitialized(state.MatchId, turnOrder);
+
+                if (state.IsSurpriseExamActive)
+                {
+                    SurpriseExamState exam = state.SurpriseExam;
+
+                    if (exam != null &&
+                        exam.QuestionIdByUserId.TryGetValue(userId, out int examQuestionId) &&
+                        state.QuestionsById.TryGetValue(examQuestionId, out QuestionWithAnswersDto examQuestion) &&
+                        !exam.IsCorrectByUserId.ContainsKey(userId))
+                    {
+                        joiningPlayer.Callback.OnSpecialEvent(
+                            state.MatchId,
+                            SPECIAL_EVENT_SURPRISE_EXAM_STARTED_CODE,
+                            SPECIAL_EVENT_SURPRISE_EXAM_STARTED_DESCRIPTION);
+
+                        joiningPlayer.Callback.OnNextQuestion(
+                            state.MatchId,
+                            BuildPlayerSummary(joiningPlayer, isOnline: true),
+                            examQuestion,
+                            state.CurrentChain,
+                            state.BankedPoints);
+
+                        return;
+                    }
+                }
 
                 if (state.IsInVotePhase)
                 {
@@ -638,6 +733,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static void StartVotePhase(MatchRuntimeState state)
         {
+            state.ResetSurpriseExam();
+
             state.IsInVotePhase = true;
             state.IsInDuelPhase = false;
             state.WeakestRivalUserId = null;
@@ -645,6 +742,8 @@ namespace ServicesTheWeakestRival.Server.Services
             state.VotersThisRound.Clear();
             state.VotesThisRound.Clear();
             state.BombQuestionId = 0;
+
+            state.ActiveSpecialEvent = SpecialEventType.None;
 
             Broadcast(
                 state,
@@ -656,6 +755,8 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             state.IsInVotePhase = false;
             state.BombQuestionId = 0;
+
+            EndDarkModeIfActive(state);
 
             List<MatchPlayerRuntime> alivePlayers = state.Players
                 .Where(p => !p.IsEliminated)
@@ -900,6 +1001,11 @@ namespace ServicesTheWeakestRival.Server.Services
             state.HasSpecialEventThisRound = false;
             state.BombQuestionId = 0;
 
+            state.IsDarkModeActive = false;
+            state.DarkModeRoundNumber = 0;
+
+            state.ResetSurpriseExam();
+
             state.RestoreTurnAfterLightning();
             state.ResetLightningChallenge();
 
@@ -914,6 +1020,13 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
 
                 state.CurrentPlayerIndex = firstAlive;
+            }
+
+            TryStartDarkModeEvent(state);
+
+            if (TryStartSurpriseExamEvent(state))
+            {
+                return;
             }
 
             bool hasLightningStarted = TryStartLightningChallenge(state);
@@ -964,7 +1077,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 cb => cb.OnTurnOrderInitialized(state.MatchId, dto),
                 "GameplayEngine.TurnOrder");
         }
-
 
         private static void SendNextQuestion(MatchRuntimeState state)
         {
@@ -1298,6 +1410,8 @@ namespace ServicesTheWeakestRival.Server.Services
             state.WinnerUserId = winner.UserId;
             winner.IsWinner = true;
 
+            state.ResetSurpriseExam();
+
             Broadcast(
                 state,
                 cb => cb.OnMatchFinished(state.MatchId, BuildPlayerSummary(winner, isOnline: true)),
@@ -1350,7 +1464,7 @@ namespace ServicesTheWeakestRival.Server.Services
             IGameplayServiceCallback callback =
                 OperationContext.Current.GetCallbackChannel<IGameplayServiceCallback>();
 
-            string displayName = string.Format("Jugador {0}", userId);
+            string displayName = string.Format(DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE, userId);
 
             UserAvatarEntity avatarEntity = new UserAvatarSql(GetConnectionString()).GetByUserId(userId);
 
@@ -1376,6 +1490,10 @@ namespace ServicesTheWeakestRival.Server.Services
             state.BombQuestionId = 0;
             state.HasSpecialEventThisRound = false;
 
+            state.IsDarkModeActive = false;
+            state.DarkModeRoundNumber = 0;
+
+            state.ResetSurpriseExam();
             state.RestoreTurnAfterLightning();
             state.ResetLightningChallenge();
         }
@@ -1472,12 +1590,290 @@ namespace ServicesTheWeakestRival.Server.Services
                 "GameplayEngine.BombQuestion.Applied");
         }
 
-
         private static bool IsLightningActive(MatchRuntimeState state)
         {
             return state != null &&
                    state.ActiveSpecialEvent == SpecialEventType.LightningChallenge &&
                    state.LightningChallenge != null;
+        }
+
+        private static bool TryStartSurpriseExamEvent(MatchRuntimeState state)
+        {
+            if (state == null)
+            {
+                return false;
+            }
+
+            if (state.HasSpecialEventThisRound || IsLightningActive(state) || state.IsInVotePhase || state.IsInDuelPhase)
+            {
+                return false;
+            }
+
+            List<MatchPlayerRuntime> alivePlayers = state.Players
+                .Where(p => p != null && !p.IsEliminated)
+                .ToList();
+
+            if (alivePlayers.Count <= 0)
+            {
+                return false;
+            }
+
+            if (state.Questions.Count < alivePlayers.Count)
+            {
+                return false;
+            }
+
+            int randomValue = NextRandom(SURPRISE_EXAM_RANDOM_MIN_VALUE, SURPRISE_EXAM_RANDOM_MAX_VALUE);
+            if (randomValue >= SURPRISE_EXAM_PROBABILITY_PERCENT)
+            {
+                return false;
+            }
+
+            DateTime deadlineUtc = DateTime.UtcNow.AddSeconds(SURPRISE_EXAM_TIME_LIMIT_SECONDS);
+
+            state.ActiveSpecialEvent = SpecialEventType.SurpriseExam;
+            state.HasSpecialEventThisRound = true;
+
+            SurpriseExamState exam = new SurpriseExamState(deadlineUtc);
+
+            foreach (MatchPlayerRuntime player in alivePlayers)
+            {
+                QuestionWithAnswersDto question = state.Questions.Dequeue();
+
+                exam.QuestionIdByUserId[player.UserId] = question.QuestionId;
+                exam.PendingUserIds.Add(player.UserId);
+
+                TrySendSurpriseExamQuestionToPlayer(state, player, question);
+            }
+
+            state.SurpriseExam = exam;
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_SURPRISE_EXAM_STARTED_CODE, SPECIAL_EVENT_SURPRISE_EXAM_STARTED_DESCRIPTION),
+                "GameplayEngine.SurpriseExam.Started");
+
+            Timer timer = new Timer(
+                SurpriseExamTimeoutCallback,
+                state.MatchId,
+                TimeSpan.FromSeconds(SURPRISE_EXAM_TIME_LIMIT_SECONDS),
+                Timeout.InfiniteTimeSpan);
+
+            exam.AttachTimer(timer);
+
+            return true;
+        }
+
+        private static void TrySendSurpriseExamQuestionToPlayer(MatchRuntimeState state, MatchPlayerRuntime player, QuestionWithAnswersDto question)
+        {
+            if (state == null || player == null || player.Callback == null || question == null)
+            {
+                return;
+            }
+
+            try
+            {
+                player.Callback.OnNextQuestion(
+                    state.MatchId,
+                    BuildPlayerSummary(player, isOnline: true),
+                    question,
+                    state.CurrentChain,
+                    state.BankedPoints);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("GameplayEngine.SurpriseExam.Question callback failed.", ex);
+            }
+        }
+
+        private static void SurpriseExamTimeoutCallback(object stateObj)
+        {
+            if (!(stateObj is Guid matchId) || matchId == Guid.Empty)
+            {
+                return;
+            }
+
+            if (!Matches.TryGetValue(matchId, out MatchRuntimeState state) || state == null)
+            {
+                return;
+            }
+
+            lock (state.SyncRoot)
+            {
+                if (!state.IsSurpriseExamActive)
+                {
+                    return;
+                }
+
+                ResolveSurpriseExam(state, SURPRISE_EXAM_RESOLVE_REASON_TIMEOUT);
+            }
+        }
+
+        private static AnswerResult HandleSurpriseExamSubmitAnswer(MatchRuntimeState state, int userId, SubmitAnswerRequest request)
+        {
+            SurpriseExamState exam = state.SurpriseExam;
+
+            AnswerResult fallback = new AnswerResult
+            {
+                QuestionId = request.QuestionId,
+                IsCorrect = false,
+                ChainIncrement = 0m,
+                CurrentChain = state.CurrentChain,
+                BankedPoints = state.BankedPoints
+            };
+
+            if (exam == null || exam.IsResolved)
+            {
+                return fallback;
+            }
+
+            if (!exam.QuestionIdByUserId.TryGetValue(userId, out int expectedQuestionId))
+            {
+                return fallback;
+            }
+
+            if (expectedQuestionId != request.QuestionId)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Invalid question for SurpriseExam.");
+            }
+
+            if (exam.IsCorrectByUserId.ContainsKey(userId))
+            {
+                return fallback;
+            }
+
+            if (!state.QuestionsById.TryGetValue(request.QuestionId, out QuestionWithAnswersDto question))
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Question not found for SurpriseExam.");
+            }
+
+            bool isCorrect = EvaluateAnswerOrThrow(question, request.AnswerText);
+
+            exam.IsCorrectByUserId[userId] = isCorrect;
+            exam.PendingUserIds.Remove(userId);
+
+            MatchPlayerRuntime answeringPlayer = state.Players.FirstOrDefault(p => p.UserId == userId);
+
+            if (answeringPlayer != null && answeringPlayer.Callback != null)
+            {
+                try
+                {
+                    answeringPlayer.Callback.OnAnswerEvaluated(
+                        state.MatchId,
+                        BuildPlayerSummary(answeringPlayer, isOnline: true),
+                        new AnswerResult
+                        {
+                            QuestionId = request.QuestionId,
+                            IsCorrect = isCorrect,
+                            ChainIncrement = 0m,
+                            CurrentChain = state.CurrentChain,
+                            BankedPoints = state.BankedPoints
+                        });
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn("GameplayEngine.SurpriseExam.Answer callback failed.", ex);
+                }
+            }
+
+            if (exam.PendingUserIds.Count <= 0)
+            {
+                ResolveSurpriseExam(state, SURPRISE_EXAM_RESOLVE_REASON_ALL_ANSWERED);
+            }
+
+            return new AnswerResult
+            {
+                QuestionId = request.QuestionId,
+                IsCorrect = isCorrect,
+                ChainIncrement = 0m,
+                CurrentChain = state.CurrentChain,
+                BankedPoints = state.BankedPoints
+            };
+        }
+
+        private static void ResolveSurpriseExam(MatchRuntimeState state, string reasonCode)
+        {
+            SurpriseExamState exam = state.SurpriseExam;
+
+            if (exam == null || exam.IsResolved)
+            {
+                return;
+            }
+
+            exam.IsResolved = true;
+
+            foreach (int pendingUserId in exam.PendingUserIds.ToList())
+            {
+                exam.IsCorrectByUserId[pendingUserId] = false;
+            }
+
+            exam.PendingUserIds.Clear();
+
+            int total = exam.QuestionIdByUserId.Count;
+            int correct = exam.IsCorrectByUserId.Values.Count(v => v);
+
+            bool allCorrect = total > 0 && correct == total;
+
+            decimal previousBank = state.BankedPoints < MIN_BANKED_POINTS ? MIN_BANKED_POINTS : state.BankedPoints;
+            decimal delta = allCorrect ? SURPRISE_EXAM_SUCCESS_BONUS : -SURPRISE_EXAM_FAILURE_PENALTY;
+
+            decimal updatedBank = previousBank + delta;
+            if (updatedBank < MIN_BANKED_POINTS)
+            {
+                updatedBank = MIN_BANKED_POINTS;
+            }
+
+            state.BankedPoints = updatedBank;
+
+            string outcome = allCorrect
+                ? SPECIAL_EVENT_SURPRISE_EXAM_OUTCOME_ALL_CORRECT
+                : SPECIAL_EVENT_SURPRISE_EXAM_OUTCOME_SOME_FAILED;
+
+            string deltaDisplay = delta.ToString("+0.00;-0.00;0.00");
+            string bankDisplay = state.BankedPoints.ToString("0.00");
+
+            string description = string.Format(
+                SPECIAL_EVENT_SURPRISE_EXAM_RESOLVED_DESCRIPTION_TEMPLATE,
+                outcome,
+                correct,
+                total,
+                deltaDisplay,
+                bankDisplay);
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_SURPRISE_EXAM_RESOLVED_CODE, description),
+                "GameplayEngine.SurpriseExam.Resolved");
+
+            BankState bankState = new BankState
+            {
+                MatchId = state.MatchId,
+                CurrentChain = state.CurrentChain,
+                BankedPoints = state.BankedPoints
+            };
+
+            Broadcast(
+                state,
+                cb => cb.OnBankUpdated(state.MatchId, bankState),
+                "GameplayEngine.SurpriseExam.BankUpdated");
+
+            exam.DisposeTimerSafely();
+
+            state.ActiveSpecialEvent = SpecialEventType.None;
+            state.SurpriseExam = null;
+
+            if (state.IsFinished)
+            {
+                return;
+            }
+
+            if (state.Questions.Count == 0)
+            {
+                StartVotePhase(state);
+                return;
+            }
+
+            SendNextQuestion(state);
         }
 
         private static bool TryStartLightningChallenge(MatchRuntimeState state)
@@ -1729,6 +2125,99 @@ namespace ServicesTheWeakestRival.Server.Services
                 state,
                 cb => cb.OnSpecialEvent(state.MatchId, specialEventCode, description),
                 "GameplayEngine.SpecialEvent.Wildcard");
+        }
+
+        private static bool TryStartDarkModeEvent(MatchRuntimeState state)
+        {
+            if (state == null)
+            {
+                return false;
+            }
+
+            if (state.HasSpecialEventThisRound || IsLightningActive(state) || state.IsInVotePhase || state.IsInDuelPhase)
+            {
+                return false;
+            }
+
+            int randomValue = NextRandom(DARK_MODE_RANDOM_MIN_VALUE, DARK_MODE_RANDOM_MAX_VALUE);
+            if (randomValue >= DARK_MODE_PROBABILITY_PERCENT)
+            {
+                return false;
+            }
+
+            state.IsDarkModeActive = true;
+            state.DarkModeRoundNumber = state.RoundNumber;
+            state.HasSpecialEventThisRound = true;
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_DARK_MODE_STARTED_CODE, SPECIAL_EVENT_DARK_MODE_STARTED_DESCRIPTION),
+                "GameplayEngine.DarkMode.Started");
+
+            return true;
+        }
+
+        private static void EndDarkModeIfActive(MatchRuntimeState state)
+        {
+            if (state == null || !state.IsDarkModeActive)
+            {
+                return;
+            }
+
+            NotifyVotersAboutTheirVote(state);
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_DARK_MODE_ENDED_CODE, SPECIAL_EVENT_DARK_MODE_ENDED_DESCRIPTION),
+                "GameplayEngine.DarkMode.Ended");
+
+            state.IsDarkModeActive = false;
+            state.DarkModeRoundNumber = 0;
+        }
+
+        private static void NotifyVotersAboutTheirVote(MatchRuntimeState state)
+        {
+            foreach (KeyValuePair<int, int?> kvp in state.VotesThisRound)
+            {
+                int voterUserId = kvp.Key;
+                int? targetUserId = kvp.Value;
+
+                MatchPlayerRuntime voter = state.Players.FirstOrDefault(p => p != null && p.UserId == voterUserId);
+                if (voter == null || voter.Callback == null)
+                {
+                    continue;
+                }
+
+                string targetDisplayName = ResolveVoteTargetDisplayName(state, targetUserId);
+
+                try
+                {
+                    voter.Callback.OnSpecialEvent(
+                        state.MatchId,
+                        SPECIAL_EVENT_DARK_MODE_VOTE_REVEAL_CODE,
+                        string.Format(SPECIAL_EVENT_DARK_MODE_VOTE_REVEAL_DESCRIPTION_TEMPLATE, targetDisplayName));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn("GameplayEngine.DarkMode.VoteReveal callback failed.", ex);
+                }
+            }
+        }
+
+        private static string ResolveVoteTargetDisplayName(MatchRuntimeState state, int? targetUserId)
+        {
+            if (!targetUserId.HasValue)
+            {
+                return DARK_MODE_NO_VOTE_DISPLAY_NAME;
+            }
+
+            MatchPlayerRuntime target = state.Players.FirstOrDefault(p => p != null && p.UserId == targetUserId.Value);
+            if (target != null && !string.IsNullOrWhiteSpace(target.DisplayName))
+            {
+                return target.DisplayName;
+            }
+
+            return string.Format(DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE, targetUserId.Value);
         }
 
         internal static FaultException<ServiceFault> ThrowFault(string code, string message)

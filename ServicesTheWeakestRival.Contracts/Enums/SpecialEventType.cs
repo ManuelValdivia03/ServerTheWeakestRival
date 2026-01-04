@@ -14,5 +14,7 @@ namespace ServicesTheWeakestRival.Contracts.Enums
         [EnumMember]
         BombQuestions = 2,
 
+        [EnumMember]
+        SurpriseExam = 3
     }
 }

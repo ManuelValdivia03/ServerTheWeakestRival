@@ -21,25 +21,25 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string CTX_CHOOSE_DUEL = "GameplayService.ChooseDuelOpponent";
         private const string CTX_GET_QUESTIONS = "GameplayService.GetQuestions";
 
-        private readonly GameplayEngine _engine;
-        private readonly GameplayMatchLogic _matchLogic;
-        private readonly GameplayTurnLogic _turnLogic;
+        private readonly GameplayEngine engine;
+        private readonly GameplayMatchLogic matchLogic;
+        private readonly GameplayTurnLogic turnLogic;
 
         public GameplayService()
         {
-            _engine = GameplayEngine.Shared;
-            _matchLogic = new GameplayMatchLogic(_engine);
-            _turnLogic = new GameplayTurnLogic(_engine);
+            engine = GameplayEngine.Shared;
+            matchLogic = new GameplayMatchLogic(engine);
+            turnLogic = new GameplayTurnLogic(engine);
         }
 
         public SubmitAnswerResponse SubmitAnswer(SubmitAnswerRequest request)
         {
-            return ExecuteService(CTX_SUBMIT_ANSWER, () => _turnLogic.SubmitAnswer(request));
+            return ExecuteService(CTX_SUBMIT_ANSWER, () => turnLogic.SubmitAnswer(request));
         }
 
         public BankResponse Bank(BankRequest request)
         {
-            return ExecuteService(CTX_BANK, () => _turnLogic.Bank(request));
+            return ExecuteService(CTX_BANK, () => turnLogic.Bank(request));
         }
 
         public UseLifelineResponse UseLifeline(UseLifelineRequest request)
@@ -60,7 +60,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public CastVoteResponse CastVote(CastVoteRequest request)
         {
-            return ExecuteService(CTX_CAST_VOTE, () => _turnLogic.CastVote(request));
+            return ExecuteService(CTX_CAST_VOTE, () => turnLogic.CastVote(request));
         }
 
         public AckEventSeenResponse AckEventSeen(AckEventSeenRequest request)
@@ -81,22 +81,22 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public GetQuestionsResponse GetQuestions(GetQuestionsRequest request)
         {
-            return ExecuteService(CTX_GET_QUESTIONS, () => _engine.GetQuestions(request));
+            return ExecuteService(CTX_GET_QUESTIONS, () => engine.GetQuestions(request));
         }
 
         public GameplayJoinMatchResponse JoinMatch(GameplayJoinMatchRequest request)
         {
-            return ExecuteService(CTX_JOIN_MATCH, () => _matchLogic.JoinMatch(request));
+            return ExecuteService(CTX_JOIN_MATCH, () => matchLogic.JoinMatch(request));
         }
 
         public GameplayStartMatchResponse StartMatch(GameplayStartMatchRequest request)
         {
-            return ExecuteService(CTX_START_MATCH, () => _matchLogic.StartMatch(request));
+            return ExecuteService(CTX_START_MATCH, () => matchLogic.StartMatch(request));
         }
 
         public ChooseDuelOpponentResponse ChooseDuelOpponent(ChooseDuelOpponentRequest request)
         {
-            return ExecuteService(CTX_CHOOSE_DUEL, () => _matchLogic.ChooseDuelOpponent(request));
+            return ExecuteService(CTX_CHOOSE_DUEL, () => matchLogic.ChooseDuelOpponent(request));
         }
 
         private static T ExecuteService<T>(string context, Func<T> action)
