@@ -37,7 +37,7 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
             try
             {
-                var manager = new ServicesTheWeakestRival.Server.Services.MatchManager(connectionString);
+                var manager = new MatchManager(connectionString);
 
                 int maxPlayers =
                     request.MaxPlayers > 0

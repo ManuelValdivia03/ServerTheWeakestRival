@@ -82,8 +82,11 @@
     <Compile Include="Server\Infraestructure\LobbyBroadcastHub.cs" />
     <Compile Include="Server\Infraestructure\SanctionReconciler.cs" />
     <Compile Include="Server\Infraestructure\SecurityUtil.cs" />
+    <Compile Include="Server\Services\AuthRefactor\AuthOperations.cs" />
+    <Compile Include="Server\Services\AuthRefactor\AuthRepository.cs" />
+    <Compile Include="Server\Services\AuthRefactor\AuthServiceConstants.cs" />
+    <Compile Include="Server\Services\AuthRefactor\AuthServiceContext.cs" />
     <Compile Include="Server\Services\AuthService.cs" />
-    <Compile Include="Server\Services\Auth\AuthDataAccess.cs" />
     <Compile Include="Server\Services\Auth\PasswordService.cs" />
     <Compile Include="Server\Services\ChatService.cs" />
     <Compile Include="Server\Services\Chat\ChatOperations.cs" />

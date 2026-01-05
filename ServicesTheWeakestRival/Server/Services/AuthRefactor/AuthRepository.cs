@@ -3,16 +3,20 @@ using System.Data;
 using System.Data.SqlClient;
 using ServicesTheWeakestRival.Server.Services.Logic;
 
-namespace ServicesTheWeakestRival.Server.Services.Auth
+namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
-    internal sealed class AuthDataAccess
+    public sealed class AuthRepository
     {
-        public void CreateRegisterVerification(
-            string email,
-            byte[] codeHash,
-            DateTime expiresAtUtc)
+        private readonly Func<string> connectionStringProvider;
+
+        public AuthRepository(Func<string> connectionStringProvider)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            this.connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
+        }
+
+        public void CreateRegisterVerification(string email, byte[] codeHash, DateTime expiresAtUtc)
+        {
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
@@ -20,39 +24,37 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
                 {
                     using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
                     {
-                        exists.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        exists.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         var found = exists.ExecuteScalar();
                         if (found != null)
                         {
-                            throw AuthService.ThrowFault(AuthService.ERROR_EMAIL_TAKEN, "Email is already registered.");
+                            throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_EMAIL_TAKEN, "Email is already registered.");
                         }
                     }
 
                     using (var last = new SqlCommand(AuthSql.Text.LAST_VERIFICATION, connection, transaction))
                     {
-                        last.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        last.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         object lastObj = last.ExecuteScalar();
-                        DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value)
-                            ? (DateTime?)null
-                            : (DateTime)lastObj;
+                        DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
 
                         bool isInCooldown = lastUtc.HasValue &&
-                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthService.ResendCooldownSeconds;
+                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthServiceContext.ResendCooldownSeconds;
                         if (isInCooldown)
                         {
-                            throw AuthService.ThrowFault(AuthService.ERROR_TOO_SOON, "Please wait before requesting another code.");
+                            throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_TOO_SOON, "Please wait before requesting another code.");
                         }
                     }
 
                     using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_VERIFICATIONS, connection, transaction))
                     {
-                        invalidate.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        invalidate.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         invalidate.ExecuteNonQuery();
                     }
 
                     using (var insert = new SqlCommand(AuthSql.Text.INSERT_VERIFICATION, connection, transaction))
                     {
-                        insert.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        insert.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
                         insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
                         insert.ExecuteNonQuery();
@@ -63,12 +65,9 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
             }
         }
 
-        public void CreatePasswordResetRequest(
-            string email,
-            byte[] codeHash,
-            DateTime expiresAtUtc)
+        public void CreatePasswordResetRequest(string email, byte[] codeHash, DateTime expiresAtUtc)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
@@ -76,39 +75,37 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
                 {
                     using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection, transaction))
                     {
-                        exists.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        exists.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         var found = exists.ExecuteScalar();
                         if (found == null)
                         {
-                            throw AuthService.ThrowFault(AuthService.ERROR_EMAIL_NOT_FOUND, "No account is registered with that email.");
+                            throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_EMAIL_NOT_FOUND, "No account is registered with that email.");
                         }
                     }
 
                     using (var last = new SqlCommand(AuthSql.Text.LAST_RESET_REQUEST, connection, transaction))
                     {
-                        last.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        last.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         object lastObj = last.ExecuteScalar();
-                        DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value)
-                            ? (DateTime?)null
-                            : (DateTime)lastObj;
+                        DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
 
                         bool isInCooldown = lastUtc.HasValue &&
-                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthService.ResendCooldownSeconds;
+                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthServiceContext.ResendCooldownSeconds;
                         if (isInCooldown)
                         {
-                            throw AuthService.ThrowFault(AuthService.ERROR_TOO_SOON, "Please wait before requesting another code.");
+                            throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_TOO_SOON, "Please wait before requesting another code.");
                         }
                     }
 
                     using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_RESETS, connection, transaction))
                     {
-                        invalidate.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        invalidate.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         invalidate.ExecuteNonQuery();
                     }
 
                     using (var insert = new SqlCommand(AuthSql.Text.INSERT_RESET_REQUEST, connection, transaction))
                     {
-                        insert.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        insert.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         insert.Parameters.Add("@CodeHash", SqlDbType.VarBinary, 32).Value = codeHash;
                         insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
                         insert.ExecuteNonQuery();
@@ -119,23 +116,19 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
             }
         }
 
-        public void ReadLatestVerification(
-            string email,
-            out int verificationId,
-            out DateTime expiresAtUtc,
-            out bool used)
+        public void ReadLatestVerification(string email, out int verificationId, out DateTime expiresAtUtc, out bool used)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_VERIFICATION, connection))
             {
-                pick.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                pick.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                 connection.Open();
 
                 using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
                 {
                     if (!reader.Read())
                     {
-                        throw AuthService.ThrowFault(AuthService.ERROR_CODE_MISSING, "No pending code. Request a new one.");
+                        throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_CODE_MISSING, "No pending code. Request a new one.");
                     }
 
                     verificationId = reader.GetInt32(0);
@@ -145,23 +138,19 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
             }
         }
 
-        public void ReadLatestReset(
-            string email,
-            out int resetId,
-            out DateTime expiresAtUtc,
-            out bool used)
+        public void ReadLatestReset(string email, out int resetId, out DateTime expiresAtUtc, out bool used)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_RESET, connection))
             {
-                pick.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                pick.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                 connection.Open();
 
                 using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
                 {
                     if (!reader.Read())
                     {
-                        throw AuthService.ThrowFault(AuthService.ERROR_CODE_MISSING, "No pending reset code. Request a new one.");
+                        throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_CODE_MISSING, "No pending reset code. Request a new one.");
                     }
 
                     resetId = reader.GetInt32(0);
@@ -171,11 +160,9 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
             }
         }
 
-        public void ValidateVerificationCodeOrThrow(
-            int verificationId,
-            byte[] codeHash)
+        public void ValidateVerificationCodeOrThrow(int verificationId, byte[] codeHash)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
@@ -193,17 +180,15 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
                             inc.ExecuteNonQuery();
                         }
 
-                        throw AuthService.ThrowFault(AuthService.ERROR_CODE_INVALID, "Invalid verification code.");
+                        throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_CODE_INVALID, "Invalid verification code.");
                     }
                 }
             }
         }
 
-        public void ValidateResetCodeOrThrow(
-            int resetId,
-            byte[] codeHash)
+        public void ValidateResetCodeOrThrow(int resetId, byte[] codeHash)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
@@ -221,7 +206,7 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
                             inc.ExecuteNonQuery();
                         }
 
-                        throw AuthService.ThrowFault(AuthService.ERROR_CODE_INVALID, "Invalid reset code.");
+                        throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_CODE_INVALID, "Invalid reset code.");
                     }
                 }
             }
@@ -229,31 +214,27 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
 
         public void EnsureAccountDoesNotExist(string email)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
                 using (var check = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection))
                 {
-                    check.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                    check.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                     var exists = check.ExecuteScalar();
                     if (exists != null)
                     {
-                        throw AuthService.ThrowFault(AuthService.ERROR_EMAIL_TAKEN, "Email is already registered.");
+                        throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_EMAIL_TAKEN, "Email is already registered.");
                     }
                 }
             }
         }
 
-        public int CreateAccountAndUser(
-            string email,
-            string passwordHash,
-            string displayName,
-            string profileImageUrl)
+        public int CreateAccountAndUser(string email, string passwordHash, string displayName, string profileImageUrl)
         {
             int newAccountId;
 
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
@@ -261,20 +242,18 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
                 {
                     using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
                     {
-                        insertAcc.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                        insertAcc.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
-                        insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = AuthService.ACCOUNT_STATUS_ACTIVE;
+                        insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = AuthServiceConstants.ACCOUNT_STATUS_ACTIVE;
                         newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
                     }
 
                     using (var insertUser = new SqlCommand(AuthSql.Text.INSERT_USER, connection, transaction))
                     {
                         insertUser.Parameters.Add("@UserId", SqlDbType.Int).Value = newAccountId;
-                        insertUser.Parameters.Add("@DisplayName", SqlDbType.NVarChar, AuthService.DISPLAY_NAME_MAX_LENGTH).Value = displayName;
-                        insertUser.Parameters.Add("@ProfileImageUrl", SqlDbType.NVarChar, AuthService.PROFILE_URL_MAX_LENGTH).Value =
-                            string.IsNullOrWhiteSpace(profileImageUrl)
-                                ? (object)DBNull.Value
-                                : profileImageUrl;
+                        insertUser.Parameters.Add("@DisplayName", SqlDbType.NVarChar, AuthServiceConstants.DISPLAY_NAME_MAX_LENGTH).Value = displayName;
+                        insertUser.Parameters.Add("@ProfileImageUrl", SqlDbType.NVarChar, AuthServiceConstants.PROFILE_URL_MAX_LENGTH).Value =
+                            string.IsNullOrWhiteSpace(profileImageUrl) ? (object)DBNull.Value : profileImageUrl;
                         insertUser.ExecuteNonQuery();
                     }
 
@@ -285,23 +264,19 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
             return newAccountId;
         }
 
-        public void GetAccountForLogin(
-            string email,
-            out int userId,
-            out string storedHash,
-            out byte status)
+        public void GetAccountForLogin(string email, out int userId, out string storedHash, out byte status)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             using (var get = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
             {
-                get.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                get.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                 connection.Open();
 
                 using (var reader = get.ExecuteReader(CommandBehavior.SingleRow))
                 {
                     if (!reader.Read())
                     {
-                        throw AuthService.ThrowFault(AuthService.ERROR_INVALID_CREDENTIALS, "Email or password is incorrect.");
+                        throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, "Email or password is incorrect.");
                     }
 
                     userId = reader.GetInt32(0);
@@ -311,18 +286,16 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
             }
         }
 
-        public int UpdateAccountPassword(
-            string email,
-            string passwordHash)
+        public int UpdateAccountPassword(string email, string passwordHash)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
                 using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 using (var updatePwd = new SqlCommand(AuthSql.Text.UPDATE_ACCOUNT_PASSWORD, connection, transaction))
                 {
-                    updatePwd.Parameters.Add(AuthService.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthService.EMAIL_MAX_LENGTH).Value = email;
+                    updatePwd.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                     updatePwd.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
 
                     int rows = updatePwd.ExecuteNonQuery();
@@ -334,7 +307,7 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
 
         public void MarkVerificationUsed(int verificationId)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
@@ -348,7 +321,7 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
 
         public void MarkResetUsed(int resetId)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             {
                 connection.Open();
 
@@ -362,7 +335,7 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
 
         public void LeaveAllLobbiesForUser(int userId)
         {
-            using (var connection = new SqlConnection(AuthService.GetConnectionString()))
+            using (var connection = new SqlConnection(connectionStringProvider()))
             using (var cmd = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", connection))
             {
                 cmd.CommandType = CommandType.StoredProcedure;
