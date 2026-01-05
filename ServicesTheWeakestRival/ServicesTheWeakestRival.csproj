@@ -86,6 +86,11 @@
     <Compile Include="Server\Services\Auth\AuthDataAccess.cs" />
     <Compile Include="Server\Services\Auth\PasswordService.cs" />
     <Compile Include="Server\Services\ChatService.cs" />
+    <Compile Include="Server\Services\Chat\ChatOperations.cs" />
+    <Compile Include="Server\Services\Chat\ChatRepository.cs" />
+    <Compile Include="Server\Services\Chat\ChatServiceConstants.cs" />
+    <Compile Include="Server\Services\Chat\ChatServiceContext.cs" />
+    <Compile Include="Server\Services\Chat\SqlDataReaderExtensions.cs" />
     <Compile Include="Server\Services\FriendService.cs" />
     <Compile Include="Server\Services\Friends\FriendAccountLogic.cs" />
     <Compile Include="Server\Services\Friends\FriendPresenceLogic.cs" />
