@@ -114,6 +114,16 @@
     <Compile Include="Server\Services\Gameplay\Infraestructure\WildcardRepository.cs" />
     <Compile Include="Server\Services\Gameplay\IWildcardRepository.cs" />
     <Compile Include="Server\Services\LobbyService.cs" />
+    <Compile Include="Server\Services\Lobby\AccountProfileValidator.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyAccountOperations.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyCallbackHub.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyKickCoordinator.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyMappers.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyMatchOperations.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyRepository.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyRoomOperations.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyServiceConstants.cs" />
+    <Compile Include="Server\Services\Lobby\LobbyServiceContext.cs" />
     <Compile Include="Server\Services\Logic\AuthSql.cs" />
     <Compile Include="Server\Services\Logic\ChatSql.cs" />
     <Compile Include="Server\Services\Logic\FriendSql.cs" />
