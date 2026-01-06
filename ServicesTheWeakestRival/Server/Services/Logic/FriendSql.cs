@@ -160,6 +160,15 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                 WHERE a.account_id <> @Me
                   AND (a.email LIKE @Qemail OR ISNULL(u.display_name, '') LIKE @Qname)
                 ORDER BY display_name;";
+
+            public const string ACCOUNT_CONTACT = @"
+                SELECT
+                    a.email,
+                    ISNULL(u.display_name, a.email) AS display_name
+                FROM dbo.Accounts a
+                LEFT JOIN dbo.Users u ON u.user_id = a.account_id
+                WHERE a.account_id = @Id;";
+
         }
 
         public static string BuildGetAccountsByIdsQuery(int paramCount)

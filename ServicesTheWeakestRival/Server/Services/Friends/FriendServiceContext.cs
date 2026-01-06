@@ -92,6 +92,23 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string CONTEXT_SEARCH_ACCOUNTS = "FriendService.SearchAccounts";
         internal const string CONTEXT_GET_ACCOUNTS_BY_IDS = "FriendService.GetAccountsByIds";
 
+        internal const int MAX_LOBBY_CODE_LENGTH = 32;
+
+        internal const string CONTEXT_SEND_LOBBY_INVITE_EMAIL = "FriendService.SendLobbyInviteEmail";
+
+        internal const string ERROR_INVITE_INVALID_TARGET = "INVITE_INVALID_TARGET";
+        internal const string ERROR_INVITE_INVALID_CODE = "INVITE_INVALID_CODE";
+        internal const string ERROR_INVITE_NOT_FRIEND = "INVITE_NOT_FRIEND";
+        internal const string ERROR_INVITE_ACCOUNT_NOT_FOUND = "INVITE_ACCOUNT_NOT_FOUND";
+        internal const string ERROR_INVITE_EMAIL_FAILED = "INVITE_EMAIL_FAILED";
+
+        internal const string MESSAGE_INVITE_INVALID_TARGET = "Jugador inválido.";
+        internal const string MESSAGE_INVITE_INVALID_CODE = "No hay un código de lobby válido.";
+        internal const string MESSAGE_INVITE_NOT_FRIEND = "Solo puedes invitar a tus amigos.";
+        internal const string MESSAGE_INVITE_ACCOUNT_NOT_FOUND = "No se pudo encontrar la cuenta del destinatario.";
+        internal const string MESSAGE_INVITE_EMAIL_FAILED = "No se pudo enviar la invitación. Intenta más tarde.";
+
+
         internal static string GetConnectionString()
         {
             ConnectionStringSettings configurationString =

@@ -62,5 +62,29 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             }
         }
 
+        public static void SendLobbyInvite(string toEmail, string inviterName, string lobbyCode)
+        {
+            using (var smtp = new SmtpClient(Host, Port))
+            {
+                smtp.EnableSsl = true;
+                smtp.Credentials = new NetworkCredential(User, Pass);
+
+                const string subject = "Invitación a sala";
+                var body = new StringBuilder()
+                    .AppendLine("Hola,")
+                    .AppendLine()
+                    .AppendFormat("{0} te invitó a unirte a su sala.", inviterName ?? string.Empty).AppendLine()
+                    .AppendLine()
+                    .AppendFormat("Código de sala: {0}", lobbyCode ?? string.Empty).AppendLine()
+                    .AppendLine()
+                    .AppendLine("Abre el juego, ve a Unirse a sala e ingresa el código.")
+                    .ToString();
+
+                using (var msg = new MailMessage(From, toEmail, subject, body))
+                {
+                    smtp.Send(msg);
+                }
+            }
+        }
     }
 }

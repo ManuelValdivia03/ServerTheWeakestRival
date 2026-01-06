@@ -1,8 +1,8 @@
-﻿using ServicesTheWeakestRival.Contracts.Data;
+﻿using System.ServiceModel;
+using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services.Friends;
 using ServicesTheWeakestRival.Server.Services.Friends.Infrastructure;
-using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
@@ -12,15 +12,21 @@ namespace ServicesTheWeakestRival.Server.Services
         private readonly FriendRequestLogic _requestLogic;
         private readonly FriendPresenceLogic _presenceLogic;
         private readonly FriendAccountLogic _accountLogic;
+        private readonly FriendInviteLogic _inviteLogic;
 
         public FriendService()
         {
             IFriendRequestRepository friendRequestRepository = new FriendRequestRepository();
             _requestLogic = new FriendRequestLogic(friendRequestRepository);
+
             IFriendPresenceRepository presenceRepository = new FriendPresenceRepository();
             _presenceLogic = new FriendPresenceLogic(presenceRepository);
+
             IFriendAccountRepository accountRepository = new FriendAccountRepository();
             _accountLogic = new FriendAccountLogic(accountRepository);
+
+            IFriendInviteRepository inviteRepository = new FriendInviteRepository();
+            _inviteLogic = new FriendInviteLogic(inviteRepository);
         }
 
         public SendFriendRequestResponse SendFriendRequest(SendFriendRequestRequest request)
@@ -66,6 +72,11 @@ namespace ServicesTheWeakestRival.Server.Services
         public GetAccountsByIdsResponse GetAccountsByIds(GetAccountsByIdsRequest request)
         {
             return _accountLogic.GetAccountsByIds(request);
+        }
+
+        public SendLobbyInviteEmailResponse SendLobbyInviteEmail(SendLobbyInviteEmailRequest request)
+        {
+            return _inviteLogic.SendLobbyInviteEmail(request);
         }
     }
 }

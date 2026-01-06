@@ -81,6 +81,7 @@
     <Compile Include="Data\HeartbeatRequest.cs" />
     <Compile Include="Data\JoinMatchRequest.cs" />
     <Compile Include="Data\LobbyDtos.cs" />
+    <Compile Include="Data\LobbyInviteDtos.cs" />
     <Compile Include="Data\MatchDtos.cs" />
     <Compile Include="Data\PingDtos.cs" />
     <Compile Include="Data\PlayerSummary.cs" />
