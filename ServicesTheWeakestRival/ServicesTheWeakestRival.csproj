@@ -79,6 +79,7 @@
     <Compile Include="Server\Infraestructure\CallbackRegistry.cs" />
     <Compile Include="Server\Infraestructure\EmailSender.cs" />
     <Compile Include="Server\Infraestructure\EmailService.cs" />
+    <Compile Include="Server\Infraestructure\Faults\SqlExceptionFaultMapper.cs" />
     <Compile Include="Server\Infraestructure\LobbyBroadcastHub.cs" />
     <Compile Include="Server\Infraestructure\SanctionReconciler.cs" />
     <Compile Include="Server\Infraestructure\SecurityUtil.cs" />

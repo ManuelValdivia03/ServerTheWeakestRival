@@ -108,6 +108,12 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string MESSAGE_INVITE_ACCOUNT_NOT_FOUND = "No se pudo encontrar la cuenta del destinatario.";
         internal const string MESSAGE_INVITE_EMAIL_FAILED = "No se pudo enviar la invitación. Intenta más tarde.";
 
+        public const string OP_KEY_SEND_FRIEND_REQUEST = "Friends.SendFriendRequest";
+        public const string OP_KEY_ACCEPT_FRIEND_REQUEST = "Friends.AcceptFriendRequest";
+        public const string OP_KEY_REJECT_FRIEND_REQUEST = "Friends.RejectFriendRequest";
+        public const string OP_KEY_REMOVE_FRIEND = "Friends.RemoveFriend";
+        public const string KEY_FR_REQUEST_ALREADY_PROCESSED = "Friends.FriendRequests.RequestAlreadyProcessed";
+
 
         internal static string GetConnectionString()
         {
