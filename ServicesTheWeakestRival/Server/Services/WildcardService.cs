@@ -1,20 +1,20 @@
-﻿using System;
+﻿using log4net;
+using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Services.Logic;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.ServiceModel;
-using log4net;
-using ServicesTheWeakestRival.Contracts.Data;
-using ServicesTheWeakestRival.Contracts.Services;
-using ServicesTheWeakestRival.Server.Services.Logic;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
     [ServiceBehavior(
-    InstanceContextMode = InstanceContextMode.Single,
-    ConcurrencyMode = ConcurrencyMode.Multiple)]
+        InstanceContextMode = InstanceContextMode.Single,
+        ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class WildcardService : IWildcardService
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(WildcardService));
@@ -23,6 +23,9 @@ namespace ServicesTheWeakestRival.Server.Services
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
+
+        private const int MIN_VALID_ID = 1;
+        private const int ROUND_ID_NOT_FOUND = 0;
 
         private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
         private const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
@@ -40,10 +43,22 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_WILDCARD_NOT_FOUND_MESSAGE =
             "El comodín no existe o ya fue consumido.";
 
+        private const string ERROR_INVALID_MATCH = "INVALID_MATCH";
+        private const string ERROR_INVALID_MATCH_MESSAGE = "MatchId inválido.";
+
+        private const string ERROR_INVALID_PARAMS = "INVALID_PARAMS";
+        private const string ERROR_INVALID_PARAMS_MESSAGE = "Parámetros inválidos.";
+
+        private const string AUTH_REQUIRED = "AUTH_REQUIRED";
+        private const string AUTH_INVALID = "AUTH_INVALID";
+        private const string AUTH_EXPIRED = "AUTH_EXPIRED";
+
         private const string PARAM_MATCH_ID = "@MatchId";
         private const string PARAM_USER_ID = "@UserId";
         private const string PARAM_PLAYER_WILDCARD_ID = "@PlayerWildcardId";
         private const string PARAM_ROUND_NUMBER = "@RoundNumber";
+        private const string PARAM_ROUND_ID = "@RoundId";
+        private const string PARAM_WILDCARD_TYPE_ID = "@WildcardTypeId";
 
         private static string GetConnectionString()
         {
@@ -67,15 +82,18 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
-            Logger.WarnFormat("Service fault. Code='{0}', Message='{1}'", code, message);
+            string safeCode = code ?? string.Empty;
+            string safeMessage = message ?? string.Empty;
+
+            Logger.WarnFormat("Service fault. Code='{0}', Message='{1}'", safeCode, safeMessage);
 
             ServiceFault fault = new ServiceFault
             {
-                Code = code,
-                Message = message
+                Code = safeCode,
+                Message = safeMessage
             };
 
-            return new FaultException<ServiceFault>(fault, new FaultReason(message));
+            return new FaultException<ServiceFault>(fault, new FaultReason(safeMessage));
         }
 
         private static FaultException<ServiceFault> ThrowTechnicalFault(
@@ -84,32 +102,36 @@ namespace ServicesTheWeakestRival.Server.Services
             string context,
             Exception ex)
         {
-            Logger.Error(context, ex);
+            string safeCode = code ?? string.Empty;
+            string safeUserMessage = userMessage ?? string.Empty;
+            string safeContext = context ?? string.Empty;
+
+            Logger.Error(safeContext, ex);
 
             ServiceFault fault = new ServiceFault
             {
-                Code = code,
-                Message = userMessage
+                Code = safeCode,
+                Message = safeUserMessage
             };
 
-            return new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
+            return new FaultException<ServiceFault>(fault, new FaultReason(safeUserMessage));
         }
 
         private static int Authenticate(string token)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                throw ThrowFault("AUTH_REQUIRED", "Missing token.");
+                throw ThrowFault(AUTH_REQUIRED, "Missing token.");
             }
 
             if (!TokenCache.TryGetValue(token, out AuthToken authToken))
             {
-                throw ThrowFault("AUTH_INVALID", "Invalid token.");
+                throw ThrowFault(AUTH_INVALID, "Invalid token.");
             }
 
             if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
             {
-                throw ThrowFault("AUTH_EXPIRED", "Token expired.");
+                throw ThrowFault(AUTH_EXPIRED, "Token expired.");
             }
 
             return authToken.UserId;
@@ -152,10 +174,12 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
+                LogSqlException("WildcardService.ListWildcardTypes", ex);
+
                 throw ThrowTechnicalFault(
                     ERROR_DB,
                     MESSAGE_DB_ERROR,
-                    "Database error at ListWildcardTypes.",
+                    "WildcardService.ListWildcardTypes",
                     ex);
             }
             catch (Exception ex)
@@ -163,7 +187,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowTechnicalFault(
                     ERROR_UNEXPECTED,
                     MESSAGE_UNEXPECTED_ERROR,
-                    "Unexpected error at ListWildcardTypes.",
+                    "WildcardService.ListWildcardTypes",
                     ex);
             }
         }
@@ -175,60 +199,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
-            if (request.MatchId <= 0)
+            if (request.MatchId < MIN_VALID_ID)
             {
-                throw ThrowFault("INVALID_MATCH", "MatchId inválido.");
+                throw ThrowFault(ERROR_INVALID_MATCH, ERROR_INVALID_MATCH_MESSAGE);
             }
-
-            int userId = Authenticate(request.Token);
-
-            try
-            {
-                using (SqlConnection connection = new SqlConnection(GetConnectionString()))
-                {
-                    connection.Open();
-
-                    List<PlayerWildcardDto> list = LoadAvailableWildcards(connection, request.MatchId, userId);
-
-                    if (list.Count == 0)
-                    {
-                        GrantRandomWildcardInternal(connection, request.MatchId, userId);
-                        list = LoadAvailableWildcards(connection, request.MatchId, userId);
-                    }
-
-                    Logger.InfoFormat(
-                        "GetPlayerWildcards: MatchId={0}, UserId={1}, Count={2}",
-                        request.MatchId,
-                        userId,
-                        list.Count);
-
-                    return new GetPlayerWildcardsResponse
-                    {
-                        Wildcards = list.ToArray()
-                    };
-                }
-            }
-            catch (SqlException ex)
-            {
-                throw ThrowTechnicalFault(
-                    ERROR_DB,
-                    MESSAGE_DB_ERROR,
-                    "Database error at GetPlayerWildcards.",
-                    ex);
-            }
-            catch (Exception ex)
-            {
-                throw ThrowTechnicalFault(
-                    ERROR_UNEXPECTED,
-                    MESSAGE_UNEXPECTED_ERROR,
-                    "Unexpected error at GetPlayerWildcards.",
-                    ex);
-            }
-        }
-
-        public UseWildcardResponse UseWildcard(UseWildcardRequest request)
-        {
-            ValidateUseWildcardRequest(request);
 
             int userId = Authenticate(request.Token);
 
@@ -240,31 +214,26 @@ namespace ServicesTheWeakestRival.Server.Services
 
                     using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
-                        PlayerWildcardDto wildcard = LoadValidWildcardForUse(
-                            connection,
-                            transaction,
-                            request.PlayerWildcardId,
-                            request.MatchId,
-                            userId);
+                        List<PlayerWildcardDto> list =
+                            LoadAvailableWildcards(connection, transaction, request.MatchId, userId);
 
-                        ConsumeWildcard(connection, transaction, request.PlayerWildcardId, request.RoundNumber);
+                        if (list.Count == 0)
+                        {
+                            GrantRandomWildcardInternal(connection, transaction, request.MatchId, userId);
+                            list = LoadAvailableWildcards(connection, transaction, request.MatchId, userId);
+                        }
 
                         transaction.Commit();
 
                         Logger.InfoFormat(
-                            "UseWildcard: MatchId={0}, UserId={1}, PlayerWildcardId={2}, Round={3}",
+                            "GetPlayerWildcards: MatchId={0}, UserId={1}, Count={2}",
                             request.MatchId,
                             userId,
-                            request.PlayerWildcardId,
-                            request.RoundNumber);
+                            list.Count);
 
-                        wildcard.ConsumedAt = DateTime.UtcNow;
-                        wildcard.ConsumedInRound = request.RoundNumber;
-
-                        return new UseWildcardResponse
+                        return new GetPlayerWildcardsResponse
                         {
-                            IsConsumed = true,
-                            Wildcard = wildcard
+                            Wildcards = list.ToArray()
                         };
                     }
                 }
@@ -275,6 +244,104 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
+                LogSqlException("WildcardService.GetPlayerWildcards", ex);
+
+                throw ThrowTechnicalFault(
+                    ERROR_DB,
+                    MESSAGE_DB_ERROR,
+                    "WildcardService.GetPlayerWildcards",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                throw ThrowTechnicalFault(
+                    ERROR_UNEXPECTED,
+                    MESSAGE_UNEXPECTED_ERROR,
+                    "WildcardService.GetPlayerWildcards",
+                    ex);
+            }
+        }
+
+        public UseWildcardResponse UseWildcard(UseWildcardRequest request)
+        {
+            ValidateUseWildcardRequest(request);
+
+            int userId = Authenticate(request.Token);
+
+            PlayerWildcardDto consumedWildcard = null;
+            int roundId = ROUND_ID_NOT_FOUND;
+
+            try
+            {
+                using (SqlConnection connection = new SqlConnection(GetConnectionString()))
+                {
+                    connection.Open();
+
+                    using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                    {
+                        roundId = TryGetRoundId(connection, transaction, request.MatchId, request.RoundNumber);
+
+                        if (roundId == ROUND_ID_NOT_FOUND)
+                        {
+                            Logger.WarnFormat(
+                                "UseWildcard: Round not found in DB. MatchId={0}, RoundNumber={1}. Will consume without round_id.",
+                                request.MatchId,
+                                request.RoundNumber);
+
+                            consumedWildcard = ConsumeAndLoadWildcardForUseWithoutRound(
+                                connection,
+                                transaction,
+                                request.PlayerWildcardId,
+                                request.MatchId,
+                                userId);
+                        }
+                        else
+                        {
+                            consumedWildcard = ConsumeAndLoadWildcardForUse(
+                                connection,
+                                transaction,
+                                request.PlayerWildcardId,
+                                request.MatchId,
+                                userId,
+                                roundId);
+                        }
+
+                        transaction.Commit();
+                    }
+                }
+
+                GameplayEngine.Shared.ApplyWildcardFromDbOrThrow(
+                    request.MatchId,
+                    userId,
+                    consumedWildcard.Code,
+                    request.RoundNumber);
+
+                Logger.InfoFormat(
+                    "UseWildcard: MatchId={0}, UserId={1}, PlayerWildcardId={2}, RoundNumber={3}, RoundId={4}, Code={5}",
+                    request.MatchId,
+                    userId,
+                    request.PlayerWildcardId,
+                    request.RoundNumber,
+                    roundId,
+                    consumedWildcard.Code);
+
+                return new UseWildcardResponse
+                {
+                    IsConsumed = true,
+                    Wildcard = consumedWildcard
+                };
+            }
+            catch (FaultException<ServiceFault>)
+            {
+                TryRollbackConsumedWildcard(request.MatchId, userId, request.PlayerWildcardId, roundId);
+                throw;
+            }
+            catch (SqlException ex)
+            {
+                LogSqlException("WildcardService.UseWildcard", ex);
+
+                TryRollbackConsumedWildcard(request.MatchId, userId, request.PlayerWildcardId, roundId);
+
                 throw ThrowTechnicalFault(
                     ERROR_DB,
                     MESSAGE_DB_ERROR,
@@ -283,6 +350,8 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
+                TryRollbackConsumedWildcard(request.MatchId, userId, request.PlayerWildcardId, roundId);
+
                 throw ThrowTechnicalFault(
                     ERROR_UNEXPECTED,
                     MESSAGE_UNEXPECTED_ERROR,
@@ -291,14 +360,162 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
+        private static void ValidateUseWildcardRequest(UseWildcardRequest request)
+        {
+            if (request == null)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
+            }
+
+            if (request.MatchId < MIN_VALID_ID ||
+                request.PlayerWildcardId < MIN_VALID_ID ||
+                request.RoundNumber < MIN_VALID_ID)
+            {
+                throw ThrowFault(ERROR_INVALID_PARAMS, ERROR_INVALID_PARAMS_MESSAGE);
+            }
+        }
+
+        private static int TryGetRoundId(
+            SqlConnection connection,
+            SqlTransaction transaction,
+            int matchId,
+            int roundNumber)
+        {
+            using (SqlCommand command = new SqlCommand(
+                       WildcardSql.Text.GET_ROUND_ID_BY_MATCH_AND_NUMBER,
+                       connection,
+                       transaction))
+            {
+                command.CommandType = CommandType.Text;
+                command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
+                command.Parameters.Add(PARAM_ROUND_NUMBER, SqlDbType.Int).Value = roundNumber;
+
+                object scalar = command.ExecuteScalar();
+                if (scalar == null || scalar == DBNull.Value)
+                {
+                    return ROUND_ID_NOT_FOUND;
+                }
+
+                return Convert.ToInt32(scalar);
+            }
+        }
+
+        private static PlayerWildcardDto ConsumeAndLoadWildcardForUse(
+            SqlConnection connection,
+            SqlTransaction transaction,
+            int playerWildcardId,
+            int matchId,
+            int userId,
+            int roundId)
+        {
+            using (SqlCommand command = new SqlCommand(
+                       WildcardSql.Text.CONSUME_AND_GET_PLAYER_WILDCARD_FOR_USE,
+                       connection,
+                       transaction))
+            {
+                command.CommandType = CommandType.Text;
+
+                command.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
+                command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
+                command.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
+                command.Parameters.Add(PARAM_ROUND_ID, SqlDbType.Int).Value = roundId;
+
+                return ReadConsumedWildcardOrThrow(command);
+            }
+        }
+
+        private static PlayerWildcardDto ConsumeAndLoadWildcardForUseWithoutRound(
+            SqlConnection connection,
+            SqlTransaction transaction,
+            int playerWildcardId,
+            int matchId,
+            int userId)
+        {
+            using (SqlCommand command = new SqlCommand(
+                       WildcardSql.Text.CONSUME_AND_GET_PLAYER_WILDCARD_FOR_USE_WITHOUT_ROUND,
+                       connection,
+                       transaction))
+            {
+                command.CommandType = CommandType.Text;
+
+                command.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
+                command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
+                command.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
+
+                return ReadConsumedWildcardOrThrow(command);
+            }
+        }
+
+        private static PlayerWildcardDto ReadConsumedWildcardOrThrow(SqlCommand command)
+        {
+            using (SqlDataReader reader = command.ExecuteReader(CommandBehavior.SingleRow))
+            {
+                if (!reader.Read())
+                {
+                    throw ThrowFault(ERROR_WILDCARD_NOT_FOUND, ERROR_WILDCARD_NOT_FOUND_MESSAGE);
+                }
+
+                return new PlayerWildcardDto
+                {
+                    PlayerWildcardId = reader.GetInt32(0),
+                    MatchId = reader.GetInt32(1),
+                    UserId = reader.GetInt32(2),
+                    WildcardTypeId = reader.GetInt32(3),
+                    Code = reader.GetString(4),
+                    Name = reader.GetString(5),
+                    Description = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
+                    MaxUsesPerMatch = reader.GetByte(7),
+                    GrantedAt = reader.GetDateTime(8),
+                    ConsumedAt = reader.IsDBNull(9) ? (DateTime?)null : reader.GetDateTime(9),
+                    ConsumedInRound = reader.IsDBNull(10) ? (int?)null : reader.GetInt32(10)
+                };
+            }
+        }
+
+        private static void TryRollbackConsumedWildcard(int matchId, int userId, int playerWildcardId, int roundId)
+        {
+            try
+            {
+                string sql = roundId == ROUND_ID_NOT_FOUND
+                    ? WildcardSql.Text.UNCONSUME_PLAYER_WILDCARD_WITHOUT_ROUND
+                    : WildcardSql.Text.UNCONSUME_PLAYER_WILDCARD;
+
+                using (SqlConnection connection = new SqlConnection(GetConnectionString()))
+                using (SqlCommand command = new SqlCommand(sql, connection))
+                {
+                    command.CommandType = CommandType.Text;
+
+                    command.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
+                    command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
+                    command.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
+
+                    if (roundId != ROUND_ID_NOT_FOUND)
+                    {
+                        command.Parameters.Add(PARAM_ROUND_ID, SqlDbType.Int).Value = roundId;
+                    }
+
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("TryRollbackConsumedWildcard failed.", ex);
+            }
+        }
+
         private static List<PlayerWildcardDto> LoadAvailableWildcards(
             SqlConnection connection,
+            SqlTransaction transaction,
             int matchId,
             int userId)
         {
             List<PlayerWildcardDto> list = new List<PlayerWildcardDto>();
 
-            using (SqlCommand command = new SqlCommand(WildcardSql.Text.GET_AVAILABLE_PLAYER_WILDCARDS, connection))
+            using (SqlCommand command = new SqlCommand(
+                       WildcardSql.Text.GET_AVAILABLE_PLAYER_WILDCARDS,
+                       connection,
+                       transaction))
             {
                 command.CommandType = CommandType.Text;
                 command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
@@ -316,85 +533,30 @@ namespace ServicesTheWeakestRival.Server.Services
             return list;
         }
 
-        private static void ValidateUseWildcardRequest(UseWildcardRequest request)
+        private static void LogSqlException(string context, SqlException ex)
         {
-            if (request == null)
+            string safeContext = context ?? string.Empty;
+
+            Logger.ErrorFormat(
+                "{0} SqlException. Number={1}, State={2}, Procedure={3}, Line={4}, Message={5}",
+                safeContext,
+                ex.Number,
+                ex.State,
+                ex.Procedure ?? string.Empty,
+                ex.LineNumber,
+                ex.Message ?? string.Empty);
+
+            foreach (SqlError err in ex.Errors)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
-            }
-
-            if (request.MatchId <= 0 || request.PlayerWildcardId <= 0 || request.RoundNumber <= 0)
-            {
-                throw ThrowFault("INVALID_PARAMS", "Parámetros inválidos.");
-            }
-        }
-
-        private static PlayerWildcardDto LoadValidWildcardForUse(
-            SqlConnection connection,
-            SqlTransaction transaction,
-            int playerWildcardId,
-            int matchId,
-            int userId)
-        {
-            using (SqlCommand checkCommand = new SqlCommand(
-                       WildcardSql.Text.GET_PLAYER_WILDCARD_FOR_USE,
-                       connection,
-                       transaction))
-            {
-                checkCommand.CommandType = CommandType.Text;
-                checkCommand.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
-                checkCommand.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
-                checkCommand.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
-
-                using (SqlDataReader reader = checkCommand.ExecuteReader(CommandBehavior.SingleRow))
-                {
-                    if (!reader.Read())
-                    {
-                        throw ThrowFault(
-                            ERROR_WILDCARD_NOT_FOUND,
-                            ERROR_WILDCARD_NOT_FOUND_MESSAGE);
-                    }
-
-                    PlayerWildcardDto wildcard = new PlayerWildcardDto
-                    {
-                        PlayerWildcardId = reader.GetInt32(0),
-                        MatchId = reader.GetInt32(1),
-                        UserId = reader.GetInt32(2),
-                        WildcardTypeId = reader.GetInt32(3),
-                        Code = reader.GetString(4),
-                        Name = reader.GetString(5),
-                        Description = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                        MaxUsesPerMatch = reader.GetByte(7),
-                        GrantedAt = reader.GetDateTime(8),
-                        ConsumedAt = null,
-                        ConsumedInRound = null
-                    };
-
-                    return wildcard;
-                }
-            }
-        }
-
-        private static void ConsumeWildcard(
-            SqlConnection connection,
-            SqlTransaction transaction,
-            int playerWildcardId,
-            int roundNumber)
-        {
-            using (SqlCommand updateCommand =
-                   new SqlCommand(WildcardSql.Text.CONSUME_PLAYER_WILDCARD, connection, transaction))
-            {
-                updateCommand.CommandType = CommandType.Text;
-                updateCommand.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
-                updateCommand.Parameters.Add(PARAM_ROUND_NUMBER, SqlDbType.Int).Value = roundNumber;
-
-                int rows = updateCommand.ExecuteNonQuery();
-                if (rows == 0)
-                {
-                    throw ThrowFault(
-                        ERROR_WILDCARD_NOT_FOUND,
-                        ERROR_WILDCARD_NOT_FOUND_MESSAGE);
-                }
+                Logger.ErrorFormat(
+                    "{0} SqlError: Number={1}, State={2}, Class={3}, Procedure={4}, Line={5}, Message={6}",
+                    safeContext,
+                    err.Number,
+                    err.State,
+                    err.Class,
+                    err.Procedure ?? string.Empty,
+                    err.LineNumber,
+                    err.Message ?? string.Empty);
             }
         }
 
@@ -428,13 +590,17 @@ namespace ServicesTheWeakestRival.Server.Services
             };
         }
 
-
         public static void GrantLightningWildcard(int matchId, int userId)
         {
-            using (var connection = new SqlConnection(GetConnectionString()))
+            using (SqlConnection connection = new SqlConnection(GetConnectionString()))
             {
                 connection.Open();
-                GrantRandomWildcardInternal(connection, matchId, userId);
+
+                using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    GrantRandomWildcardInternal(connection, transaction, matchId, userId);
+                    transaction.Commit();
+                }
 
                 Logger.InfoFormat(
                     "GrantLightningWildcard: MatchId={0}, UserId={1} — wildcard granted successfully.",
@@ -444,17 +610,18 @@ namespace ServicesTheWeakestRival.Server.Services
         }
 
         private static void GrantRandomWildcardInternal(
-    SqlConnection connection,
-    int matchId,
-    int userId)
+            SqlConnection connection,
+            SqlTransaction transaction,
+            int matchId,
+            int userId)
         {
-            var wildcardTypeIds = new System.Collections.Generic.List<int>();
+            List<int> wildcardTypeIds = new List<int>();
 
-            using (var cmd = new SqlCommand(WildcardSql.Text.GET_WILDCARD_TYPES, connection))
+            using (SqlCommand cmd = new SqlCommand(WildcardSql.Text.GET_WILDCARD_TYPES, connection, transaction))
             {
                 cmd.CommandType = CommandType.Text;
 
-                using (var reader = cmd.ExecuteReader())
+                using (SqlDataReader reader = cmd.ExecuteReader())
                 {
                     while (reader.Read())
                     {
@@ -472,16 +639,16 @@ namespace ServicesTheWeakestRival.Server.Services
             int selectedTypeId;
             lock (RandomGenerator)
             {
-                var index = RandomGenerator.Next(wildcardTypeIds.Count);
+                int index = RandomGenerator.Next(wildcardTypeIds.Count);
                 selectedTypeId = wildcardTypeIds[index];
             }
 
-            using (var cmd = new SqlCommand(WildcardSql.Text.INSERT_PLAYER_WILDCARD, connection))
+            using (SqlCommand cmd = new SqlCommand(WildcardSql.Text.INSERT_PLAYER_WILDCARD, connection, transaction))
             {
                 cmd.CommandType = CommandType.Text;
-                cmd.Parameters.Add("@MatchId", SqlDbType.Int).Value = matchId;
-                cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
-                cmd.Parameters.Add("@WildcardTypeId", SqlDbType.Int).Value = selectedTypeId;
+                cmd.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
+                cmd.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
+                cmd.Parameters.Add(PARAM_WILDCARD_TYPE_ID, SqlDbType.Int).Value = selectedTypeId;
 
                 cmd.ExecuteNonQuery();
             }
@@ -493,13 +660,17 @@ namespace ServicesTheWeakestRival.Server.Services
                 selectedTypeId);
         }
 
-
         internal static void GrantRandomWildcardForMatch(int matchId, int userId)
         {
             using (SqlConnection connection = new SqlConnection(GetConnectionString()))
             {
                 connection.Open();
-                GrantRandomWildcardInternal(connection, matchId, userId);
+
+                using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    GrantRandomWildcardInternal(connection, transaction, matchId, userId);
+                    transaction.Commit();
+                }
             }
         }
     }

@@ -51,7 +51,8 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string ERROR_DUEL_NOT_ACTIVE_MESSAGE = "Duel is not active.";
         private const string ERROR_NOT_WEAKEST_RIVAL_MESSAGE = "Only weakest rival can choose duel opponent.";
         private const string ERROR_INVALID_DUEL_TARGET_MESSAGE = "Invalid duel opponent.";
-        private const string ERROR_NO_QUESTIONS_MESSAGE = "No se encontraron preguntas para la dificultad/idioma solicitados.";
+        private const string ERROR_NO_QUESTIONS_MESSAGE =
+            "No se encontraron preguntas para la dificultad/idioma solicitados.";
 
         private const int DEFAULT_MAX_QUESTIONS = 40;
         private const int QUESTIONS_PER_PLAYER_PER_ROUND = 2;
@@ -98,10 +99,12 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int TURN_USER_ID_NONE = 0;
 
         private const string SPECIAL_EVENT_LIGHTNING_WILDCARD_CODE = "LIGHTNING_WILDCARD_AWARDED";
-        private const string SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE = "El jugador {0} ha ganado un comodín relámpago.";
+        private const string SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE =
+            "El jugador {0} ha ganado un comodín relámpago.";
 
         private const string SPECIAL_EVENT_EXTRA_WILDCARD_CODE = "EXTRA_WILDCARD_AWARDED";
-        private const string SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE = "El jugador {0} ha recibido un comodín extra.";
+        private const string SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE =
+            "El jugador {0} ha recibido un comodín extra.";
 
         private const string SPECIAL_EVENT_BOMB_QUESTION_CODE = "BOMB_QUESTION";
         private const string SPECIAL_EVENT_BOMB_QUESTION_DESCRIPTION_TEMPLATE =
@@ -124,7 +127,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const int DARK_MODE_RANDOM_MIN_VALUE = 0;
         private const int DARK_MODE_RANDOM_MAX_VALUE = 100;
-        private const int DARK_MODE_PROBABILITY_PERCENT = 100;
+        private const int DARK_MODE_PROBABILITY_PERCENT = 20;
 
         private const string SPECIAL_EVENT_DARK_MODE_STARTED_CODE = "DARK_MODE_STARTED";
         private const string SPECIAL_EVENT_DARK_MODE_STARTED_DESCRIPTION =
@@ -141,6 +144,52 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string DARK_MODE_NO_VOTE_DISPLAY_NAME = "Nadie";
         private const string DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE = "Jugador {0}";
 
+        private const string WILDCARD_CHANGE_Q = "CHANGE_Q";
+        private const string WILDCARD_PASS_Q = "PASS_Q";
+        private const string WILDCARD_SHIELD = "SHIELD";
+        private const string WILDCARD_FORCED_BANK = "FORCED_BANK";
+        private const string WILDCARD_DOUBLE = "DOUBLE";
+        private const string WILDCARD_BLOCK = "BLOCK";
+        private const string WILDCARD_SWAP = "SWAP";
+        private const string WILDCARD_SABOTAGE = "SABOTAGE";
+        private const string WILDCARD_EXTRA_TIME = "EXTRA_TIME";
+
+        private const string TURN_REASON_TIME_DELTA_PREFIX = "TIME_DELTA:";
+        private const string TURN_REASON_WILDCARD_SWAP = "WILDCARD_SWAP";
+        private const string TURN_REASON_WILDCARD_PASS_Q = "WILDCARD_PASS_Q";
+
+        private const int WILDCARD_TIME_BONUS_SECONDS = 5;
+        private const int WILDCARD_TIME_PENALTY_SECONDS = 5;
+
+        private const string SPECIAL_EVENT_WILDCARD_USED_CODE_TEMPLATE = "WILDCARD_USED_{0}";
+        private const string SPECIAL_EVENT_WILDCARD_USED_DESCRIPTION_TEMPLATE = "{0} usó el comodín {1}.";
+
+        private const string SPECIAL_EVENT_SHIELD_TRIGGERED_CODE = "WILDCARD_SHIELD_TRIGGERED";
+        private const string SPECIAL_EVENT_SHIELD_TRIGGERED_DESCRIPTION_TEMPLATE =
+            "El escudo de {0} evitó su eliminación.";
+
+        private const string SPECIAL_EVENT_TIME_BONUS_CODE = "WILDCARD_EXTRA_TIME";
+        private const string SPECIAL_EVENT_TIME_BONUS_DESCRIPTION_TEMPLATE =
+            "{0} obtuvo +{1} segundos.";
+
+        private const string SPECIAL_EVENT_TIME_PENALTY_CODE = "WILDCARD_SABOTAGE";
+        private const string SPECIAL_EVENT_TIME_PENALTY_DESCRIPTION_TEMPLATE =
+            "{0} tendrá -{1} segundos.";
+
+        private const string ERROR_WILDCARD_INVALID_TIMING = "WILDCARD_INVALID_TIMING";
+        private const string ERROR_WILDCARD_INVALID_TIMING_MESSAGE =
+            "No puedes usar comodines en este momento.";
+
+        private const string ERROR_WILDCARDS_BLOCKED = "WILDCARDS_BLOCKED";
+        private const string ERROR_WILDCARDS_BLOCKED_MESSAGE =
+            "Tus comodines están bloqueados por esta ronda.";
+
+        private const string ERROR_INVALID_ROUND = "INVALID_ROUND";
+        private const string ERROR_INVALID_ROUND_MESSAGE =
+            "La ronda del cliente no coincide con la del servidor.";
+
+        private const int LOCALE_CODE_MAX_LENGTH = 10;
+
         private static readonly decimal[] CHAIN_STEPS =
         {
             0.10m,
@@ -155,14 +204,17 @@ namespace ServicesTheWeakestRival.Server.Services
         private static readonly ConcurrentDictionary<Guid, MatchRuntimeState> Matches =
             new ConcurrentDictionary<Guid, MatchRuntimeState>();
 
+        private static readonly ConcurrentDictionary<int, Guid> RuntimeMatchByWildcardMatchId =
+            new ConcurrentDictionary<int, Guid>();
+
         private static readonly ConcurrentDictionary<int, Guid> PlayerMatchByUserId =
             new ConcurrentDictionary<int, Guid>();
 
         private static readonly ConcurrentDictionary<Guid, ConcurrentDictionary<int, byte>> ExpectedPlayersByMatchId =
             new ConcurrentDictionary<Guid, ConcurrentDictionary<int, byte>>();
 
-        private static readonly Random RandomGenerator = new Random();
         private static readonly object RandomSyncRoot = new object();
+        private static readonly Random RandomGenerator = new Random();
 
         private GameplayEngine()
         {
@@ -178,7 +230,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
             try
             {
-                List<QuestionWithAnswersDto> questions = LoadQuestions(request.Difficulty, request.LocaleCode, maxQuestions);
+                List<QuestionWithAnswersDto> questions =
+                    LoadQuestions(request.Difficulty, request.LocaleCode, maxQuestions);
 
                 return new GetQuestionsResponse
                 {
@@ -212,6 +265,30 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             return state;
+        }
+
+        internal MatchRuntimeState GetMatchByWildcardDbIdOrThrow(int wildcardMatchId)
+        {
+            if (wildcardMatchId <= 0)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "WildcardMatchId inválido.");
+            }
+
+            if (RuntimeMatchByWildcardMatchId.TryGetValue(wildcardMatchId, out Guid runtimeMatchId))
+            {
+                return GetMatchOrThrow(runtimeMatchId);
+            }
+
+            MatchRuntimeState fallback = Matches.Values.FirstOrDefault(
+                s => s != null && s.WildcardMatchId == wildcardMatchId);
+
+            if (fallback == null)
+            {
+                throw ThrowFault(ERROR_MATCH_NOT_FOUND, ERROR_MATCH_NOT_FOUND_MESSAGE);
+            }
+
+            RuntimeMatchByWildcardMatchId.TryAdd(wildcardMatchId, fallback.MatchId);
+            return fallback;
         }
 
         internal Guid ResolveMatchIdForUserOrThrow(int userId)
@@ -274,7 +351,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     string displayName = string.Format(DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE, userId);
 
-                    UserAvatarEntity avatarEntity = new UserAvatarSql(GetConnectionString()).GetByUserId(userId);
+                    UserAvatarEntity avatarEntity =
+                        new UserAvatarSql(GetConnectionString()).GetByUserId(userId);
 
                     MatchPlayerRuntime player = new MatchPlayerRuntime(userId, displayName, callback)
                     {
@@ -395,6 +473,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
             state.WildcardMatchId = request.MatchDbId;
 
+            if (state.WildcardMatchId > 0)
+            {
+                RuntimeMatchByWildcardMatchId[state.WildcardMatchId] = state.MatchId;
+            }
+
             EnsureHostPlayerRegistered(state, hostUserId);
 
             ResetRoundStateForStart(state);
@@ -487,10 +570,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 QuestionWithAnswersDto question = GetCurrentQuestionOrThrow(state);
                 bool isCorrect = EvaluateAnswerOrThrow(question, request.AnswerText);
 
-                UpdateChainState(state, isCorrect);
+                decimal chainIncrement = UpdateChainState(state, currentPlayer, isCorrect);
                 ApplyBombQuestionEffectIfNeeded(state, currentPlayer, isCorrect);
 
-                AnswerResult result = BuildAnswerResult(question.QuestionId, state, isCorrect);
+                AnswerResult result = BuildAnswerResult(question.QuestionId, state, isCorrect, chainIncrement);
 
                 Broadcast(
                     state,
@@ -603,6 +686,286 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 return true;
             }
+        }
+
+        internal int ApplyWildcardFromDbOrThrow(int wildcardMatchId, int userId, string wildcardCode, int clientRoundNumber)
+        {
+            MatchRuntimeState state = GetMatchByWildcardDbIdOrThrow(wildcardMatchId);
+
+            lock (state.SyncRoot)
+            {
+                int serverRoundNumber = state.RoundNumber;
+
+                if (clientRoundNumber != serverRoundNumber)
+                {
+                    Logger.WarnFormat(
+                        "ApplyWildcardFromDbOrThrow: round mismatch. MatchId={0}, UserId={1}, Code={2}, ClientRound={3}, ServerRound={4}. Using server round.",
+                        wildcardMatchId,
+                        userId,
+                        wildcardCode ?? string.Empty,
+                        clientRoundNumber,
+                        serverRoundNumber);
+
+                    clientRoundNumber = serverRoundNumber;
+                }
+
+                if (state.IsInVotePhase || state.IsInDuelPhase || state.IsSurpriseExamActive || IsLightningActive(state))
+                {
+                    throw ThrowFault(ERROR_WILDCARD_INVALID_TIMING, ERROR_WILDCARD_INVALID_TIMING_MESSAGE);
+                }
+
+                MatchPlayerRuntime actor = state.Players.FirstOrDefault(p => p != null && p.UserId == userId);
+                if (actor == null || actor.IsEliminated)
+                {
+                    throw ThrowFault(ERROR_INVALID_REQUEST, "Player not in match or eliminated.");
+                }
+
+                if (actor.BlockWildcardsRoundNumber == state.RoundNumber)
+                {
+                    throw ThrowFault(ERROR_WILDCARDS_BLOCKED, ERROR_WILDCARDS_BLOCKED_MESSAGE);
+                }
+
+                MatchPlayerRuntime current = GetCurrentPlayerOrThrow(state, userId);
+
+                string normalizedCode = (wildcardCode ?? string.Empty).Trim().ToUpperInvariant();
+                ApplyWildcardLocked(state, current, normalizedCode);
+
+                BroadcastWildcardUsed(state, current, normalizedCode);
+
+                return state.RoundNumber;
+            }
+        }
+
+
+        private static void ApplyWildcardLocked(MatchRuntimeState state, MatchPlayerRuntime currentPlayer, string wildcardCode)
+        {
+            switch (wildcardCode)
+            {
+                case WILDCARD_CHANGE_Q:
+                    ApplyWildcardChangeQuestion(state, currentPlayer);
+                    return;
+
+                case WILDCARD_PASS_Q:
+                    ApplyWildcardPassQuestion(state, currentPlayer);
+                    return;
+
+                case WILDCARD_SHIELD:
+                    ApplyWildcardShield(currentPlayer);
+                    return;
+
+                case WILDCARD_FORCED_BANK:
+                    ApplyWildcardForcedBank(state);
+                    return;
+
+                case WILDCARD_DOUBLE:
+                    ApplyWildcardDouble(currentPlayer);
+                    return;
+
+                case WILDCARD_BLOCK:
+                    ApplyWildcardBlock(state, currentPlayer);
+                    return;
+
+                case WILDCARD_SWAP:
+                    ApplyWildcardSwap(state, currentPlayer);
+                    return;
+
+                case WILDCARD_SABOTAGE:
+                    ApplyWildcardSabotage(state, currentPlayer);
+                    return;
+
+                case WILDCARD_EXTRA_TIME:
+                    ApplyWildcardExtraTime(state, currentPlayer);
+                    return;
+
+                default:
+                    throw ThrowFault(ERROR_INVALID_REQUEST, "Código de comodín inválido.");
+            }
+        }
+
+        private static void ApplyWildcardChangeQuestion(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            if (state.Questions.Count <= 0)
+            {
+                throw ThrowFault(ERROR_NO_QUESTIONS, ERROR_NO_QUESTIONS_MESSAGE);
+            }
+
+            QuestionWithAnswersDto nextQuestion = state.Questions.Dequeue();
+            state.CurrentQuestionId = nextQuestion.QuestionId;
+
+            Broadcast(
+                state,
+                cb => cb.OnNextQuestion(
+                    state.MatchId,
+                    BuildPlayerSummary(currentPlayer, isOnline: true),
+                    nextQuestion,
+                    state.CurrentChain,
+                    state.BankedPoints),
+                "GameplayEngine.Wildcard.ChangeQuestion");
+        }
+
+        private static void ApplyWildcardPassQuestion(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            MatchPlayerRuntime target = ResolveNextAlivePlayerOrThrow(state, currentPlayer.UserId);
+
+            int targetIndex = state.Players.FindIndex(p => p != null && p.UserId == target.UserId);
+            if (targetIndex < 0)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Target inválido para PASS_Q.");
+            }
+
+            state.CurrentPlayerIndex = targetIndex;
+
+            BroadcastTurnOrderInitialized(state);
+
+            if (!state.QuestionsById.TryGetValue(state.CurrentQuestionId, out QuestionWithAnswersDto currentQuestion))
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Current question not found for PASS_Q.");
+            }
+
+            Broadcast(
+                state,
+                cb => cb.OnNextQuestion(
+                    state.MatchId,
+                    BuildPlayerSummary(target, isOnline: true),
+                    currentQuestion,
+                    state.CurrentChain,
+                    state.BankedPoints),
+                "GameplayEngine.Wildcard.PassQuestion");
+        }
+
+        private static void ApplyWildcardShield(MatchPlayerRuntime currentPlayer)
+        {
+            currentPlayer.IsShieldActive = true;
+        }
+
+        private static void ApplyWildcardForcedBank(MatchRuntimeState state)
+        {
+            state.BankedPoints += state.CurrentChain;
+            state.CurrentChain = 0m;
+            state.CurrentStreak = 0;
+
+            BankState bankState = new BankState
+            {
+                MatchId = state.MatchId,
+                CurrentChain = state.CurrentChain,
+                BankedPoints = state.BankedPoints
+            };
+
+            Broadcast(
+                state,
+                cb => cb.OnBankUpdated(state.MatchId, bankState),
+                "GameplayEngine.Wildcard.ForcedBank");
+        }
+
+        private static void ApplyWildcardDouble(MatchPlayerRuntime currentPlayer)
+        {
+            currentPlayer.IsDoublePointsActive = true;
+        }
+
+        private static void ApplyWildcardBlock(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            MatchPlayerRuntime target = ResolveNextAlivePlayerOrThrow(state, currentPlayer.UserId);
+            target.BlockWildcardsRoundNumber = state.RoundNumber;
+        }
+
+        private static void ApplyWildcardSwap(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            MatchPlayerRuntime target = ResolveNextAlivePlayerOrThrow(state, currentPlayer.UserId);
+
+            int currentIndex = state.Players.FindIndex(p => p.UserId == currentPlayer.UserId);
+            int targetIndex = state.Players.FindIndex(p => p.UserId == target.UserId);
+
+            if (currentIndex < 0 || targetIndex < 0)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "No se pudo aplicar SWAP.");
+            }
+
+            MatchPlayerRuntime tmp = state.Players[currentIndex];
+            state.Players[currentIndex] = state.Players[targetIndex];
+            state.Players[targetIndex] = tmp;
+
+            state.CurrentPlayerIndex = targetIndex;
+
+            BroadcastTurnOrderInitialized(state);
+        }
+
+        private static void ApplyWildcardSabotage(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            MatchPlayerRuntime target = ResolveNextAlivePlayerOrThrow(state, currentPlayer.UserId);
+
+            target.PendingTimeDeltaSeconds -= WILDCARD_TIME_PENALTY_SECONDS;
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(
+                    state.MatchId,
+                    SPECIAL_EVENT_TIME_PENALTY_CODE,
+                    string.Format(
+                        SPECIAL_EVENT_TIME_PENALTY_DESCRIPTION_TEMPLATE,
+                        target.DisplayName,
+                        WILDCARD_TIME_PENALTY_SECONDS)),
+                "GameplayEngine.Wildcard.Sabotage");
+        }
+
+        private static void ApplyWildcardExtraTime(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            currentPlayer.PendingTimeDeltaSeconds += WILDCARD_TIME_BONUS_SECONDS;
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(
+                    state.MatchId,
+                    SPECIAL_EVENT_TIME_BONUS_CODE,
+                    string.Format(
+                        SPECIAL_EVENT_TIME_BONUS_DESCRIPTION_TEMPLATE,
+                        currentPlayer.DisplayName,
+                        WILDCARD_TIME_BONUS_SECONDS)),
+                "GameplayEngine.Wildcard.ExtraTime");
+        }
+
+        private static void BroadcastWildcardUsed(MatchRuntimeState state, MatchPlayerRuntime actor, string wildcardCode)
+        {
+            string code = string.Format(SPECIAL_EVENT_WILDCARD_USED_CODE_TEMPLATE, wildcardCode);
+            string description = string.Format(SPECIAL_EVENT_WILDCARD_USED_DESCRIPTION_TEMPLATE, actor.DisplayName, wildcardCode);
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, code, description),
+                "GameplayEngine.Wildcard.Used");
+        }
+
+        private static MatchPlayerRuntime ResolveNextAlivePlayerOrThrow(MatchRuntimeState state, int currentUserId)
+        {
+            if (state == null || state.Players.Count <= 1)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "No hay jugador objetivo.");
+            }
+
+            int startIndex = state.Players.FindIndex(p => p != null && p.UserId == currentUserId);
+            if (startIndex < 0)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Jugador actual inválido.");
+            }
+
+            int idx = startIndex;
+
+            for (int i = 0; i < state.Players.Count; i++)
+            {
+                idx++;
+
+                if (idx >= state.Players.Count)
+                {
+                    idx = 0;
+                }
+
+                MatchPlayerRuntime candidate = state.Players[idx];
+                if (candidate != null && !candidate.IsEliminated && candidate.UserId != currentUserId)
+                {
+                    return candidate;
+                }
+            }
+
+            throw ThrowFault(ERROR_INVALID_REQUEST, "No hay jugador vivo objetivo.");
         }
 
         internal static void TrySendSnapshotToJoiningPlayer(MatchRuntimeState state, int userId)
@@ -775,7 +1138,11 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
-            int weakestRivalUserId = ResolveWeakestRivalUserId(voteCounts, state);
+            if (!TryResolveWeakestRivalUserIdConsideringShield(state, voteCounts, out int weakestRivalUserId))
+            {
+                StartNextRound(state);
+                return;
+            }
 
             MatchPlayerRuntime weakestRivalPlayer = state.Players.FirstOrDefault(p => p.UserId == weakestRivalUserId);
             if (weakestRivalPlayer == null)
@@ -807,6 +1174,55 @@ namespace ServicesTheWeakestRival.Server.Services
             StartDuel(state, weakestRivalPlayer, weakestRivalUserId, duelCandidates);
         }
 
+        private static bool TryResolveWeakestRivalUserIdConsideringShield(
+            MatchRuntimeState state,
+            Dictionary<int, int> voteCounts,
+            out int weakestRivalUserId)
+        {
+            weakestRivalUserId = 0;
+
+            while (voteCounts.Count > 0)
+            {
+                int maxVotes = voteCounts.Values.Max();
+
+                List<int> candidates = voteCounts
+                    .Where(kvp => kvp.Value == maxVotes)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                int selected = candidates.Count == 1
+                    ? candidates[0]
+                    : candidates[NextRandom(0, candidates.Count)];
+
+                MatchPlayerRuntime selectedPlayer = state.Players.FirstOrDefault(p => p != null && p.UserId == selected);
+                if (selectedPlayer == null || selectedPlayer.IsEliminated)
+                {
+                    voteCounts.Remove(selected);
+                    continue;
+                }
+
+                if (!selectedPlayer.IsShieldActive)
+                {
+                    weakestRivalUserId = selected;
+                    return true;
+                }
+
+                selectedPlayer.IsShieldActive = false;
+
+                Broadcast(
+                    state,
+                    cb => cb.OnSpecialEvent(
+                        state.MatchId,
+                        SPECIAL_EVENT_SHIELD_TRIGGERED_CODE,
+                        string.Format(SPECIAL_EVENT_SHIELD_TRIGGERED_DESCRIPTION_TEMPLATE, selectedPlayer.DisplayName)),
+                    "GameplayEngine.Shield.Triggered");
+
+                voteCounts.Remove(selected);
+            }
+
+            return false;
+        }
+
         private static Dictionary<int, int> CountVotesForAlivePlayers(MatchRuntimeState state, List<MatchPlayerRuntime> alivePlayers)
         {
             Dictionary<int, int> voteCounts = new Dictionary<int, int>();
@@ -833,23 +1249,6 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             return voteCounts;
-        }
-
-        private static int ResolveWeakestRivalUserId(Dictionary<int, int> voteCounts, MatchRuntimeState state)
-        {
-            int maxVotes = voteCounts.Values.Max();
-
-            List<int> candidates = voteCounts
-                .Where(kvp => kvp.Value == maxVotes)
-                .Select(kvp => kvp.Key)
-                .ToList();
-
-            if (candidates.Count == 1)
-            {
-                return candidates[0];
-            }
-
-            return candidates[NextRandom(0, candidates.Count)];
         }
 
         private static void EliminatePlayerByVoteNoDuel(MatchRuntimeState state, MatchPlayerRuntime weakestRivalPlayer)
@@ -1078,6 +1477,113 @@ namespace ServicesTheWeakestRival.Server.Services
                 "GameplayEngine.TurnOrder");
         }
 
+        private static TurnOrderDto BuildTurnOrderDto(MatchRuntimeState state)
+        {
+            int[] orderedAliveUserIds = state.Players
+                .Where(p => p != null && !p.IsEliminated)
+                .Select(p => p.UserId)
+                .ToArray();
+
+            MatchPlayerRuntime current = state.GetCurrentPlayer();
+
+            return new TurnOrderDto
+            {
+                OrderedAliveUserIds = orderedAliveUserIds,
+                CurrentTurnUserId = current != null ? current.UserId : TURN_USER_ID_NONE,
+                ServerUtcTicks = DateTime.UtcNow.Ticks
+            };
+        }
+
+        private static void BroadcastTurnOrderChanged(MatchRuntimeState state, string reasonCode)
+        {
+            TurnOrderDto dto = BuildTurnOrderDto(state);
+
+            Broadcast(
+                state,
+                cb => cb.OnTurnOrderChanged(state.MatchId, dto, reasonCode ?? string.Empty),
+                "GameplayEngine.TurnOrderChanged");
+        }
+
+        internal MatchPlayerRuntime ValidateWildcardUseUnderLockOrThrow(MatchRuntimeState state, int userId, int clientRoundNumber)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            if (state.RoundNumber != clientRoundNumber)
+            {
+                throw ThrowFault(ERROR_INVALID_ROUND, ERROR_INVALID_ROUND_MESSAGE);
+            }
+
+            if (state.IsInVotePhase || state.IsInDuelPhase || state.IsSurpriseExamActive || IsLightningActive(state))
+            {
+                throw ThrowFault(ERROR_WILDCARD_INVALID_TIMING, ERROR_WILDCARD_INVALID_TIMING_MESSAGE);
+            }
+
+            MatchPlayerRuntime actor = state.Players.FirstOrDefault(p => p != null && p.UserId == userId);
+            if (actor == null || actor.IsEliminated)
+            {
+                throw ThrowFault(ERROR_INVALID_REQUEST, "Player not in match or eliminated.");
+            }
+
+            if (actor.BlockWildcardsRoundNumber == state.RoundNumber)
+            {
+                throw ThrowFault(ERROR_WILDCARDS_BLOCKED, ERROR_WILDCARDS_BLOCKED_MESSAGE);
+            }
+
+            return GetCurrentPlayerOrThrow(state, userId);
+        }
+
+        internal void ApplyWildcardUnderLockFromServiceOrThrow(
+            MatchRuntimeState state,
+            MatchPlayerRuntime currentPlayer,
+            string wildcardCode)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            if (currentPlayer == null)
+            {
+                throw new ArgumentNullException(nameof(currentPlayer));
+            }
+
+            string normalizedCode = (wildcardCode ?? string.Empty).Trim().ToUpperInvariant();
+
+            ApplyWildcardLocked(state, currentPlayer, normalizedCode);
+
+            BroadcastWildcardUsed(state, currentPlayer, normalizedCode);
+        }
+
+        private static void NotifyAndClearPendingTimeDeltaIfAny(MatchRuntimeState state, MatchPlayerRuntime targetPlayer)
+        {
+            if (state == null || targetPlayer == null || targetPlayer.Callback == null)
+            {
+                return;
+            }
+
+            int deltaSeconds = targetPlayer.PendingTimeDeltaSeconds;
+            if (deltaSeconds == 0)
+            {
+                return;
+            }
+
+            targetPlayer.PendingTimeDeltaSeconds = 0;
+
+            string reasonCode = TURN_REASON_TIME_DELTA_PREFIX + deltaSeconds.ToString();
+
+            try
+            {
+                targetPlayer.Callback.OnTurnOrderChanged(state.MatchId, BuildTurnOrderDto(state), reasonCode);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("GameplayEngine.TimeDelta callback failed.", ex);
+            }
+        }
+
         private static void SendNextQuestion(MatchRuntimeState state)
         {
             if (state.Questions.Count == 0)
@@ -1096,6 +1602,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             state.BombQuestionId = 0;
             TryStartBombQuestionEvent(state, targetPlayer, question.QuestionId);
+            NotifyAndClearPendingTimeDeltaIfAny(state, targetPlayer);
 
             Broadcast(
                 state,
@@ -1144,8 +1651,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
+            string safeAnswer = answerText.Trim();
+
             AnswerDto selectedAnswer = question.Answers.Find(a =>
-                string.Equals(a.Text, answerText, StringComparison.Ordinal));
+                string.Equals(a.Text, safeAnswer, StringComparison.Ordinal));
 
             if (selectedAnswer == null)
             {
@@ -1155,32 +1664,48 @@ namespace ServicesTheWeakestRival.Server.Services
             return selectedAnswer.IsCorrect;
         }
 
-        private static void UpdateChainState(MatchRuntimeState state, bool isCorrect)
+        private static decimal UpdateChainState(MatchRuntimeState state, MatchPlayerRuntime currentPlayer, bool isCorrect)
         {
-            if (isCorrect)
+            if (!isCorrect)
             {
-                if (state.CurrentStreak < CHAIN_STEPS.Length)
-                {
-                    state.CurrentChain += CHAIN_STEPS[state.CurrentStreak];
-                    state.CurrentStreak++;
-                }
+                state.CurrentChain = 0m;
+                state.CurrentStreak = 0;
 
-                return;
+                currentPlayer.IsDoublePointsActive = false;
+
+                return 0m;
             }
 
-            state.CurrentChain = 0m;
-            state.CurrentStreak = 0;
+            if (state.CurrentStreak >= CHAIN_STEPS.Length)
+            {
+                currentPlayer.IsDoublePointsActive = false;
+                return 0m;
+            }
+
+            decimal baseIncrement = CHAIN_STEPS[state.CurrentStreak];
+            decimal increment = currentPlayer.IsDoublePointsActive
+                ? baseIncrement + baseIncrement
+                : baseIncrement;
+
+            state.CurrentChain += increment;
+            state.CurrentStreak++;
+
+            currentPlayer.IsDoublePointsActive = false;
+
+            return increment;
         }
 
-        private static AnswerResult BuildAnswerResult(int questionId, MatchRuntimeState state, bool isCorrect)
+        private static AnswerResult BuildAnswerResult(
+            int questionId,
+            MatchRuntimeState state,
+            bool isCorrect,
+            decimal chainIncrement)
         {
             return new AnswerResult
             {
                 QuestionId = questionId,
                 IsCorrect = isCorrect,
-                ChainIncrement = state.CurrentStreak > 0 && isCorrect
-                    ? CHAIN_STEPS[state.CurrentStreak - 1]
-                    : 0m,
+                ChainIncrement = chainIncrement,
                 CurrentChain = state.CurrentChain,
                 BankedPoints = state.BankedPoints
             };
@@ -1288,7 +1813,14 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 command.Parameters.Add("@MaxQuestions", SqlDbType.Int).Value = maxQuestions;
                 command.Parameters.Add("@Difficulty", SqlDbType.TinyInt).Value = difficulty;
-                command.Parameters.Add("@LocaleCode", SqlDbType.NVarChar, 10).Value = localeCode;
+
+                string safeLocale = (localeCode ?? string.Empty).Trim();
+                if (safeLocale.Length > LOCALE_CODE_MAX_LENGTH)
+                {
+                    safeLocale = safeLocale.Substring(0, LOCALE_CODE_MAX_LENGTH);
+                }
+
+                command.Parameters.Add("@LocaleCode", SqlDbType.NVarChar, LOCALE_CODE_MAX_LENGTH).Value = safeLocale;
 
                 connection.Open();
 
@@ -1417,12 +1949,20 @@ namespace ServicesTheWeakestRival.Server.Services
                 cb => cb.OnMatchFinished(state.MatchId, BuildPlayerSummary(winner, isOnline: true)),
                 "GameplayEngine.MatchFinished");
 
+            if (state.WildcardMatchId > 0)
+            {
+                RuntimeMatchByWildcardMatchId.TryRemove(state.WildcardMatchId, out _);
+            }
+
             Matches.TryRemove(state.MatchId, out _);
             ExpectedPlayersByMatchId.TryRemove(state.MatchId, out _);
 
             foreach (MatchPlayerRuntime player in state.Players)
             {
-                PlayerMatchByUserId.TryRemove(player.UserId, out _);
+                if (player != null)
+                {
+                    PlayerMatchByUserId.TryRemove(player.UserId, out _);
+                }
             }
         }
 
@@ -1466,7 +2006,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
             string displayName = string.Format(DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE, userId);
 
-            UserAvatarEntity avatarEntity = new UserAvatarSql(GetConnectionString()).GetByUserId(userId);
+            UserAvatarEntity avatarEntity =
+                new UserAvatarSql(GetConnectionString()).GetByUserId(userId);
 
             state.Players.Add(new MatchPlayerRuntime(userId, displayName, callback)
             {
@@ -1588,13 +2129,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 state,
                 cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_BOMB_QUESTION_APPLIED_CODE, description),
                 "GameplayEngine.BombQuestion.Applied");
-        }
-
-        private static bool IsLightningActive(MatchRuntimeState state)
-        {
-            return state != null &&
-                   state.ActiveSpecialEvent == SpecialEventType.LightningChallenge &&
-                   state.LightningChallenge != null;
         }
 
         private static bool TryStartSurpriseExamEvent(MatchRuntimeState state)
@@ -1876,6 +2410,13 @@ namespace ServicesTheWeakestRival.Server.Services
             SendNextQuestion(state);
         }
 
+        private static bool IsLightningActive(MatchRuntimeState state)
+        {
+            return state != null &&
+                   state.ActiveSpecialEvent == SpecialEventType.LightningChallenge &&
+                   state.LightningChallenge != null;
+        }
+
         private static bool TryStartLightningChallenge(MatchRuntimeState state)
         {
             if (state.HasSpecialEventThisRound || IsLightningActive(state))
@@ -1980,7 +2521,7 @@ namespace ServicesTheWeakestRival.Server.Services
             if (!string.IsNullOrWhiteSpace(request.AnswerText))
             {
                 AnswerDto selected = question.Answers.Find(a =>
-                    string.Equals(a.Text, request.AnswerText, StringComparison.Ordinal));
+                    string.Equals(a.Text, request.AnswerText.Trim(), StringComparison.Ordinal));
 
                 isCorrect = selected != null && selected.IsCorrect;
             }
@@ -2003,7 +2544,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             Broadcast(
                 state,
-                cb => cb.OnAnswerEvaluated(state.MatchId, BuildPlayerSummary(currentPlayer, isOnline: false), result),
+                cb => cb.OnAnswerEvaluated(state.MatchId, BuildPlayerSummary(currentPlayer, isOnline: true), result),
                 "GameplayEngine.Lightning.Answer");
 
             if (challenge.RemainingQuestions <= 0)
@@ -2083,24 +2624,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static void TryAwardLightningWildcard(MatchRuntimeState state, int playerUserId)
         {
-            AwardWildcard(
-                state,
-                playerUserId,
-                SPECIAL_EVENT_LIGHTNING_WILDCARD_CODE,
-                SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE);
-        }
-
-        private static void TryAwardExtraWildcard(MatchRuntimeState state, int playerUserId)
-        {
-            AwardWildcard(
-                state,
-                playerUserId,
-                SPECIAL_EVENT_EXTRA_WILDCARD_CODE,
-                SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE);
-        }
-
-        private static void AwardWildcard(MatchRuntimeState state, int playerUserId, string specialEventCode, string descriptionTemplate)
-        {
             MatchPlayerRuntime targetPlayer = state.Players.FirstOrDefault(p => p.UserId == playerUserId);
             if (targetPlayer == null)
             {
@@ -2116,15 +2639,43 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                Logger.Error("GameplayEngine.AwardWildcard", ex);
+                Logger.Error("GameplayEngine.TryAwardLightningWildcard", ex);
             }
 
-            string description = string.Format(descriptionTemplate, targetPlayer.DisplayName);
+            string description = string.Format(SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE, targetPlayer.DisplayName);
 
             Broadcast(
                 state,
-                cb => cb.OnSpecialEvent(state.MatchId, specialEventCode, description),
-                "GameplayEngine.SpecialEvent.Wildcard");
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_LIGHTNING_WILDCARD_CODE, description),
+                "GameplayEngine.SpecialEvent.LightningWildcard");
+        }
+
+        private static void TryAwardExtraWildcard(MatchRuntimeState state, int playerUserId)
+        {
+            MatchPlayerRuntime targetPlayer = state.Players.FirstOrDefault(p => p.UserId == playerUserId);
+            if (targetPlayer == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (state.WildcardMatchId > 0)
+                {
+                    WildcardService.GrantRandomWildcardForMatch(state.WildcardMatchId, playerUserId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("GameplayEngine.TryAwardExtraWildcard", ex);
+            }
+
+            string description = string.Format(SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE, targetPlayer.DisplayName);
+
+            Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(state.MatchId, SPECIAL_EVENT_EXTRA_WILDCARD_CODE, description),
+                "GameplayEngine.SpecialEvent.ExtraWildcard");
         }
 
         private static bool TryStartDarkModeEvent(MatchRuntimeState state)

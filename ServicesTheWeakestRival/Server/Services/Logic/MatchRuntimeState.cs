@@ -1,4 +1,5 @@
-﻿using ServicesTheWeakestRival.Contracts.Data;
+﻿// MatchRuntimeState.cs
+using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Enums;
 using ServicesTheWeakestRival.Contracts.Services;
 using System;
@@ -208,6 +209,19 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             ResetSurpriseExam();
             RestoreTurnAfterLightning();
             ResetLightningChallenge();
+
+            foreach (MatchPlayerRuntime player in Players)
+            {
+                if (player == null)
+                {
+                    continue;
+                }
+
+                player.IsShieldActive = false;
+                player.IsDoublePointsActive = false;
+                player.BlockWildcardsRoundNumber = 0;
+                player.PendingTimeDeltaSeconds = 0;
+            }
         }
 
         public MatchPlayerRuntime GetCurrentPlayer()
@@ -355,6 +369,15 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             UserId = userId;
             DisplayName = displayName;
             Callback = callback;
+
+            IsEliminated = false;
+            IsWinner = false;
+
+            IsShieldActive = false;
+            IsDoublePointsActive = false;
+            BlockWildcardsRoundNumber = 0;
+
+            PendingTimeDeltaSeconds = 0;
         }
 
         public int UserId { get; }
@@ -368,6 +391,14 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
         public bool IsWinner { get; set; }
 
         public AvatarAppearanceDto Avatar { get; set; }
+
+        public bool IsShieldActive { get; set; }
+
+        public bool IsDoublePointsActive { get; set; }
+
+        public int BlockWildcardsRoundNumber { get; set; }
+
+        public int PendingTimeDeltaSeconds { get; set; }
     }
 
     internal sealed class SurpriseExamState
