@@ -20,7 +20,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 Email = testEmail,
                 Password = VALID_PASSWORD,
                 DisplayName = DISPLAY_NAME,
-                ProfileImageUrl = null
+                ProfileImageBytes = null,
+                ProfileImageContentType = null
             });
 
             Assert.IsNotNull(response.Token);
@@ -42,7 +43,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 {
                     Email = testEmail,
                     Password = WEAK_PASSWORD,
-                    DisplayName = DISPLAY_NAME
+                    DisplayName = DISPLAY_NAME,
+                    ProfileImageBytes = null,
+                    ProfileImageContentType = null
                 }),
                 AuthServiceConstants.ERROR_WEAK_PASSWORD);
         }
@@ -54,7 +57,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             {
                 Email = testEmail,
                 Password = VALID_PASSWORD,
-                DisplayName = DISPLAY_NAME
+                DisplayName = DISPLAY_NAME,
+                ProfileImageBytes = null,
+                ProfileImageContentType = null
             });
 
             FaultAssert.AssertFaultCode(
@@ -62,7 +67,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 {
                     Email = testEmail,
                     Password = VALID_PASSWORD,
-                    DisplayName = DISPLAY_NAME
+                    DisplayName = DISPLAY_NAME,
+                    ProfileImageBytes = null,
+                    ProfileImageContentType = null
                 }),
                 AuthServiceConstants.ERROR_EMAIL_TAKEN);
         }

@@ -1,17 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ServicesTheWeakestRival.Server.Services.Logic
+﻿namespace ServicesTheWeakestRival.Server.Services.Logic
 {
-    
     public static class AuthSql
     {
         public static class Text
         {
-
             public const string EXISTS_ACCOUNT_BY_EMAIL = @"
                 SELECT 1 FROM dbo.Accounts WHERE email = @Email;";
 
@@ -51,23 +43,29 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                 SET attempts = attempts + 1
                 WHERE verification_id = @Id;";
 
-
             public const string INSERT_ACCOUNT = @"
                 INSERT INTO dbo.Accounts (email, password_hash, status, created_at)
                 OUTPUT INSERTED.account_id
                 VALUES (@Email, @PasswordHash, @Status, SYSUTCDATETIME());";
 
             public const string INSERT_USER = @"
-                INSERT INTO dbo.Users (user_id, display_name, profile_image_url, created_at)
-                VALUES (@UserId, @DisplayName, @ProfileImageUrl, SYSUTCDATETIME());";
-
+                INSERT INTO dbo.Users
+                    (user_id, display_name, profile_image_url, created_at,
+                     profile_image, profile_image_content_type, profile_image_updated_at_utc)
+                VALUES
+                    (@UserId, @DisplayName, NULL, SYSUTCDATETIME(),
+                     @ProfileImage, @ProfileImageContentType, @ProfileImageUpdatedAtUtc);";
 
             public const string GET_ACCOUNT_BY_EMAIL = @"
                 SELECT account_id, password_hash, status
                 FROM dbo.Accounts
                 WHERE email = @Email;";
 
-            
+            public const string GET_PROFILE_IMAGE_BY_USER_ID = @"
+                SELECT profile_image, profile_image_content_type, profile_image_updated_at_utc
+                FROM dbo.Users
+                WHERE user_id = @UserId;";
+
             public const string SP_LOBBY_LEAVE_ALL_BY_USER = "dbo.usp_Lobby_LeaveAllByUser";
 
             internal const string LAST_RESET_REQUEST =
@@ -121,4 +119,3 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
         }
     }
 }
-

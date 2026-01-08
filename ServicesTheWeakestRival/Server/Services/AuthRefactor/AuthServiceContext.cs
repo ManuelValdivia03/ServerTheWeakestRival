@@ -76,6 +76,31 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             return new FaultException<ServiceFault>(fault, new FaultReason(message));
         }
 
+        public static bool TryGetUserId(string tokenValue, out int userId)
+        {
+            userId = 0;
+
+            if (string.IsNullOrWhiteSpace(tokenValue))
+            {
+                return false;
+            }
+
+            if (!TokenCache.TryGetValue(tokenValue, out AuthToken token))
+            {
+                return false;
+            }
+
+            if (token.ExpiresAtUtc <= DateTime.UtcNow)
+            {
+                TokenCache.TryRemove(tokenValue, out _);
+                return false;
+            }
+
+            userId = token.UserId;
+            return true;
+        }
+
+
         public static FaultException<ServiceFault> ThrowTechnicalFault(
             string technicalCode,
             string userMessage,

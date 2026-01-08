@@ -38,8 +38,10 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                         object lastObj = last.ExecuteScalar();
                         DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
 
-                        bool isInCooldown = lastUtc.HasValue &&
-                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthServiceContext.ResendCooldownSeconds;
+                        bool isInCooldown =
+                            lastUtc.HasValue &&
+                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthServiceContext.ResendCooldownSeconds;
+
                         if (isInCooldown)
                         {
                             throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_TOO_SOON, "Please wait before requesting another code.");
@@ -89,8 +91,10 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                         object lastObj = last.ExecuteScalar();
                         DateTime? lastUtc = (lastObj == null || lastObj == DBNull.Value) ? (DateTime?)null : (DateTime)lastObj;
 
-                        bool isInCooldown = lastUtc.HasValue &&
-                                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthServiceContext.ResendCooldownSeconds;
+                        bool isInCooldown =
+                            lastUtc.HasValue &&
+                            (DateTime.UtcNow - lastUtc.Value).TotalSeconds < AuthServiceContext.ResendCooldownSeconds;
+
                         if (isInCooldown)
                         {
                             throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_TOO_SOON, "Please wait before requesting another code.");
@@ -230,7 +234,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             }
         }
 
-        public int CreateAccountAndUser(string email, string passwordHash, string displayName, string profileImageUrl)
+        public int CreateAccountAndUser(string email, string passwordHash, string displayName, byte[] profileImageBytes, string profileImageContentType)
         {
             int newAccountId;
 
@@ -245,6 +249,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                         insertAcc.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
                         insertAcc.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 128).Value = passwordHash;
                         insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = AuthServiceConstants.ACCOUNT_STATUS_ACTIVE;
+
                         newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
                     }
 
@@ -252,8 +257,20 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                     {
                         insertUser.Parameters.Add("@UserId", SqlDbType.Int).Value = newAccountId;
                         insertUser.Parameters.Add("@DisplayName", SqlDbType.NVarChar, AuthServiceConstants.DISPLAY_NAME_MAX_LENGTH).Value = displayName;
-                        insertUser.Parameters.Add("@ProfileImageUrl", SqlDbType.NVarChar, AuthServiceConstants.PROFILE_URL_MAX_LENGTH).Value =
-                            string.IsNullOrWhiteSpace(profileImageUrl) ? (object)DBNull.Value : profileImageUrl;
+
+                        if (profileImageBytes == null || profileImageBytes.Length == 0)
+                        {
+                            insertUser.Parameters.Add("@ProfileImage", SqlDbType.VarBinary, -1).Value = DBNull.Value;
+                            insertUser.Parameters.Add("@ProfileImageContentType", SqlDbType.NVarChar, ProfileImageConstants.CONTENT_TYPE_MAX_LENGTH).Value = DBNull.Value;
+                            insertUser.Parameters.Add("@ProfileImageUpdatedAtUtc", SqlDbType.DateTime2).Value = DBNull.Value;
+                        }
+                        else
+                        {
+                            insertUser.Parameters.Add("@ProfileImage", SqlDbType.VarBinary, -1).Value = profileImageBytes;
+                            insertUser.Parameters.Add("@ProfileImageContentType", SqlDbType.NVarChar, ProfileImageConstants.CONTENT_TYPE_MAX_LENGTH).Value = profileImageContentType;
+                            insertUser.Parameters.Add("@ProfileImageUpdatedAtUtc", SqlDbType.DateTime2).Value = DateTime.UtcNow;
+                        }
+
                         insertUser.ExecuteNonQuery();
                     }
 
@@ -282,6 +299,35 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                     userId = reader.GetInt32(0);
                     storedHash = reader.GetString(1);
                     status = reader.GetByte(2);
+                }
+            }
+        }
+
+        public ProfileImageRecord ReadUserProfileImage(int userId)
+        {
+            using (var connection = new SqlConnection(connectionStringProvider()))
+            using (var cmd = new SqlCommand(AuthSql.Text.GET_PROFILE_IMAGE_BY_USER_ID, connection))
+            {
+                cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                connection.Open();
+
+                using (var reader = cmd.ExecuteReader(CommandBehavior.SingleRow))
+                {
+                    if (!reader.Read())
+                    {
+                        return ProfileImageRecord.Empty(userId);
+                    }
+
+                    byte[] imageBytes = reader.IsDBNull(0) ? null : (byte[])reader[0];
+                    string contentType = reader.IsDBNull(1) ? null : reader.GetString(1);
+                    DateTime? updatedAtUtc = reader.IsDBNull(2) ? (DateTime?)null : reader.GetDateTime(2);
+
+                    if (imageBytes == null || imageBytes.Length == 0)
+                    {
+                        return ProfileImageRecord.Empty(userId);
+                    }
+
+                    return new ProfileImageRecord(userId, imageBytes, contentType, updatedAtUtc);
                 }
             }
         }
@@ -336,13 +382,34 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
         public void LeaveAllLobbiesForUser(int userId)
         {
             using (var connection = new SqlConnection(connectionStringProvider()))
-            using (var cmd = new SqlCommand("dbo.usp_Lobby_LeaveAllByUser", connection))
+            using (var cmd = new SqlCommand(AuthSql.Text.SP_LOBBY_LEAVE_ALL_BY_USER, connection))
             {
                 cmd.CommandType = CommandType.StoredProcedure;
                 cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
                 connection.Open();
                 cmd.ExecuteNonQuery();
             }
+        }
+    }
+
+    public sealed class ProfileImageRecord
+    {
+        public int UserId { get; }
+        public byte[] ImageBytes { get; }
+        public string ContentType { get; }
+        public DateTime? UpdatedAtUtc { get; }
+
+        public ProfileImageRecord(int userId, byte[] imageBytes, string contentType, DateTime? updatedAtUtc)
+        {
+            UserId = userId;
+            ImageBytes = imageBytes ?? Array.Empty<byte>();
+            ContentType = contentType ?? string.Empty;
+            UpdatedAtUtc = updatedAtUtc;
+        }
+
+        public static ProfileImageRecord Empty(int userId)
+        {
+            return new ProfileImageRecord(userId, Array.Empty<byte>(), string.Empty, null);
         }
     }
 }

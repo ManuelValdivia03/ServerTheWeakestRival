@@ -9,7 +9,9 @@ namespace ServicesTheWeakestRival.Contracts.Data
         [DataMember(Order = 1, IsRequired = true)] public string Email { get; set; }
         [DataMember(Order = 2, IsRequired = true)] public string Password { get; set; }
         [DataMember(Order = 3, IsRequired = true)] public string DisplayName { get; set; }
-        [DataMember(Order = 4, IsRequired = false)] public string ProfileImageUrl { get; set; }
+
+        [DataMember(Order = 4, IsRequired = false)] public byte[] ProfileImageBytes { get; set; }
+        [DataMember(Order = 5, IsRequired = false)] public string ProfileImageContentType { get; set; }
     }
 
     [DataContract]

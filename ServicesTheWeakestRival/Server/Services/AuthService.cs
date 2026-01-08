@@ -3,7 +3,6 @@ using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
 using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor;
-using System;
 using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services
@@ -43,5 +42,8 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public void CompletePasswordReset(CompletePasswordResetRequest request) =>
             authOperations.CompletePasswordReset(request);
+
+        public GetProfileImageResponse GetProfileImage(GetProfileImageRequest request) =>
+            authOperations.GetProfileImage(request);
     }
 }

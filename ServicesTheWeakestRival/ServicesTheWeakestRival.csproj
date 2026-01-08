@@ -87,6 +87,8 @@
     <Compile Include="Server\Services\AuthRefactor\AuthRepository.cs" />
     <Compile Include="Server\Services\AuthRefactor\AuthServiceConstants.cs" />
     <Compile Include="Server\Services\AuthRefactor\AuthServiceContext.cs" />
+    <Compile Include="Server\Services\AuthRefactor\ProfileImageConstants.cs" />
+    <Compile Include="Server\Services\AuthRefactor\ProfileImageValidator.cs" />
     <Compile Include="Server\Services\AuthService.cs" />
     <Compile Include="Server\Services\Auth\PasswordService.cs" />
     <Compile Include="Server\Services\ChatService.cs" />

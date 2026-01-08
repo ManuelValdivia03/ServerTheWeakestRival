@@ -50,7 +50,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             {
                 Email = testEmail,
                 Password = VALID_PASSWORD,
-                DisplayName = DISPLAY_NAME
+                DisplayName = DISPLAY_NAME,
+                ProfileImageBytes = null,
+                ProfileImageContentType = null
             });
 
             FaultAssert.AssertFaultCode(
@@ -91,7 +93,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 DisplayName = DISPLAY_NAME,
                 Password = VALID_PASSWORD,
                 Code = emailService.LastVerificationCode,
-                ProfileImageUrl = null
+                ProfileImageBytes = null,
+                ProfileImageContentType = null
             });
 
             Assert.IsNotNull(response.Token);
@@ -106,7 +109,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                     Email = testEmail,
                     DisplayName = DISPLAY_NAME,
                     Password = VALID_PASSWORD,
-                    Code = MANUAL_CODE
+                    Code = MANUAL_CODE,
+                    ProfileImageBytes = null,
+                    ProfileImageContentType = null
                 }),
                 AuthServiceConstants.ERROR_CODE_MISSING);
         }
@@ -122,7 +127,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                     Email = testEmail,
                     DisplayName = DISPLAY_NAME,
                     Password = VALID_PASSWORD,
-                    Code = INVALID_CODE
+                    Code = INVALID_CODE,
+                    ProfileImageBytes = null,
+                    ProfileImageContentType = null
                 }),
                 AuthServiceConstants.ERROR_CODE_INVALID);
         }
@@ -138,7 +145,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                     Email = testEmail,
                     DisplayName = DISPLAY_NAME,
                     Password = WEAK_PASSWORD,
-                    Code = emailService.LastVerificationCode
+                    Code = emailService.LastVerificationCode,
+                    ProfileImageBytes = null,
+                    ProfileImageContentType = null
                 }),
                 AuthServiceConstants.ERROR_WEAK_PASSWORD);
         }

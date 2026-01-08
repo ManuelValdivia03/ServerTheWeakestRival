@@ -84,6 +84,9 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
             ValidatePasswordOrThrow(password);
 
+            int maxBytes = ReadProfileImageMaxBytes();
+            ProfileImageValidator.ValidateOrThrow(request.ProfileImageBytes, request.ProfileImageContentType, maxBytes);
+
             byte[] codeHash = SecurityUtil.Sha256(code);
 
             authRepository.ReadLatestVerification(email, out int verificationId, out DateTime expiresAtUtc, out bool used);
@@ -102,7 +105,8 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                     email,
                     passwordHash,
                     displayName,
-                    request.ProfileImageUrl);
+                    request.ProfileImageBytes,
+                    request.ProfileImageContentType);
 
                 authRepository.MarkVerificationUsed(verificationId);
             }
@@ -133,6 +137,9 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
             ValidatePasswordOrThrow(request.Password);
 
+            int maxBytes = ReadProfileImageMaxBytes();
+            ProfileImageValidator.ValidateOrThrow(request.ProfileImageBytes, request.ProfileImageContentType, maxBytes);
+
             string passwordHash = passwordService.Hash(request.Password);
             int newAccountId;
 
@@ -143,7 +150,8 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                     request.Email,
                     passwordHash,
                     request.DisplayName,
-                    request.ProfileImageUrl);
+                    request.ProfileImageBytes,
+                    request.ProfileImageContentType);
             }
             catch (SqlException ex)
             {
@@ -157,6 +165,50 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             var token = AuthServiceContext.IssueToken(newAccountId);
             return new RegisterResponse { UserId = newAccountId, Token = token };
         }
+
+        public GetProfileImageResponse GetProfileImage(GetProfileImageRequest request)
+        {
+            if (request == null)
+            {
+                throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_INVALID_REQUEST, AuthServiceConstants.MESSAGE_PAYLOAD_NULL);
+            }
+
+            if (!AuthServiceContext.TryGetUserId(request.Token, out int _))
+            {
+                throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, "Invalid session.");
+            }
+
+            if (request.UserId <= 0)
+            {
+                throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_INVALID_REQUEST, "UserId is required.");
+            }
+
+            try
+            {
+                ProfileImageRecord record = authRepository.ReadUserProfileImage(request.UserId);
+
+                bool hasImage = record.ImageBytes.Length > 0;
+
+                return new GetProfileImageResponse
+                {
+                    UserId = request.UserId,
+                    HasImage = hasImage,
+                    ImageBytes = hasImage ? record.ImageBytes : null,
+                    ContentType = hasImage ? record.ContentType : null,
+                    UpdatedAtUtc = record.UpdatedAtUtc
+                };
+            }
+            catch (SqlException ex)
+            {
+                throw AuthServiceContext.ThrowTechnicalFault(
+                    AuthServiceConstants.ERROR_DB_ERROR,
+                    "Unexpected database error while reading profile image.",
+                    "AuthOperations.GetProfileImage",
+                    ex);
+            }
+        }
+
+
 
         public LoginResponse Login(LoginRequest request)
         {
@@ -328,6 +380,11 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             {
                 throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_CODE_EXPIRED, expiredMessage);
             }
+        }
+
+        private static int ReadProfileImageMaxBytes()
+        {
+            return ProfileImageConstants.DEFAULT_MAX_IMAGE_BYTES;
         }
 
         private static void ThrowIfBlockedStatus(byte status)

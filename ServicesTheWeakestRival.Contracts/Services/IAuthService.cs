@@ -33,5 +33,9 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract]
         void CompletePasswordReset(CompletePasswordResetRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        GetProfileImageResponse GetProfileImage(GetProfileImageRequest request);
     }
 }

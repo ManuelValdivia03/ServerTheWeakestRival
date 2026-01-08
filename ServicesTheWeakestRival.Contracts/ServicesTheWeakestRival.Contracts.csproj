@@ -78,6 +78,7 @@
     <Compile Include="Data\FriendSummary.cs" />
     <Compile Include="Data\GameplayDtos.cs" />
     <Compile Include="Data\GameplayStartJoinMessages.cs" />
+    <Compile Include="Data\GetProfileImageRequest.cs" />
     <Compile Include="Data\HeartbeatRequest.cs" />
     <Compile Include="Data\JoinMatchRequest.cs" />
     <Compile Include="Data\LobbyDtos.cs" />
