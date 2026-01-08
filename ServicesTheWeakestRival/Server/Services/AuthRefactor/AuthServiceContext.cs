@@ -41,7 +41,19 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
         public static AuthToken IssueToken(int userId)
         {
-            string tokenValue = Guid.NewGuid().ToString("N");
+            if (userId <= 0)
+            {
+                throw ThrowFault(AuthServiceConstants.ERROR_INVALID_REQUEST, "Invalid user id.");
+            }
+
+            if (TokenStore.TryGetActiveTokenForUser(userId, out _))
+            {
+                throw ThrowFault(
+                    AuthServiceConstants.ERROR_ALREADY_LOGGED_IN,
+                    AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN);
+            }
+
+            string tokenValue = Guid.NewGuid().ToString(AuthServiceConstants.TOKEN_GUID_FORMAT);
             DateTime expiresAt = DateTime.UtcNow.AddHours(AuthServiceConstants.TOKEN_TTL_HOURS);
 
             var token = new AuthToken
@@ -51,14 +63,15 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                 ExpiresAtUtc = expiresAt
             };
 
-            TokenCache[tokenValue] = token;
+            TokenStore.StoreToken(token);
             return token;
         }
 
         public static bool TryRemoveToken(string tokenValue, out AuthToken token)
         {
-            return TokenCache.TryRemove(tokenValue, out token);
+            return TokenStore.TryRemoveToken(tokenValue, out token);
         }
+
 
         public static FaultException<ServiceFault> ThrowFault(string code, string message)
         {

@@ -37,6 +37,8 @@
         public const string ERROR_ACCOUNT_INACTIVE = "ACCOUNT_INACTIVE";
         public const string ERROR_ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED";
         public const string ERROR_ACCOUNT_BANNED = "ACCOUNT_BANNED";
+        public const string ERROR_ALREADY_LOGGED_IN = "ALREADY_LOGGED_IN";
+        public const string MESSAGE_ALREADY_LOGGED_IN = "This account is already online.";
 
         public const string MESSAGE_CONFIG_ERROR = "Configuration error. Please contact support.";
         public const string MESSAGE_PAYLOAD_NULL = "Request payload is null.";
@@ -49,5 +51,7 @@
         public const string CTX_LOGOUT_LEAVE_ALL = "Logout.LeaveAllByUser";
         public const string CTX_BEGIN_RESET = "BeginPasswordReset.EmailSender";
         public const string CTX_COMPLETE_RESET = "CompletePasswordReset.Tx";
+
+        public const string TOKEN_GUID_FORMAT = "N";
     }
 }
