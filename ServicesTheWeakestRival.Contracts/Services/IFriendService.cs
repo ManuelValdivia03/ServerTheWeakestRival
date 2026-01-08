@@ -41,5 +41,10 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
         GetAccountsByIdsResponse GetAccountsByIds(GetAccountsByIdsRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        SendLobbyInviteEmailResponse SendLobbyInviteEmail(SendLobbyInviteEmailRequest request);
+
     }
 }

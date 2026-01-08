@@ -1,4 +1,5 @@
 ﻿using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Server.Infrastructure.Faults;
 using ServicesTheWeakestRival.Server.Services.Friends;
 using ServicesTheWeakestRival.Server.Services.Friends.Infrastructure;
 using ServicesTheWeakestRival.Server.Services.Logic;
@@ -45,67 +46,85 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
-                        var db = new FriendDbContext(connection, transaction, myAccountId);
-
-                        EnsureFriendshipDoesNotExist(_friendRequestRepository, db, targetAccountId);
-
-                        int? existingOutgoingId = _friendRequestRepository.GetPendingOutgoingId(db, targetAccountId);
-                        if (existingOutgoingId.HasValue)
-                        {
-                            transaction.Commit();
-
-                            FriendServiceContext.Logger.InfoFormat(
-                                "SendFriendRequest: existing outgoing request reused. Me={0}, Target={1}, RequestId={2}",
-                                myAccountId,
-                                targetAccountId,
-                                existingOutgoingId.Value);
-
-                            return CreateSendFriendRequestResponse(existingOutgoingId.Value, FriendRequestStatus.Pending);
-                        }
-
-                        int? incomingId = _friendRequestRepository.GetPendingIncomingId(db, targetAccountId);
-                        if (incomingId.HasValue)
-                        {
-                            int acceptedId = _friendRequestRepository.AcceptIncomingRequest(db, incomingId.Value);
-
-                            transaction.Commit();
-
-                            FriendServiceContext.Logger.InfoFormat(
-                                "SendFriendRequest: converted incoming request to accepted. Me={0}, Target={1}, RequestId={2}",
-                                myAccountId,
-                                targetAccountId,
-                                acceptedId);
-
-                            return CreateSendFriendRequestResponse(acceptedId, FriendRequestStatus.Accepted);
-                        }
-
                         try
                         {
-                            int newId = _friendRequestRepository.InsertNewRequest(db, targetAccountId);
+                            var db = new FriendDbContext(connection, transaction, myAccountId);
 
-                            transaction.Commit();
+                            EnsureFriendshipDoesNotExist(_friendRequestRepository, db, targetAccountId);
 
-                            FriendServiceContext.Logger.InfoFormat(
-                                "SendFriendRequest: new request created. Me={0}, Target={1}, RequestId={2}",
-                                myAccountId,
-                                targetAccountId,
-                                newId);
+                            int? existingOutgoingId = _friendRequestRepository.GetPendingOutgoingId(db, targetAccountId);
+                            if (existingOutgoingId.HasValue)
+                            {
+                                transaction.Commit();
 
-                            return CreateSendFriendRequestResponse(newId, FriendRequestStatus.Pending);
+                                FriendServiceContext.Logger.InfoFormat(
+                                    "SendFriendRequest: existing outgoing request reused. Me={0}, Target={1}, RequestId={2}",
+                                    myAccountId,
+                                    targetAccountId,
+                                    existingOutgoingId.Value);
+
+                                return CreateSendFriendRequestResponse(existingOutgoingId.Value, FriendRequestStatus.Pending);
+                            }
+
+                            int? incomingId = _friendRequestRepository.GetPendingIncomingId(db, targetAccountId);
+                            if (incomingId.HasValue)
+                            {
+                                int acceptedId = _friendRequestRepository.AcceptIncomingRequest(db, incomingId.Value);
+
+                                transaction.Commit();
+
+                                FriendServiceContext.Logger.InfoFormat(
+                                    "SendFriendRequest: converted incoming request to accepted. Me={0}, Target={1}, RequestId={2}",
+                                    myAccountId,
+                                    targetAccountId,
+                                    acceptedId);
+
+                                return CreateSendFriendRequestResponse(acceptedId, FriendRequestStatus.Accepted);
+                            }
+
+                            try
+                            {
+                                int newId = _friendRequestRepository.InsertNewRequest(db, targetAccountId);
+
+                                transaction.Commit();
+
+                                FriendServiceContext.Logger.InfoFormat(
+                                    "SendFriendRequest: new request created. Me={0}, Target={1}, RequestId={2}",
+                                    myAccountId,
+                                    targetAccountId,
+                                    newId);
+
+                                return CreateSendFriendRequestResponse(newId, FriendRequestStatus.Pending);
+                            }
+                            catch (SqlException ex) when (FriendServiceContext.IsUniqueViolation(ex))
+                            {
+                                int reopenedId = _friendRequestRepository.ReopenRequest(db, targetAccountId);
+
+                                transaction.Commit();
+
+                                FriendServiceContext.Logger.InfoFormat(
+                                    "SendFriendRequest: duplicate handled by reopening request. Me={0}, Target={1}, RequestId={2}",
+                                    myAccountId,
+                                    targetAccountId,
+                                    reopenedId);
+
+                                return CreateSendFriendRequestResponse(reopenedId, FriendRequestStatus.Pending);
+                            }
                         }
-                        catch (SqlException ex) when (FriendServiceContext.IsUniqueViolation(ex))
+                        catch (SqlException ex)
                         {
-                            int reopenedId = _friendRequestRepository.ReopenRequest(db, targetAccountId);
+                            SqlFaultMapping mapped = SqlExceptionFaultMapper.Map(
+                                ex,
+                                FriendServiceContext.OP_KEY_SEND_FRIEND_REQUEST);
 
-                            transaction.Commit();
+                            FriendServiceContext.Logger.Error("SendFriendRequest: SQL exception.", ex);
+                            FriendServiceContext.Logger.ErrorFormat(
+                                "SendFriendRequest: mapped SQL fault. Key={0}",
+                                mapped.MessageKey);
 
-                            FriendServiceContext.Logger.InfoFormat(
-                                "SendFriendRequest: duplicate handled by reopening request. Me={0}, Target={1}, RequestId={2}",
-                                myAccountId,
-                                targetAccountId,
-                                reopenedId);
-
-                            return CreateSendFriendRequestResponse(reopenedId, FriendRequestStatus.Pending);
+                            throw FriendServiceContext.ThrowFault(
+                                FriendServiceContext.ERROR_DB,
+                                mapped.MessageKey);
                         }
                     }
                 });
@@ -123,35 +142,51 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
-                        var db = new FriendDbContext(connection, transaction, myAccountId);
+                        try
+                        {
+                            var db = new FriendDbContext(connection, transaction, myAccountId);
 
-                        FriendRequestRow row = _friendRequestRepository.ReadRequestRow(
-                            db,
-                            FriendSql.Text.CHECK_REQUEST,
-                            request.FriendRequestId);
+                            FriendRequestRow row = _friendRequestRepository.ReadRequestRow(
+                                db,
+                                FriendSql.Text.CHECK_REQUEST,
+                                request.FriendRequestId);
 
-                        EnsureRequestReceiver(row.ToAccountId, myAccountId);
+                            EnsureRequestReceiver(row.ToAccountId, myAccountId);
 
-                        EnsureRequestPending(
-                            row.Status,
-                            FriendServiceContext.ERROR_FR_NOT_PENDING,
-                            FriendServiceContext.MESSAGE_FR_NOT_PENDING_ALREADY_PROCESSED);
+                            EnsureRequestPending(
+                                row.Status,
+                                FriendServiceContext.ERROR_FR_NOT_PENDING,
+                                FriendServiceContext.KEY_FR_REQUEST_ALREADY_PROCESSED);
 
-                        int affectedRows = _friendRequestRepository.AcceptRequest(db, request.FriendRequestId, myAccountId);
-                        EnsureAffectedRowsOrRace(affectedRows);
 
-                        transaction.Commit();
+                            int affectedRows = _friendRequestRepository.AcceptRequest(db, request.FriendRequestId, myAccountId);
+                            EnsureAffectedRowsOrRace(affectedRows);
 
-                        FriendServiceContext.Logger.InfoFormat(
-                            "AcceptFriendRequest: request accepted. RequestId={0}, Me={1}, From={2}",
-                            request.FriendRequestId,
-                            myAccountId,
-                            row.FromAccountId);
+                            transaction.Commit();
 
-                        DateTime sinceUtc = DateTime.UtcNow;
-                        FriendSummary newFriend = CreateNewFriendSummary(row.FromAccountId, sinceUtc);
+                            FriendServiceContext.Logger.InfoFormat(
+                                "AcceptFriendRequest: request accepted. RequestId={0}, Me={1}, From={2}",
+                                request.FriendRequestId,
+                                myAccountId,
+                                row.FromAccountId);
 
-                        return CreateAcceptFriendRequestResponse(newFriend);
+                            DateTime sinceUtc = DateTime.UtcNow;
+                            FriendSummary newFriend = CreateNewFriendSummary(row.FromAccountId, sinceUtc);
+
+                            return CreateAcceptFriendRequestResponse(newFriend);
+                        }
+                        catch (SqlException ex)
+                        {
+                            SqlFaultMapping mapped = SqlExceptionFaultMapper.Map(
+                                ex,
+                                FriendServiceContext.OP_KEY_ACCEPT_FRIEND_REQUEST);
+
+                            FriendServiceContext.Logger.Error("AcceptFriendRequest: SQL exception.", ex);
+
+                            throw FriendServiceContext.ThrowFault(
+                                FriendServiceContext.ERROR_DB,
+                                mapped.MessageKey);
+                        }
                     }
                 });
 
@@ -169,53 +204,69 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
-                        var db = new FriendDbContext(connection, transaction, myAccountId);
-
-                        FriendRequestRow row = _friendRequestRepository.ReadRequestRow(
-                            db,
-                            FriendSql.Text.GET_REQUEST,
-                            request.FriendRequestId);
-
-                        EnsureRequestPending(
-                            row.Status,
-                            FriendServiceContext.ERROR_FR_NOT_PENDING,
-                            FriendServiceContext.MESSAGE_FR_NOT_PENDING_ALREADY_RESOLVED);
-
-                        if (row.ToAccountId == myAccountId)
+                        try
                         {
-                            int affectedRows = _friendRequestRepository.RejectAsReceiver(db, request.FriendRequestId);
-                            EnsureAffectedRowsOrRace(affectedRows);
+                            var db = new FriendDbContext(connection, transaction, myAccountId);
 
-                            transaction.Commit();
+                            FriendRequestRow row = _friendRequestRepository.ReadRequestRow(
+                                db,
+                                FriendSql.Text.GET_REQUEST,
+                                request.FriendRequestId);
 
-                            FriendServiceContext.Logger.InfoFormat(
-                                "RejectFriendRequest: request rejected. RequestId={0}, Me={1}, From={2}",
-                                request.FriendRequestId,
-                                myAccountId,
-                                row.FromAccountId);
+                            EnsureRequestPending(
+                                row.Status,
+                                FriendServiceContext.ERROR_FR_NOT_PENDING,
+                                FriendServiceContext.KEY_FR_REQUEST_ALREADY_PROCESSED);
 
-                            return CreateRejectFriendRequestResponse(FriendRequestStatus.Rejected);
+
+                            if (row.ToAccountId == myAccountId)
+                            {
+                                int affectedRows = _friendRequestRepository.RejectAsReceiver(db, request.FriendRequestId);
+                                EnsureAffectedRowsOrRace(affectedRows);
+
+                                transaction.Commit();
+
+                                FriendServiceContext.Logger.InfoFormat(
+                                    "RejectFriendRequest: request rejected. RequestId={0}, Me={1}, From={2}",
+                                    request.FriendRequestId,
+                                    myAccountId,
+                                    row.FromAccountId);
+
+                                return CreateRejectFriendRequestResponse(FriendRequestStatus.Rejected);
+                            }
+
+                            if (row.FromAccountId == myAccountId)
+                            {
+                                int affectedRows = _friendRequestRepository.CancelAsSender(db, request.FriendRequestId);
+                                EnsureAffectedRowsOrRace(affectedRows);
+
+                                transaction.Commit();
+
+                                FriendServiceContext.Logger.InfoFormat(
+                                    "RejectFriendRequest: request cancelled. RequestId={0}, Me={1}, To={2}",
+                                    request.FriendRequestId,
+                                    myAccountId,
+                                    row.ToAccountId);
+
+                                return CreateRejectFriendRequestResponse(FriendRequestStatus.Cancelled);
+                            }
+
+                            throw FriendServiceContext.ThrowFault(
+                                FriendServiceContext.ERROR_FR_FORBIDDEN,
+                                FriendServiceContext.MESSAGE_FR_FORBIDDEN_NOT_INVOLVED);
                         }
-
-                        if (row.FromAccountId == myAccountId)
+                        catch (SqlException ex)
                         {
-                            int affectedRows = _friendRequestRepository.CancelAsSender(db, request.FriendRequestId);
-                            EnsureAffectedRowsOrRace(affectedRows);
+                            SqlFaultMapping mapped = SqlExceptionFaultMapper.Map(
+                                ex,
+                                FriendServiceContext.OP_KEY_REJECT_FRIEND_REQUEST);
 
-                            transaction.Commit();
+                            FriendServiceContext.Logger.Error("RejectFriendRequest: SQL exception.", ex);
 
-                            FriendServiceContext.Logger.InfoFormat(
-                                "RejectFriendRequest: request cancelled. RequestId={0}, Me={1}, To={2}",
-                                request.FriendRequestId,
-                                myAccountId,
-                                row.ToAccountId);
-
-                            return CreateRejectFriendRequestResponse(FriendRequestStatus.Cancelled);
+                            throw FriendServiceContext.ThrowFault(
+                                FriendServiceContext.ERROR_DB,
+                                mapped.MessageKey);
                         }
-
-                        throw FriendServiceContext.ThrowFault(
-                            FriendServiceContext.ERROR_FR_FORBIDDEN,
-                            FriendServiceContext.MESSAGE_FR_FORBIDDEN_NOT_INVOLVED);
                     }
                 });
         }
@@ -233,33 +284,48 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     using (SqlTransaction transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                     {
-                        var db = new FriendDbContext(connection, transaction, myAccountId);
-
-                        int? friendRequestId = _friendRequestRepository.GetLatestAcceptedFriendRequestId(db, otherAccountId);
-                        if (!friendRequestId.HasValue)
+                        try
                         {
+                            var db = new FriendDbContext(connection, transaction, myAccountId);
+
+                            int? friendRequestId = _friendRequestRepository.GetLatestAcceptedFriendRequestId(db, otherAccountId);
+                            if (!friendRequestId.HasValue)
+                            {
+                                transaction.Commit();
+
+                                FriendServiceContext.Logger.InfoFormat(
+                                    "RemoveFriend: no friendship found. Me={0}, Other={1}",
+                                    myAccountId,
+                                    otherAccountId);
+
+                                return CreateRemoveFriendResponse(false);
+                            }
+
+                            int affectedRows = _friendRequestRepository.MarkFriendRequestCancelled(db, friendRequestId.Value);
+                            EnsureAffectedRowsOrRace(affectedRows);
+
                             transaction.Commit();
 
                             FriendServiceContext.Logger.InfoFormat(
-                                "RemoveFriend: no friendship found. Me={0}, Other={1}",
+                                "RemoveFriend: friendship marked as cancelled. Me={0}, Other={1}, RequestId={2}",
                                 myAccountId,
-                                otherAccountId);
+                                otherAccountId,
+                                friendRequestId.Value);
 
-                            return CreateRemoveFriendResponse(false);
+                            return CreateRemoveFriendResponse(true);
                         }
+                        catch (SqlException ex)
+                        {
+                            SqlFaultMapping mapped = SqlExceptionFaultMapper.Map(
+                                ex,
+                                FriendServiceContext.OP_KEY_REMOVE_FRIEND);
 
-                        int affectedRows = _friendRequestRepository.MarkFriendRequestCancelled(db, friendRequestId.Value);
-                        EnsureAffectedRowsOrRace(affectedRows);
+                            FriendServiceContext.Logger.Error("RemoveFriend: SQL exception.", ex);
 
-                        transaction.Commit();
-
-                        FriendServiceContext.Logger.InfoFormat(
-                            "RemoveFriend: friendship marked as cancelled. Me={0}, Other={1}, RequestId={2}",
-                            myAccountId,
-                            otherAccountId,
-                            friendRequestId.Value);
-
-                        return CreateRemoveFriendResponse(true);
+                            throw FriendServiceContext.ThrowFault(
+                                FriendServiceContext.ERROR_DB,
+                                mapped.MessageKey);
+                        }
                     }
                 });
         }
@@ -279,11 +345,11 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
 
 
-        private static void EnsureRequestPending(byte status, string errorCode, string message)
+        private static void EnsureRequestPending(byte status, string errorCode, string messageKey)
         {
             if (status != (byte)FriendRequestState.Pending)
             {
-                throw FriendServiceContext.ThrowFault(errorCode, message);
+                throw FriendServiceContext.ThrowFault(errorCode, messageKey);
             }
         }
 

@@ -56,6 +56,12 @@
                 WHERE lm.lobby_id = @LobbyId AND lm.is_active = 1;";
         }
 
+        private const string SQL_GET_ACTIVE_LOBBY_IDS_FOR_USER =
+                @"SELECT DISTINCT lobby_id
+                  FROM dbo.LobbyMembers
+                  WHERE user_id = @UserId
+                    AND is_active = 1
+                    AND left_at_utc IS NULL;";
         public static string BuildUpdateUser(bool setName, bool setImg)
         {
             if (!setName && !setImg)
