@@ -29,6 +29,8 @@
         public const string MESSAGE_UNEXPECTED_ERROR =
             "Ocurrió un error inesperado. Intenta de nuevo más tarde.";
 
+        public const string MESSAGE_ACCESS_CODE_REQUIRED = "AccessCode requerido.";
+
         public const string PARAM_USER_ID = "@UserId";
         public const string PARAM_LOBBY_ID = "@LobbyId";
         public const string PARAM_ID = "@Id";
