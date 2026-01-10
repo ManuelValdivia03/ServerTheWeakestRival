@@ -426,7 +426,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         }
 
         [TestMethod]
-        public void GetProfileImage_WhenNoImageSaved_ReturnsHasImageFalse()
+        public void GetProfileImage_WhenNoImageSaved_ReturnsEmptyImage()
         {
             string email = CreateUniqueEmail("noimage");
 
@@ -448,25 +448,30 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             GetProfileImageResponse response = authService.GetProfileImage(new GetProfileImageRequest
             {
                 Token = loginResponse.Token.Token,
-                UserId = loginResponse.Token.UserId
+                AccountId = loginResponse.Token.UserId,
+                ProfileImageCode = EMPTY
             });
 
             Assert.IsNotNull(response);
-            Assert.AreEqual(loginResponse.Token.UserId, response.UserId);
-            Assert.IsFalse(response.HasImage);
+
             Assert.IsNotNull(response.ImageBytes);
             Assert.AreEqual(0, response.ImageBytes.Length);
+
             Assert.IsNotNull(response.ContentType);
             Assert.AreEqual(string.Empty, response.ContentType);
+
             Assert.IsNull(response.UpdatedAtUtc);
+
+            Assert.IsNotNull(response.ProfileImageCode);
+            Assert.AreEqual(string.Empty, response.ProfileImageCode);
         }
 
         [TestMethod]
-        public void GetProfileImage_WhenImageSaved_ReturnsHasImageTrue()
+        public void GetProfileImage_WhenImageSaved_ReturnsImage()
         {
             string email = CreateUniqueEmail("hasimage");
 
-            authService.Register(new RegisterRequest
+            RegisterResponse reg = authService.Register(new RegisterRequest
             {
                 Email = email,
                 Password = PASSWORD,
@@ -484,15 +489,23 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             GetProfileImageResponse response = authService.GetProfileImage(new GetProfileImageRequest
             {
                 Token = loginResponse.Token.Token,
-                UserId = loginResponse.Token.UserId
+                AccountId = reg.UserId,
+                ProfileImageCode = EMPTY
             });
 
             Assert.IsNotNull(response);
-            Assert.AreEqual(loginResponse.Token.UserId, response.UserId);
-            Assert.IsTrue(response.HasImage);
+
+            Assert.IsNotNull(response.ImageBytes);
+            Assert.IsTrue(response.ImageBytes.Length > 0);
             CollectionAssert.AreEqual(PNG_MINIMAL_VALID_BYTES, response.ImageBytes);
+
+            Assert.IsNotNull(response.ContentType);
             Assert.AreEqual(CONTENT_TYPE_PNG, response.ContentType);
+
             Assert.IsNotNull(response.UpdatedAtUtc);
+
+            Assert.IsNotNull(response.ProfileImageCode);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(response.ProfileImageCode));
         }
 
         [TestMethod]

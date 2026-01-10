@@ -17,10 +17,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         private const string PASSWORD = "Password123!";
 
         private const string CONTENT_TYPE_PNG = "image/png";
-
-        private const string TOKEN_WHITESPACE = "   ";
-        private const string TOKEN_EMPTY = "";
-        private const int NON_EXISTING_USER_ID = 987654321;
+        private const string PROFILE_IMAGE_CODE_EMPTY = "";
 
         private static readonly byte[] PNG_IMAGE_BYTES = new byte[]
         {
@@ -42,14 +39,13 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Execute_WhenTokenIsInvalid_ThrowsInvalidSession()
         {
-            int userId = 1;
-
             var workflow = new GetProfileImageWorkflow(authRepository);
 
             var request = new GetProfileImageRequest
             {
                 Token = Guid.NewGuid().ToString("N"),
-                UserId = userId
+                AccountId = 1,
+                ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
             };
 
             ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(request));
@@ -59,75 +55,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         }
 
         [TestMethod]
-        public void Execute_WhenTokenIsNull_ThrowsInvalidSession()
+        public void Execute_WhenAccountIdIsInvalid_ThrowsUserIdRequired()
         {
-            var workflow = new GetProfileImageWorkflow(authRepository);
-
-            ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(new GetProfileImageRequest
-            {
-                Token = null,
-                UserId = 1
-            }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_SESSION, fault.Message);
-        }
-
-        [TestMethod]
-        public void Execute_WhenTokenIsEmpty_ThrowsInvalidSession()
-        {
-            var workflow = new GetProfileImageWorkflow(authRepository);
-
-            ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(new GetProfileImageRequest
-            {
-                Token = TOKEN_EMPTY,
-                UserId = 1
-            }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_SESSION, fault.Message);
-        }
-
-        [TestMethod]
-        public void Execute_WhenTokenIsWhitespace_ThrowsInvalidSession()
-        {
-            var workflow = new GetProfileImageWorkflow(authRepository);
-
-            ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(new GetProfileImageRequest
-            {
-                Token = TOKEN_WHITESPACE,
-                UserId = 1
-            }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_SESSION, fault.Message);
-        }
-
-        [TestMethod]
-        public void Execute_WhenTokenIsExpired_ThrowsInvalidSession()
-        {
-            string email = BuildEmail("expiredtoken");
-            int userId = CreateAccountWithoutImage(email);
-
-            AuthToken token = AuthServiceContext.IssueToken(userId);
-            token.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
-
-            var workflow = new GetProfileImageWorkflow(authRepository);
-
-            ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(new GetProfileImageRequest
-            {
-                Token = token.Token,
-                UserId = userId
-            }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_SESSION, fault.Message);
-        }
-
-        [TestMethod]
-        public void Execute_WhenUserIdIsInvalid_ThrowsUserIdRequired()
-        {
-            string email = BuildEmail("useridinvalid");
+            string email = BuildEmail("accountidinvalid");
             CreateAccountWithoutImage(email);
 
             string token = LoginAndGetToken(email);
@@ -137,7 +67,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             var request = new GetProfileImageRequest
             {
                 Token = token,
-                UserId = 0
+                AccountId = 0,
+                ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
             };
 
             ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(request));
@@ -147,10 +78,10 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         }
 
         [TestMethod]
-        public void Execute_WhenUserHasNoImage_ReturnsEmptyImageResponse()
+        public void Execute_WhenAccountHasNoImage_ReturnsEmptyImageResponse()
         {
             string email = BuildEmail("noimage");
-            int userId = CreateAccountWithoutImage(email);
+            int accountId = CreateAccountWithoutImage(email);
 
             string token = LoginAndGetToken(email);
 
@@ -159,12 +90,11 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             GetProfileImageResponse response = workflow.Execute(new GetProfileImageRequest
             {
                 Token = token,
-                UserId = userId
+                AccountId = accountId,
+                ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
             });
 
             Assert.IsNotNull(response);
-            Assert.AreEqual(userId, response.UserId);
-            Assert.IsFalse(response.HasImage);
 
             Assert.IsNotNull(response.ImageBytes);
             Assert.AreEqual(0, response.ImageBytes.Length);
@@ -173,42 +103,16 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             Assert.AreEqual(string.Empty, response.ContentType);
 
             Assert.IsNull(response.UpdatedAtUtc);
+
+            Assert.IsNotNull(response.ProfileImageCode);
+            Assert.AreEqual(string.Empty, response.ProfileImageCode);
         }
 
         [TestMethod]
-        public void Execute_WhenUserIdDoesNotExist_ReturnsEmptyImageResponse()
-        {
-            string email = BuildEmail("tokenok_userdoesnotexist");
-            int userId = CreateAccountWithoutImage(email);
-
-            string token = LoginAndGetToken(email);
-
-            var workflow = new GetProfileImageWorkflow(authRepository);
-
-            GetProfileImageResponse response = workflow.Execute(new GetProfileImageRequest
-            {
-                Token = token,
-                UserId = NON_EXISTING_USER_ID
-            });
-
-            Assert.IsNotNull(response);
-            Assert.AreEqual(NON_EXISTING_USER_ID, response.UserId);
-            Assert.IsFalse(response.HasImage);
-
-            Assert.IsNotNull(response.ImageBytes);
-            Assert.AreEqual(0, response.ImageBytes.Length);
-
-            Assert.IsNotNull(response.ContentType);
-            Assert.AreEqual(string.Empty, response.ContentType);
-
-            Assert.IsNull(response.UpdatedAtUtc);
-        }
-
-        [TestMethod]
-        public void Execute_WhenUserHasImage_ReturnsImageResponse()
+        public void Execute_WhenAccountHasImage_ReturnsImageResponse()
         {
             string email = BuildEmail("hasimage");
-            int userId = CreateAccountWithImage(email, PNG_IMAGE_BYTES, CONTENT_TYPE_PNG);
+            int accountId = CreateAccountWithImage(email, PNG_IMAGE_BYTES, CONTENT_TYPE_PNG);
 
             string token = LoginAndGetToken(email);
 
@@ -217,41 +121,17 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             GetProfileImageResponse response = workflow.Execute(new GetProfileImageRequest
             {
                 Token = token,
-                UserId = userId
+                AccountId = accountId,
+                ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
             });
 
             Assert.IsNotNull(response);
-            Assert.AreEqual(userId, response.UserId);
-            Assert.IsTrue(response.HasImage);
 
             CollectionAssert.AreEqual(PNG_IMAGE_BYTES, response.ImageBytes);
             Assert.AreEqual(CONTENT_TYPE_PNG, response.ContentType);
             Assert.IsNotNull(response.UpdatedAtUtc);
-        }
 
-        [TestMethod]
-        public void Execute_WhenTokenBelongsToAnotherUser_AllowsReadingRequestedUserImage()
-        {
-            string emailA = BuildEmail("usera");
-            CreateAccountWithoutImage(emailA);
-            string tokenA = LoginAndGetToken(emailA);
-
-            string emailB = BuildEmail("userb_target");
-            int userIdB = CreateAccountWithImage(emailB, PNG_IMAGE_BYTES, CONTENT_TYPE_PNG);
-
-            var workflow = new GetProfileImageWorkflow(authRepository);
-
-            GetProfileImageResponse response = workflow.Execute(new GetProfileImageRequest
-            {
-                Token = tokenA,
-                UserId = userIdB
-            });
-
-            Assert.IsNotNull(response);
-            Assert.AreEqual(userIdB, response.UserId);
-            Assert.IsTrue(response.HasImage);
-            CollectionAssert.AreEqual(PNG_IMAGE_BYTES, response.ImageBytes);
-            Assert.AreEqual(CONTENT_TYPE_PNG, response.ContentType);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(response.ProfileImageCode));
         }
 
         private static string BuildEmail(string prefix)

@@ -27,6 +27,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         private const string WHITESPACE = " ";
         private const int EXPIRED_OFFSET_MINUTES = -1;
 
+        private const string PROFILE_IMAGE_CODE_EMPTY = "";
+
         private const string SQL_EXPIRE_LATEST_VERIFICATION = @"
             UPDATE dbo.EmailVerifications
             SET expires_at_utc = DATEADD(MINUTE, @OffsetMinutes, SYSUTCDATETIME())
@@ -58,8 +60,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             passwordService = new PasswordService(AuthServiceConstants.PASSWORD_MIN_LENGTH);
             fakeEmailService = new FakeEmailService();
 
-            var repository = new AuthRepository(() => DbTestConfig.GetMainConnectionString());
-            authOperations = new AuthOperations(repository, passwordService, fakeEmailService);
+            authRepository = new AuthRepository(() => DbTestConfig.GetMainConnectionString());
+            authOperations = new AuthOperations(authRepository, passwordService, fakeEmailService);
         }
 
         [TestCleanup]
@@ -251,15 +253,22 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             GetProfileImageResponse response = authOperations.GetProfileImage(new GetProfileImageRequest
             {
                 Token = loginResponse.Token.Token,
-                UserId = loginResponse.Token.UserId
+                AccountId = loginResponse.Token.UserId,
+                ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
             });
 
             Assert.IsNotNull(response);
-            Assert.AreEqual(loginResponse.Token.UserId, response.UserId);
-            Assert.IsFalse(response.HasImage);
+
             Assert.IsNotNull(response.ImageBytes);
             Assert.AreEqual(0, response.ImageBytes.Length);
+
             Assert.IsNotNull(response.ContentType);
+            Assert.AreEqual(string.Empty, response.ContentType);
+
+            Assert.IsNull(response.UpdatedAtUtc);
+
+            Assert.IsNotNull(response.ProfileImageCode);
+            Assert.AreEqual(string.Empty, response.ProfileImageCode);
         }
 
         [TestMethod]
@@ -612,7 +621,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
                 authOperations.GetProfileImage(new GetProfileImageRequest
                 {
                     Token = Guid.NewGuid().ToString("N"),
-                    UserId = 1
+                    AccountId = 1,
+                    ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
                 }));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
@@ -631,7 +641,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
                 authOperations.GetProfileImage(new GetProfileImageRequest
                 {
                     Token = login.Token.Token,
-                    UserId = 0
+                    AccountId = 0,
+                    ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
                 }));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_REQUEST, fault.Code);
@@ -657,14 +668,22 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             GetProfileImageResponse response = authOperations.GetProfileImage(new GetProfileImageRequest
             {
                 Token = login.Token.Token,
-                UserId = reg.UserId
+                AccountId = reg.UserId,
+                ProfileImageCode = PROFILE_IMAGE_CODE_EMPTY
             });
 
             Assert.IsNotNull(response);
-            Assert.IsTrue(response.HasImage);
+
+            Assert.IsNotNull(response.ImageBytes);
+            Assert.IsTrue(response.ImageBytes.Length > 0);
+
             CollectionAssert.AreEqual(PNG_BYTES_VALID, response.ImageBytes);
             Assert.AreEqual(ProfileImageConstants.CONTENT_TYPE_PNG, response.ContentType);
+
             Assert.IsNotNull(response.UpdatedAtUtc);
+
+            Assert.IsNotNull(response.ProfileImageCode);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(response.ProfileImageCode));
         }
 
         private void RegisterAccount(string email, string password)
