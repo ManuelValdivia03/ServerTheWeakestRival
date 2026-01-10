@@ -34,6 +34,15 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
         private const string ENTRY_ID_FORMAT_NO_HYPHENS = "N";
 
+        private const string FORCED_LOGOUT_CODE = "FORCED_LOGOUT";
+
+        private const string REASON_CHANNEL_CLOSED = "Closed";
+        private const string REASON_CHANNEL_FAULTED = "Faulted";
+        private const string REASON_UPSERT_NOT_ALIVE = "Upsert_NotAlive";
+        private const string REASON_TRYGET_NOT_ALIVE = "TryGet_NotAlive";
+        private const string REASON_REPLACED_BY_NEW_SESSION = "ReplacedByNewSession";
+        private const string REASON_FORCED_LOGOUT = "ForcedLogout";
+
         public static void Upsert(int accountId, ILobbyClientCallback callback)
         {
             if (accountId <= 0 || callback == null)
@@ -44,21 +53,30 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             var channelObject = callback as ICommunicationObject;
             if (channelObject == null)
             {
-                Logger.WarnFormat("LobbyCallbackRegistry.Upsert: callback does not implement ICommunicationObject. AccountId={0}", accountId);
+                Logger.WarnFormat(
+                    "LobbyCallbackRegistry.Upsert: callback does not implement ICommunicationObject. AccountId={0}",
+                    accountId);
                 return;
             }
 
             var entryId = Guid.NewGuid().ToString(ENTRY_ID_FORMAT_NO_HYPHENS);
-            var entry = new CallbackEntry(accountId, entryId, callback);
+            var newEntry = new CallbackEntry(accountId, entryId, callback);
+
+            CallbackEntry oldEntry = null;
 
             lock (SyncRoot)
             {
-                EntriesByAccountId[accountId] = entry;
+                if (EntriesByAccountId.TryGetValue(accountId, out var current) && current != null)
+                {
+                    oldEntry = current;
+                }
+
+                EntriesByAccountId[accountId] = newEntry;
 
                 try
                 {
-                    channelObject.Closed += (_, __) => RemoveIfMatches(accountId, entryId, "Closed");
-                    channelObject.Faulted += (_, __) => RemoveIfMatches(accountId, entryId, "Faulted");
+                    channelObject.Closed += (_, __) => RemoveIfMatches(accountId, entryId, REASON_CHANNEL_CLOSED);
+                    channelObject.Faulted += (_, __) => RemoveIfMatches(accountId, entryId, REASON_CHANNEL_FAULTED);
                 }
                 catch (Exception ex)
                 {
@@ -67,8 +85,14 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
                 if (!IsChannelAlive(channelObject))
                 {
-                    RemoveIfMatches(accountId, entryId, "Upsert_NotAlive");
+                    RemoveIfMatches(accountId, entryId, REASON_UPSERT_NOT_ALIVE);
                 }
+            }
+
+            // Si había un callback previo (otra sesión), lo forzamos a salir
+            if (oldEntry != null && oldEntry.Callback != null && !ReferenceEquals(oldEntry.Callback, callback))
+            {
+                TrySendForcedLogoutToEntry(oldEntry, REASON_REPLACED_BY_NEW_SESSION);
             }
         }
 
@@ -94,7 +118,7 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
             if (entry.ChannelObject == null || !IsChannelAlive(entry.ChannelObject))
             {
-                RemoveIfMatches(accountId, entry.EntryId, "TryGet_NotAlive");
+                RemoveIfMatches(accountId, entry.EntryId, REASON_TRYGET_NOT_ALIVE);
                 return false;
             }
 
@@ -116,11 +140,90 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             }
             catch (Exception ex)
             {
-                Logger.WarnFormat("LobbyCallbackRegistry.TrySendForcedLogout: callback failed. AccountId={0}", accountId);
+                Logger.WarnFormat(
+                    "LobbyCallbackRegistry.TrySendForcedLogout: callback failed. AccountId={0}",
+                    accountId);
                 Logger.Warn("LobbyCallbackRegistry.TrySendForcedLogout: exception.", ex);
 
                 Remove(accountId);
                 return false;
+            }
+        }
+
+        // ÚTIL para AuthServiceContext.IssueToken: sacar al cliente viejo aunque el nuevo aún no llame Lobby
+        public static bool TryForceLogoutAndRemove(int accountId, string reason)
+        {
+            if (accountId <= 0)
+            {
+                return false;
+            }
+
+            CallbackEntry entry = null;
+
+            lock (SyncRoot)
+            {
+                if (!EntriesByAccountId.TryRemove(accountId, out entry))
+                {
+                    return false;
+                }
+            }
+
+            TrySendForcedLogoutToEntry(entry, string.IsNullOrWhiteSpace(reason) ? REASON_FORCED_LOGOUT : reason);
+            return true;
+        }
+
+        private static void TrySendForcedLogoutToEntry(CallbackEntry entry, string reason)
+        {
+            if (entry == null || entry.Callback == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var notification = new ForcedLogoutNotification
+                {
+                    Code = FORCED_LOGOUT_CODE,
+                    SanctionEndAtUtc = null,
+                    SanctionType = 0
+                };
+
+                entry.Callback.ForcedLogout(notification);
+            }
+            catch (Exception ex)
+            {
+                Logger.WarnFormat(
+                    "LobbyCallbackRegistry.TrySendForcedLogoutToEntry: callback failed. AccountId={0}, Reason={1}",
+                    entry.AccountId,
+                    reason ?? string.Empty);
+                Logger.Warn("LobbyCallbackRegistry.TrySendForcedLogoutToEntry: exception.", ex);
+            }
+            finally
+            {
+                CloseChannelSafe(entry.ChannelObject);
+            }
+        }
+
+        private static void CloseChannelSafe(ICommunicationObject channelObject)
+        {
+            if (channelObject == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (channelObject.State == CommunicationState.Faulted)
+                {
+                    channelObject.Abort();
+                    return;
+                }
+
+                channelObject.Close();
+            }
+            catch
+            {
+                try { channelObject.Abort(); } catch { }
             }
         }
 

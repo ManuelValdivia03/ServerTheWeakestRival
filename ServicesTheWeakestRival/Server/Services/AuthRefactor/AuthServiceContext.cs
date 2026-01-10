@@ -1,5 +1,7 @@
 ﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services;
 using System;
 using System.Configuration;
 using System.Data.SqlClient;
@@ -36,31 +38,20 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             return connection.ConnectionString;
         }
 
-        public static AuthToken IssueToken(int userId)
+        internal static AuthToken IssueToken(int userId)
         {
             if (userId <= 0)
             {
                 throw ThrowFault(AuthServiceConstants.ERROR_INVALID_REQUEST, AuthServiceConstants.MESSAGE_INVALID_USER_ID);
             }
 
-            if (TokenStore.TryGetActiveTokenForUser(userId, out _))
-            {
-                throw ThrowFault(
-                    AuthServiceConstants.ERROR_ALREADY_LOGGED_IN,
-                    AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN);
-            }
+            LobbyCallbackRegistry.TryForceLogoutAndRemove(userId, "AuthServiceContext.IssueToken");
 
-            string tokenValue = Guid.NewGuid().ToString(AuthServiceConstants.TOKEN_GUID_FORMAT);
-            DateTime expiresAt = DateTime.UtcNow.AddHours(AuthServiceConstants.TOKEN_TTL_HOURS);
+            TokenStore.RevokeAllForUser(userId);
 
-            var token = new AuthToken
-            {
-                UserId = userId,
-                Token = tokenValue,
-                ExpiresAtUtc = expiresAt
-            };
+            AuthToken token = CreateNewToken(userId);
+            TokenStore.TryAddToken(token);
 
-            TokenStore.StoreToken(token);
             return token;
         }
 
@@ -107,11 +98,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             return new FaultException<ServiceFault>(fault, new FaultReason(userMessage));
         }
 
-        private static int ParseIntAppSetting(string key, int @default)
-        {
-            return int.TryParse(ConfigurationManager.AppSettings[key], out int value) ? value : @default;
-        }
-
         internal static Exception CreateSqlTechnicalFault(
             string technicalErrorCode,
             string messageKey,
@@ -119,6 +105,24 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             SqlException ex)
         {
             return ThrowTechnicalFault(technicalErrorCode, messageKey, context, ex);
+        }
+
+        private static AuthToken CreateNewToken(int userId)
+        {
+            string tokenValue = Guid.NewGuid().ToString(AuthServiceConstants.TOKEN_GUID_FORMAT);
+            DateTime expiresAtUtc = DateTime.UtcNow.AddHours(AuthServiceConstants.TOKEN_TTL_HOURS);
+
+            return new AuthToken
+            {
+                UserId = userId,
+                Token = tokenValue,
+                ExpiresAtUtc = expiresAtUtc
+            };
+        }
+
+        private static int ParseIntAppSetting(string key, int @default)
+        {
+            return int.TryParse(ConfigurationManager.AppSettings[key], out int value) ? value : @default;
         }
     }
 }

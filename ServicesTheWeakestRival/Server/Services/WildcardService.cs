@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
+using System.Globalization;
 using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services
@@ -18,7 +19,9 @@ namespace ServicesTheWeakestRival.Server.Services
     public sealed class WildcardService : IWildcardService
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(WildcardService));
+
         private static readonly Random RandomGenerator = new Random();
+        private static readonly object randomSyncRoot = new object();
 
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
@@ -74,7 +77,10 @@ namespace ServicesTheWeakestRival.Server.Services
                     "Configuration error. Please contact support.",
                     "WildcardService.GetConnectionString",
                     new ConfigurationErrorsException(
-                        string.Format("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME)));
+                        string.Format(
+                            CultureInfo.InvariantCulture,
+                            "Missing connection string '{0}'.",
+                            MAIN_CONNECTION_STRING_NAME)));
             }
 
             return configurationString.ConnectionString;
@@ -637,7 +643,8 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             int selectedTypeId;
-            lock (RandomGenerator)
+
+            lock (randomSyncRoot)
             {
                 int index = RandomGenerator.Next(wildcardTypeIds.Count);
                 selectedTypeId = wildcardTypeIds[index];

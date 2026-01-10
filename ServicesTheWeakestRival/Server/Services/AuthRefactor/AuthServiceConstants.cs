@@ -9,7 +9,6 @@
         public const int PASSWORD_HASH_MAX_LENGTH = 128;
         public const int SQL_VARBINARY_MAX = -1;
 
-
         public const byte ACCOUNT_STATUS_ACTIVE = 1;
         public const byte ACCOUNT_STATUS_INACTIVE = 2;
         public const byte ACCOUNT_STATUS_SUSPENDED = 3;
@@ -41,9 +40,16 @@
         public const string ERROR_ACCOUNT_INACTIVE = "ACCOUNT_INACTIVE";
         public const string ERROR_ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED";
         public const string ERROR_ACCOUNT_BANNED = "ACCOUNT_BANNED";
+
+        // Si antes lo usabas, ya NO debe bloquear login; ahora se reemplaza sesión.
         public const string ERROR_ALREADY_LOGGED_IN = "ALREADY_LOGGED_IN";
         public const string MESSAGE_ALREADY_LOGGED_IN = "This account is already online.";
 
+        // NUEVO: para “kick” por login en otro lado
+        public const string ERROR_FORCED_LOGOUT = "FORCED_LOGOUT";
+        public const string MESSAGE_FORCED_LOGOUT = "Session replaced by a new login.";
+
+        public const string MESSAGE_INVALID_REQUEST = "Invalid request.";
         public const string MESSAGE_CONFIG_ERROR = "Configuration error. Please contact support.";
         public const string MESSAGE_PAYLOAD_NULL = "Request payload is null.";
         public const string MESSAGE_EMAIL_REQUIRED = "Email is required.";
@@ -54,45 +60,27 @@
         public const string MESSAGE_ACCOUNT_NOT_ACTIVE = "Account is not active.";
         public const string MESSAGE_ACCOUNT_SUSPENDED = "Account is suspended.";
         public const string MESSAGE_ACCOUNT_BANNED = "Account is banned.";
-        public const string MESSAGE_UNEXPECTED_DB_LOGIN = 
-            "Unexpected database error while logging in.";
-        public const string MESSAGE_UNEXPECTED_DB_LOGOUT = 
-            "Unexpected database error while logging out.";
-        public const string MESSAGE_COMPLETE_REGISTER_REQUIRED_FIELDS =
-            "Email, display name, password and code are required.";
 
-        public const string MESSAGE_VERIFICATION_CODE_EXPIRED =
-            "Verification code expired. Request a new one.";
+        public const string MESSAGE_UNEXPECTED_DB_LOGIN = "Unexpected database error while logging in.";
+        public const string MESSAGE_UNEXPECTED_DB_LOGOUT = "Unexpected database error while logging out.";
+        public const string MESSAGE_COMPLETE_REGISTER_REQUIRED_FIELDS = "Email, display name, password and code are required.";
 
-        public const string MESSAGE_UNEXPECTED_DB_COMPLETE_REGISTER =
-            "Unexpected database error while completing registration.";
+        public const string MESSAGE_VERIFICATION_CODE_EXPIRED = "Verification code expired. Request a new one.";
+        public const string MESSAGE_UNEXPECTED_DB_COMPLETE_REGISTER = "Unexpected database error while completing registration.";
+        public const string MESSAGE_ACCOUNT_NOT_CREATED = "Account was not created.";
 
-        public const string MESSAGE_ACCOUNT_NOT_CREATED =
-            "Account was not created.";
+        public const string MESSAGE_COMPLETE_RESET_REQUIRED_FIELDS = "Email, code and new password are required.";
+        public const string MESSAGE_RESET_CODE_EXPIRED = "Reset code expired. Request a new one.";
+        public const string MESSAGE_EMAIL_NOT_REGISTERED = "No account is registered with that email.";
+        public const string MESSAGE_UNEXPECTED_DB_COMPLETE_RESET = "Unexpected database error while completing password reset.";
 
-        public const string MESSAGE_COMPLETE_RESET_REQUIRED_FIELDS =
-            "Email, code and new password are required.";
-
-        public const string MESSAGE_RESET_CODE_EXPIRED =
-            "Reset code expired. Request a new one.";
-
-        public const string MESSAGE_EMAIL_NOT_REGISTERED =
-            "No account is registered with that email.";
-
-        public const string MESSAGE_UNEXPECTED_DB_COMPLETE_RESET =
-            "Unexpected database error while completing password reset.";
-
-        public const string MESSAGE_REGISTER_REQUIRED_FIELDS =
-            "Email, display name and password are required.";
-
-        public const string MESSAGE_UNEXPECTED_DB_REGISTER =
-            "Unexpected database error while registering.";
+        public const string MESSAGE_REGISTER_REQUIRED_FIELDS = "Email, display name and password are required.";
+        public const string MESSAGE_UNEXPECTED_DB_REGISTER = "Unexpected database error while registering.";
 
         public const string MESSAGE_PONG = "pong";
         public const string MESSAGE_USER_ID_REQUIRED = "UserId is required.";
 
-        public const string MESSAGE_PROFILE_IMAGE_DB_ERROR =
-            "Unexpected database error while reading profile image.";
+        public const string MESSAGE_PROFILE_IMAGE_DB_ERROR = "Unexpected database error while reading profile image.";
 
         public const string MESSAGE_PASSWORD_MIN_LENGTH_NOT_MET =
             "Password does not meet the minimum length requirements ({0} characters).";
@@ -107,7 +95,6 @@
         public const string MESSAGE_UNEXPECTED_DB_BEGIN_RESET = "Unexpected database error while starting password reset.";
         public const string MESSAGE_RESET_CODE_INVALID = "Invalid reset code.";
         public const string MESSAGE_VERIFICATION_CODE_INVALID = "Invalid verification code.";
-
 
         public const string CTX_GET_CONNECTION = "AuthService.GetConnectionString";
         public const string CTX_BEGIN_REGISTER = "BeginRegister.EmailSender";
@@ -135,7 +122,5 @@
         public const string KEY_PREFIX_LOGIN = "Auth.Login";
         public const string KEY_PREFIX_LOGOUT = "Auth.Logout";
         public const string KEY_PREFIX_GET_PROFILE_IMAGE = "Auth.GetProfileImage";
-
-
     }
 }

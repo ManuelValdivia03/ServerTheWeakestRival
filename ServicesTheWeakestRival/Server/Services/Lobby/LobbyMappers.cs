@@ -1,5 +1,4 @@
-﻿// LobbyMappers.cs
-using log4net;
+﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Services.Logic;
 using System;
@@ -73,10 +72,21 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                     continue;
                 }
 
-                UserAvatarEntity avatarEntity = avatarSql.GetByUserId(member.user_id);
+                UserAvatarEntity avatarEntity = null;
+                try
+                {
+                    avatarEntity = avatarSql.GetByUserId(member.user_id);
+                }
+                catch (Exception ex)
+                {
+                    Logger.WarnFormat("MapToAccountMini: GetByUserId failed. user_id={0}.", member.user_id);
+                    Logger.Warn("MapToAccountMini: avatarSql exception.", ex);
+                }
 
                 byte[] profileImageBytes = member.Users.profile_image ?? Array.Empty<byte>();
                 bool hasProfileImage = profileImageBytes.Length > 0;
+
+                string email = ResolveEmail(member);
 
                 accountMinis.Add(
                     new AccountMini
@@ -85,7 +95,7 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                         DisplayName = string.IsNullOrWhiteSpace(member.Users.display_name)
                             ? string.Concat(LobbyServiceConstants.DEFAULT_PLAYER_NAME_PREFIX, member.user_id)
                             : member.Users.display_name,
-                        Email = member.Users.Accounts.email ?? string.Empty,
+                        Email = email,
                         HasProfileImage = hasProfileImage,
                         ProfileImageCode = string.Empty,
                         Avatar = MapAvatar(avatarEntity)
@@ -93,6 +103,25 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
             }
 
             return accountMinis;
+        }
+
+        private static string ResolveEmail(LobbyMembers member)
+        {
+            if (member == null || member.Users == null)
+            {
+                return string.Empty;
+            }
+
+            if (member.Users.Accounts == null)
+            {
+                Logger.WarnFormat(
+                    "MapToAccountMini: Users.Accounts is null for user_id={0}. Email will be empty.",
+                    member.user_id);
+
+                return string.Empty;
+            }
+
+            return member.Users.Accounts.email ?? string.Empty;
         }
 
         public static List<PlayerSummary> MapToPlayerSummaries(List<AccountMini> accounts)
