@@ -6,7 +6,7 @@ using ContractsToken = ServicesTheWeakestRival.Contracts.Data.AuthToken;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    internal static class TokenStore
+    public static class TokenStore
     {
         private const string CONTEXT_REVOKE_ALL_FOR_USER = "TokenStore.RevokeAllForUser";
 
@@ -14,13 +14,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static readonly object SyncRoot = new object();
 
-        internal static readonly ConcurrentDictionary<string, ContractsToken> Cache =
+        public static readonly ConcurrentDictionary<string, ContractsToken> Cache =
             new ConcurrentDictionary<string, ContractsToken>(StringComparer.Ordinal);
 
-        internal static readonly ConcurrentDictionary<int, string> ActiveTokenByUserId =
+        public static readonly ConcurrentDictionary<int, string> ActiveTokenByUserId =
             new ConcurrentDictionary<int, string>();
 
-        internal static bool TryGetUserId(string tokenValue, out int userId)
+        public static bool TryGetUserId(string tokenValue, out int userId)
         {
             userId = 0;
 
@@ -51,7 +51,7 @@ namespace ServicesTheWeakestRival.Server.Services
             return true;
         }
 
-        internal static bool TryGetActiveTokenForUser(int userId, out ContractsToken activeToken)
+        public static bool TryGetActiveTokenForUser(int userId, out ContractsToken activeToken)
         {
             activeToken = null;
 
@@ -82,7 +82,7 @@ namespace ServicesTheWeakestRival.Server.Services
             return true;
         }
 
-        internal static void StoreToken(ContractsToken token)
+        public static void StoreToken(ContractsToken token)
         {
             if (token == null || string.IsNullOrWhiteSpace(token.Token) || token.UserId <= 0)
             {
@@ -103,7 +103,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        internal static bool TryRemoveToken(string tokenValue, out ContractsToken removedToken)
+        public static bool TryRemoveToken(string tokenValue, out ContractsToken removedToken)
         {
             removedToken = null;
 
@@ -131,7 +131,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        internal static int RevokeAllForUser(int userId)
+        public static int RevokeAllForUser(int userId)
         {
             var revokedCount = 0;
 
@@ -172,7 +172,7 @@ namespace ServicesTheWeakestRival.Server.Services
             return revokedCount;
         }
 
-        private static bool IsExpired(ContractsToken token)
+        public static bool IsExpired(ContractsToken token)
         {
             return token.ExpiresAtUtc <= DateTime.UtcNow;
         }

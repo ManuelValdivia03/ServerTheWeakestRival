@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using System;
+using System.Data;
 using System.Data.SqlClient;
 
 namespace ServerTheWeakestRival.Tests.Unit.Infrastructure
@@ -6,6 +7,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Infrastructure
     internal static class DbTestCleaner
     {
         private const int RESEED_IDENTITY_TO = 0;
+
+        private const int COMMAND_TIMEOUT_SECONDS = 120;
 
         private const string SQL_DISABLE_CONSTRAINTS = @"
 DECLARE @schemaName sysname;
@@ -122,20 +125,45 @@ DEALLOCATE cur;
             {
                 cmd.Connection = connection;
                 cmd.CommandType = CommandType.Text;
+                cmd.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
 
                 connection.Open();
 
-                cmd.CommandText = SQL_DISABLE_CONSTRAINTS;
-                cmd.ExecuteNonQuery();
+                Exception mainException = null;
 
-                cmd.CommandText = SQL_DELETE_ALL_TABLES;
-                cmd.ExecuteNonQuery();
+                try
+                {
+                    cmd.CommandText = SQL_DISABLE_CONSTRAINTS;
+                    cmd.ExecuteNonQuery();
 
-                cmd.CommandText = reseedSql;
-                cmd.ExecuteNonQuery();
+                    cmd.CommandText = SQL_DELETE_ALL_TABLES;
+                    cmd.ExecuteNonQuery();
 
-                cmd.CommandText = SQL_ENABLE_CONSTRAINTS;
-                cmd.ExecuteNonQuery();
+                    cmd.CommandText = reseedSql;
+                    cmd.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    mainException = ex;
+                    throw;
+                }
+                finally
+                {
+                    try
+                    {
+                        cmd.CommandText = SQL_ENABLE_CONSTRAINTS;
+                        cmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        if (mainException != null)
+                        {
+                            throw new AggregateException(mainException, ex);
+                        }
+
+                        throw;
+                    }
+                }
             }
         }
     }

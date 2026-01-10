@@ -25,17 +25,23 @@ namespace ServicesTheWeakestRival.Server.Services
             authOperations = new AuthOperations(repository, passwordService, emailService);
         }
 
-        public PingResponse Ping(PingRequest request) => authOperations.Ping(request);
+        public PingResponse Ping(PingRequest request) => 
+            authOperations.Ping(request);
 
-        public BeginRegisterResponse BeginRegister(BeginRegisterRequest request) => authOperations.BeginRegister(request);
+        public BeginRegisterResponse BeginRegister(BeginRegisterRequest request) => 
+            authOperations.BeginRegister(request);
 
-        public RegisterResponse CompleteRegister(CompleteRegisterRequest request) => authOperations.CompleteRegister(request);
+        public RegisterResponse CompleteRegister(CompleteRegisterRequest request) => 
+            authOperations.CompleteRegister(request);
 
-        public RegisterResponse Register(RegisterRequest request) => authOperations.Register(request);
+        public RegisterResponse Register(RegisterRequest request) => 
+            authOperations.Register(request);
 
-        public LoginResponse Login(LoginRequest request) => authOperations.Login(request);
+        public LoginResponse Login(LoginRequest request) => 
+            authOperations.Login(request);
 
-        public void Logout(LogoutRequest request) => authOperations.Logout(request);
+        public void Logout(LogoutRequest request) => 
+            authOperations.Logout(request);
 
         public BeginPasswordResetResponse BeginPasswordReset(BeginPasswordResetRequest request) =>
             authOperations.BeginPasswordReset(request);

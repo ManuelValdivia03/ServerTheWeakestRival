@@ -1,52 +1,53 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using BCrypt.Net;
 
 namespace ServicesTheWeakestRival.Server.Services.Auth
 {
     public sealed class PasswordService
     {
-        private const int BCRYPT_WORK_FACTOR = 10;
+        private readonly int minLength;
 
-        private readonly int passwordMinLength;
-
-        public PasswordService(int passwordMinLength)
+        public PasswordService(int minLength)
         {
-            if (passwordMinLength <= 0)
+            if (minLength <= 0)
             {
-                throw new ArgumentOutOfRangeException(nameof(passwordMinLength));
+                throw new ArgumentOutOfRangeException(nameof(minLength));
             }
 
-            this.passwordMinLength = passwordMinLength;
+            this.minLength = minLength;
         }
 
         public bool IsValid(string password)
         {
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                return false;
-            }
-
-            return password.Length >= this.passwordMinLength;
+            return !string.IsNullOrWhiteSpace(password) && password.Trim().Length >= minLength;
         }
 
         public string Hash(string password)
         {
-            return BCrypt.Net.BCrypt.HashPassword(
-                password ?? string.Empty,
-                workFactor: BCRYPT_WORK_FACTOR);
+            return BCrypt.Net.BCrypt.HashPassword(password ?? string.Empty);
         }
 
         public bool Verify(string password, string storedHash)
         {
-            if (string.IsNullOrEmpty(storedHash))
+            if (string.IsNullOrWhiteSpace(storedHash))
             {
                 return false;
             }
 
-            return BCrypt.Net.BCrypt.Verify(password ?? string.Empty, storedHash);
+            try
+            {
+                return BCrypt.Net.BCrypt.Verify(password ?? string.Empty, storedHash);
+            }
+            catch (SaltParseException ex)
+            {
+                GC.KeepAlive(ex);
+                return false;
+            }
+            catch (ArgumentException ex)
+            {
+                GC.KeepAlive(ex);
+                return false;
+            }
         }
     }
 }

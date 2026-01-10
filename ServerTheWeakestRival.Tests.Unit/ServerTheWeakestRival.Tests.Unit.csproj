@@ -117,19 +117,38 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Fakes\FakeEmailService.cs" />
+    <Compile Include="Infrastructure\AuthEmailDispatcherTests.cs" />
     <Compile Include="Infrastructure\DbTestCleaner.cs" />
     <Compile Include="Infrastructure\DbTestConfig.cs" />
     <Compile Include="Infrastructure\FaultAssert.cs" />
+    <Compile Include="Infrastructure\SqlExceptionFaultGuardTests.cs" />
+    <Compile Include="Infrastructure\SqlExceptionFaultMapperTests.cs" />
     <Compile Include="Infrastructure\TestConfigBootstrapper.cs" />
     <Compile Include="Infrastructure\TokenStoreTestCleaner.cs" />
+    <Compile Include="Infrastructure\TokenStoreTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Services\Auth\AuthService_BeginRegister_CompleteRegister_Tests.cs" />
-    <Compile Include="Services\Auth\AuthService_BeginReset_CompleteReset_Tests.cs" />
-    <Compile Include="Services\Auth\AuthService_Login_Tests.cs" />
-    <Compile Include="Services\Auth\AuthService_Logout_Tests.cs" />
-    <Compile Include="Services\Auth\AuthService_Ping_Tests.cs" />
-    <Compile Include="Services\Auth\AuthService_Register_Tests.cs" />
-    <Compile Include="Services\Auth\IntegrationTestBase.cs" />
+    <Compile Include="Services\Auth\AccountStatusPolicyTests.cs" />
+    <Compile Include="Services\Auth\Integration\AuthOperationsTests.cs" />
+    <Compile Include="Services\Auth\Integration\AuthRepositoryIntegrationTests.cs" />
+    <Compile Include="Services\Auth\AuthRequestValidatorTests.cs" />
+    <Compile Include="Services\Auth\AuthServiceContextTests.cs" />
+    <Compile Include="Services\Auth\AuthTestBase.cs" />
+    <Compile Include="Services\Auth\BeginPasswordResetWorkflowTests.cs" />
+    <Compile Include="Services\Auth\BeginRegisterWorkflowTests.cs" />
+    <Compile Include="Services\Auth\CompletePasswordResetWorkflowTests.cs" />
+    <Compile Include="Services\Auth\CompleteRegisterWorkflowTests.cs" />
+    <Compile Include="Services\Auth\EmailCodeFactoryTests.cs" />
+    <Compile Include="Services\Auth\EmailExistencePolicyTests.cs" />
+    <Compile Include="Services\Auth\GetProfileImageWorkflowTests.cs" />
+    <Compile Include="Services\Auth\Integration\AuthServiceTests.cs" />
+    <Compile Include="Services\Auth\LoginWorkflowTests.cs" />
+    <Compile Include="Services\Auth\LogoutWorkflowTests.cs" />
+    <Compile Include="Services\Auth\PasswordPolicyTests.cs" />
+    <Compile Include="Services\Auth\PasswordServiceTests.cs" />
+    <Compile Include="Services\Auth\ProfileImagePolicyTests.cs" />
+    <Compile Include="Services\Auth\ProfileImageValidatorTests.cs" />
+    <Compile Include="Services\Auth\RegisterWorkflowTests.cs" />
+    <Compile Include="Services\Auth\ResendCooldownPolicyTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Console\ConnectionStrings.secrets.config">
