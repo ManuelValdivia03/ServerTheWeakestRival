@@ -1,4 +1,5 @@
-﻿using log4net;
+﻿// ReportRequestLogic.cs (solo cambios para AccountMini: HasProfileImage/ProfileImageCode/Email)
+using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Infrastructure;
 using ServicesTheWeakestRival.Server.Services.Logic;
@@ -39,7 +40,6 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
         private const string SqlResolveUserIdFromAccountId =
             "SELECT TOP (1) u.user_id FROM dbo.Users u WHERE u.account_id = @AccountId;";
         private const string ParamAccountId = "@AccountId";
-
 
         internal SubmitPlayerReportResponse SubmitPlayerReport(SubmitPlayerReportRequest request)
         {
@@ -140,8 +140,6 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
                             TrySendForcedLogoutToAccount(effectiveUserId, notification);
                         }
 
-
-
                         return response;
                     }
                 }
@@ -236,7 +234,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
                 {
                     if (channelObject != null)
                     {
-                        channelObject.Abort(); // <- clave: corta la sesión ya
+                        channelObject.Abort();
                     }
                 }
                 catch
@@ -245,9 +243,6 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
                 }
             }
         }
-
-
-
 
         private static void TryKickUserFromLobbiesInDb(SqlConnection connection, int userId)
         {
@@ -416,7 +411,8 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
                                 {
                                     user_id = reader.GetInt32(6),
                                     display_name = reader.IsDBNull(7) ? null : reader.GetString(7),
-                                    profile_image_url = reader.IsDBNull(8) ? null : reader.GetString(8)
+                                    profile_image = reader.IsDBNull(8) ? null : (byte[])reader.GetValue(8),
+                                    profile_image_content_type = reader.IsDBNull(9) ? null : reader.GetString(9)
                                 }
                             });
                     }
@@ -426,8 +422,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             return members;
         }
 
-        private static List<AccountMini> MapToAccountMini(List<LobbyMembers> members,
-            UserAvatarSql avatarSql)
+        private static List<AccountMini> MapToAccountMini(List<LobbyMembers> members, UserAvatarSql avatarSql)
         {
             var result = new List<AccountMini>();
             if (members == null)
@@ -449,12 +444,17 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
 
                 var avatarEntity = avatarSql.GetByUserId(member.user_id);
 
+                byte[] profileImageBytes = member.Users.profile_image ?? Array.Empty<byte>();
+                bool hasProfileImage = profileImageBytes.Length > 0;
+
                 result.Add(
                     new AccountMini
                     {
                         AccountId = member.user_id,
-                        DisplayName = member.Users.display_name,
-                        AvatarUrl = member.Users.profile_image_url,
+                        DisplayName = member.Users.display_name ?? string.Empty,
+                        Email = member.Users.Accounts.email ?? string.Empty,
+                        HasProfileImage = hasProfileImage,
+                        ProfileImageCode = string.Empty,
                         Avatar = MapAvatar(avatarEntity)
                     });
             }

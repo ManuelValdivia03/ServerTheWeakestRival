@@ -11,7 +11,7 @@ namespace ServicesTheWeakestRival.Server.Services
 {
     internal static class FriendServiceContext
     {
-        internal static readonly ILog Logger = LogManager.GetLogger(typeof(FriendService));
+        internal static readonly ILog Logger = LogManager.GetLogger(typeof(FriendServiceContext));
 
         internal static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
@@ -27,6 +27,7 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string SQL_LIKE_WILDCARD = "%";
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
+        private const int EXECUTE_DB_ACTION_RESULT = 0;
 
         internal const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
         internal const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
@@ -114,7 +115,6 @@ namespace ServicesTheWeakestRival.Server.Services
         public const string OP_KEY_REMOVE_FRIEND = "Friends.RemoveFriend";
         public const string KEY_FR_REQUEST_ALREADY_PROCESSED = "Friends.FriendRequests.RequestAlreadyProcessed";
 
-
         internal static string GetConnectionString()
         {
             ConnectionStringSettings configurationString =
@@ -197,6 +197,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 FaceType = (AvatarFaceType)entity.FaceType,
                 UseProfilePhotoAsFace = entity.UseProfilePhoto
             };
+
         }
 
         internal static bool IsUniqueViolation(SqlException ex)
@@ -268,12 +269,12 @@ namespace ServicesTheWeakestRival.Server.Services
             string context,
             Action<SqlConnection> action)
         {
-            ExecuteDbOperation<object>(
+            ExecuteDbOperation<int>(
                 context,
                 connection =>
                 {
                     action(connection);
-                    return null;
+                    return EXECUTE_DB_ACTION_RESULT;
                 });
         }
 
@@ -313,7 +314,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
             return Convert.ToInt32(scalarValue);
         }
-
     }
 
     internal enum FriendRequestState : byte

@@ -15,8 +15,8 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
         public LobbyAccountOperations(LobbyRepository lobbyRepository, Func<UserAvatarSql> avatarSqlFactory)
         {
-            this.lobbyRepository = lobbyRepository;
-            this.avatarSqlFactory = avatarSqlFactory;
+            this.lobbyRepository = lobbyRepository ?? throw new ArgumentNullException(nameof(lobbyRepository));
+            this.avatarSqlFactory = avatarSqlFactory ?? throw new ArgumentNullException(nameof(avatarSqlFactory));
         }
 
         public UpdateAccountResponse GetMyProfile(string token)
@@ -64,8 +64,14 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
             try
             {
                 bool hasDisplayNameChange = !string.IsNullOrWhiteSpace(request.DisplayName);
-                bool hasProfileImageChange = !string.IsNullOrWhiteSpace(request.ProfileImageUrl);
                 bool hasEmailChange = !string.IsNullOrWhiteSpace(request.Email);
+
+                bool removeProfileImage = request.RemoveProfileImage;
+                bool hasProfileImagePayload =
+                    request.ProfileImageBytes != null ||
+                    !string.IsNullOrWhiteSpace(request.ProfileImageContentType);
+
+                bool hasProfileImageChange = removeProfileImage || hasProfileImagePayload;
 
                 if (!hasDisplayNameChange && !hasProfileImageChange && !hasEmailChange)
                 {
@@ -73,13 +79,32 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                     return GetMyProfile(request.Token);
                 }
 
+                string normalizedContentType = (request.ProfileImageContentType ?? string.Empty).Trim();
+
+                if (removeProfileImage && hasProfileImagePayload)
+                {
+                    throw LobbyServiceContext.ThrowFault(
+                        LobbyServiceConstants.ERROR_VALIDATION_ERROR,
+                        "Solicitud inválida para imagen de perfil.");
+                }
+
+                if (hasProfileImagePayload && (request.ProfileImageBytes == null || string.IsNullOrWhiteSpace(normalizedContentType)))
+                {
+                    throw LobbyServiceContext.ThrowFault(
+                        LobbyServiceConstants.ERROR_VALIDATION_ERROR,
+                        "Imagen de perfil inválida.");
+                }
+
                 AccountProfileValidator.ValidateProfileChanges(
                     new UpdateAccountRequestData
                     {
                         HasDisplayNameChange = hasDisplayNameChange,
                         HasProfileImageChange = hasProfileImageChange,
+                        RemoveProfileImage = removeProfileImage,
                         DisplayNameLength = hasDisplayNameChange ? request.DisplayName.Trim().Length : 0,
-                        ProfileImageUrlLength = hasProfileImageChange ? request.ProfileImageUrl.Trim().Length : 0
+                        ProfileImageBytesLength = request.ProfileImageBytes != null ? request.ProfileImageBytes.Length : 0,
+                        ProfileImageContentTypeLength = normalizedContentType.Length,
+                        ProfileImageContentType = normalizedContentType
                     });
 
                 string normalizedEmail = null;
@@ -95,10 +120,14 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
                 if (hasDisplayNameChange || hasProfileImageChange)
                 {
+                    byte[] imageBytesToSave = removeProfileImage ? null : request.ProfileImageBytes;
+                    string imageContentTypeToSave = removeProfileImage ? null : normalizedContentType;
+
                     lobbyRepository.UpdateUserProfile(
                         userId,
                         request.DisplayName,
-                        request.ProfileImageUrl,
+                        imageBytesToSave,
+                        imageContentTypeToSave,
                         hasDisplayNameChange,
                         hasProfileImageChange);
                 }
@@ -109,10 +138,11 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                 }
 
                 Logger.InfoFormat(
-                    "UpdateAccount: UserId={0}, DisplayNameChange={1}, ProfileImageChange={2}, EmailChange={3}",
+                    "UpdateAccount: UserId={0}, DisplayNameChange={1}, ProfileImageChange={2}, RemoveProfileImage={3}, EmailChange={4}",
                     userId,
                     hasDisplayNameChange,
                     hasProfileImageChange,
+                    removeProfileImage,
                     hasEmailChange);
 
                 return GetMyProfile(request.Token);

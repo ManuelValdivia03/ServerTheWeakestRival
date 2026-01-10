@@ -1,15 +1,19 @@
-﻿using ServicesTheWeakestRival.Contracts.Data;
+﻿// AuthOperations.cs
+using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
 using ServicesTheWeakestRival.Server.Services.Auth;
 using System;
 using System.Data.SqlClient;
+using System.Globalization;
 using System.Net.Mail;
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
     public sealed class AuthOperations
     {
+        private const char PROFILE_IMAGE_CODE_SEPARATOR = '|';
+
         private readonly AuthRepository authRepository;
         private readonly PasswordService passwordService;
         private readonly IEmailService emailService;
@@ -178,24 +182,40 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                 throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, "Invalid session.");
             }
 
-            if (request.UserId <= 0)
+            if (request.AccountId <= 0)
             {
-                throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_INVALID_REQUEST, "UserId is required.");
+                throw AuthServiceContext.ThrowFault(AuthServiceConstants.ERROR_INVALID_REQUEST, "AccountId is required.");
             }
 
             try
             {
-                ProfileImageRecord record = authRepository.ReadUserProfileImage(request.UserId);
+                ProfileImageRecord record = authRepository.ReadUserProfileImage(request.AccountId);
 
-                bool hasImage = record.ImageBytes.Length > 0;
+                byte[] imageBytes = record?.ImageBytes ?? Array.Empty<byte>();
+                string contentType = record?.ContentType ?? string.Empty;
+
+                bool hasImage = imageBytes.Length > 0;
+                DateTime? updatedAtUtc = record?.UpdatedAtUtc;
+
+                string profileImageCode = BuildProfileImageCode(updatedAtUtc, imageBytes, contentType);
+
+                bool clientHasSameImage =
+                    !string.IsNullOrWhiteSpace(request.ProfileImageCode)
+                    && string.Equals(request.ProfileImageCode, profileImageCode, StringComparison.Ordinal);
+
+                byte[] responseBytes = clientHasSameImage ? Array.Empty<byte>() : imageBytes;
+
+                string responseContentType =
+                    !hasImage || clientHasSameImage
+                        ? string.Empty
+                        : contentType;
 
                 return new GetProfileImageResponse
                 {
-                    UserId = request.UserId,
-                    HasImage = hasImage,
-                    ImageBytes = hasImage ? record.ImageBytes : null,
-                    ContentType = hasImage ? record.ContentType : null,
-                    UpdatedAtUtc = record.UpdatedAtUtc
+                    ImageBytes = responseBytes,
+                    ContentType = responseContentType,
+                    UpdatedAtUtc = updatedAtUtc,
+                    ProfileImageCode = profileImageCode
                 };
             }
             catch (SqlException ex)
@@ -207,8 +227,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                     ex);
             }
         }
-
-
 
         public LoginResponse Login(LoginRequest request)
         {
@@ -350,6 +368,29 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                     AuthServiceConstants.CTX_COMPLETE_RESET,
                     ex);
             }
+        }
+
+        private static string BuildProfileImageCode(DateTime? updatedAtUtc, byte[] imageBytes, string contentType)
+        {
+            if (!updatedAtUtc.HasValue)
+            {
+                return string.Empty;
+            }
+
+            int byteCount = imageBytes?.Length ?? 0;
+            if (byteCount <= 0)
+            {
+                return string.Empty;
+            }
+
+            string safeContentType = contentType ?? string.Empty;
+
+            return string.Concat(
+                updatedAtUtc.Value.Ticks.ToString(CultureInfo.InvariantCulture),
+                PROFILE_IMAGE_CODE_SEPARATOR,
+                byteCount.ToString(CultureInfo.InvariantCulture),
+                PROFILE_IMAGE_CODE_SEPARATOR,
+                safeContentType);
         }
 
         private void ValidatePasswordOrThrow(string password)

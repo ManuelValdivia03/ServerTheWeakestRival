@@ -1,4 +1,5 @@
-﻿using ServicesTheWeakestRival.Contracts.Data;
+﻿// FriendRequestLogic.cs
+using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Infrastructure.Faults;
 using ServicesTheWeakestRival.Server.Services.Friends;
 using ServicesTheWeakestRival.Server.Services.Friends.Infrastructure;
@@ -11,12 +12,11 @@ namespace ServicesTheWeakestRival.Server.Services
 {
     internal sealed class FriendRequestLogic
     {
-        private readonly IFriendRequestRepository _friendRequestRepository;
+        private readonly IFriendRequestRepository friendRequestRepository;
 
         public FriendRequestLogic(IFriendRequestRepository friendRequestRepository)
         {
-            _friendRequestRepository = friendRequestRepository ??
-                throw new ArgumentNullException(nameof(friendRequestRepository));
+            this.friendRequestRepository = friendRequestRepository ?? throw new ArgumentNullException(nameof(friendRequestRepository));
         }
 
         public SendFriendRequestResponse SendFriendRequest(SendFriendRequestRequest request)
@@ -50,9 +50,9 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             var db = new FriendDbContext(connection, transaction, myAccountId);
 
-                            EnsureFriendshipDoesNotExist(_friendRequestRepository, db, targetAccountId);
+                            EnsureFriendshipDoesNotExist(friendRequestRepository, db, targetAccountId);
 
-                            int? existingOutgoingId = _friendRequestRepository.GetPendingOutgoingId(db, targetAccountId);
+                            int? existingOutgoingId = friendRequestRepository.GetPendingOutgoingId(db, targetAccountId);
                             if (existingOutgoingId.HasValue)
                             {
                                 transaction.Commit();
@@ -66,10 +66,10 @@ namespace ServicesTheWeakestRival.Server.Services
                                 return CreateSendFriendRequestResponse(existingOutgoingId.Value, FriendRequestStatus.Pending);
                             }
 
-                            int? incomingId = _friendRequestRepository.GetPendingIncomingId(db, targetAccountId);
+                            int? incomingId = friendRequestRepository.GetPendingIncomingId(db, targetAccountId);
                             if (incomingId.HasValue)
                             {
-                                int acceptedId = _friendRequestRepository.AcceptIncomingRequest(db, incomingId.Value);
+                                int acceptedId = friendRequestRepository.AcceptIncomingRequest(db, incomingId.Value);
 
                                 transaction.Commit();
 
@@ -84,7 +84,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                             try
                             {
-                                int newId = _friendRequestRepository.InsertNewRequest(db, targetAccountId);
+                                int newId = friendRequestRepository.InsertNewRequest(db, targetAccountId);
 
                                 transaction.Commit();
 
@@ -98,7 +98,7 @@ namespace ServicesTheWeakestRival.Server.Services
                             }
                             catch (SqlException ex) when (FriendServiceContext.IsUniqueViolation(ex))
                             {
-                                int reopenedId = _friendRequestRepository.ReopenRequest(db, targetAccountId);
+                                int reopenedId = friendRequestRepository.ReopenRequest(db, targetAccountId);
 
                                 transaction.Commit();
 
@@ -136,7 +136,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             int myAccountId = FriendServiceContext.Authenticate(request.Token);
 
-                return FriendServiceContext.ExecuteDbOperation(
+            return FriendServiceContext.ExecuteDbOperation(
                 FriendServiceContext.CONTEXT_ACCEPT_FRIEND_REQUEST,
                 connection =>
                 {
@@ -146,7 +146,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             var db = new FriendDbContext(connection, transaction, myAccountId);
 
-                            FriendRequestRow row = _friendRequestRepository.ReadRequestRow(
+                            FriendRequestRow row = friendRequestRepository.ReadRequestRow(
                                 db,
                                 FriendSql.Text.CHECK_REQUEST,
                                 request.FriendRequestId);
@@ -158,8 +158,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 FriendServiceContext.ERROR_FR_NOT_PENDING,
                                 FriendServiceContext.KEY_FR_REQUEST_ALREADY_PROCESSED);
 
-
-                            int affectedRows = _friendRequestRepository.AcceptRequest(db, request.FriendRequestId, myAccountId);
+                            int affectedRows = friendRequestRepository.AcceptRequest(db, request.FriendRequestId, myAccountId);
                             EnsureAffectedRowsOrRace(affectedRows);
 
                             transaction.Commit();
@@ -189,7 +188,6 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
                     }
                 });
-
         }
 
         public RejectFriendRequestResponse RejectFriendRequest(RejectFriendRequestRequest request)
@@ -208,7 +206,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             var db = new FriendDbContext(connection, transaction, myAccountId);
 
-                            FriendRequestRow row = _friendRequestRepository.ReadRequestRow(
+                            FriendRequestRow row = friendRequestRepository.ReadRequestRow(
                                 db,
                                 FriendSql.Text.GET_REQUEST,
                                 request.FriendRequestId);
@@ -218,10 +216,9 @@ namespace ServicesTheWeakestRival.Server.Services
                                 FriendServiceContext.ERROR_FR_NOT_PENDING,
                                 FriendServiceContext.KEY_FR_REQUEST_ALREADY_PROCESSED);
 
-
                             if (row.ToAccountId == myAccountId)
                             {
-                                int affectedRows = _friendRequestRepository.RejectAsReceiver(db, request.FriendRequestId);
+                                int affectedRows = friendRequestRepository.RejectAsReceiver(db, request.FriendRequestId);
                                 EnsureAffectedRowsOrRace(affectedRows);
 
                                 transaction.Commit();
@@ -237,7 +234,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
                             if (row.FromAccountId == myAccountId)
                             {
-                                int affectedRows = _friendRequestRepository.CancelAsSender(db, request.FriendRequestId);
+                                int affectedRows = friendRequestRepository.CancelAsSender(db, request.FriendRequestId);
                                 EnsureAffectedRowsOrRace(affectedRows);
 
                                 transaction.Commit();
@@ -288,7 +285,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         {
                             var db = new FriendDbContext(connection, transaction, myAccountId);
 
-                            int? friendRequestId = _friendRequestRepository.GetLatestAcceptedFriendRequestId(db, otherAccountId);
+                            int? friendRequestId = friendRequestRepository.GetLatestAcceptedFriendRequestId(db, otherAccountId);
                             if (!friendRequestId.HasValue)
                             {
                                 transaction.Commit();
@@ -301,7 +298,7 @@ namespace ServicesTheWeakestRival.Server.Services
                                 return CreateRemoveFriendResponse(false);
                             }
 
-                            int affectedRows = _friendRequestRepository.MarkFriendRequestCancelled(db, friendRequestId.Value);
+                            int affectedRows = friendRequestRepository.MarkFriendRequestCancelled(db, friendRequestId.Value);
                             EnsureAffectedRowsOrRace(affectedRows);
 
                             transaction.Commit();
@@ -334,16 +331,15 @@ namespace ServicesTheWeakestRival.Server.Services
             IFriendRequestRepository friendRequestRepository,
             FriendDbContext db,
             int targetAccountId)
-                {
-                    bool exists = friendRequestRepository.FriendshipExists(db, targetAccountId);
-                    if (exists)
-                    {
-                        throw FriendServiceContext.ThrowFault(
-                            FriendServiceContext.ERROR_FR_ALREADY,
-                            FriendServiceContext.MESSAGE_FR_ALREADY);
-                    }
-                }
-
+        {
+            bool exists = friendRequestRepository.FriendshipExists(db, targetAccountId);
+            if (exists)
+            {
+                throw FriendServiceContext.ThrowFault(
+                    FriendServiceContext.ERROR_FR_ALREADY,
+                    FriendServiceContext.MESSAGE_FR_ALREADY);
+            }
+        }
 
         private static void EnsureRequestPending(byte status, string errorCode, string messageKey)
         {
@@ -403,8 +399,10 @@ namespace ServicesTheWeakestRival.Server.Services
             return new FriendSummary
             {
                 AccountId = accountId,
+                Username = string.Empty,
                 DisplayName = string.Empty,
-                AvatarUrl = string.Empty,
+                HasProfileImage = false,
+                ProfileImageCode = string.Empty,
                 SinceUtc = sinceUtc,
                 IsOnline = false
             };

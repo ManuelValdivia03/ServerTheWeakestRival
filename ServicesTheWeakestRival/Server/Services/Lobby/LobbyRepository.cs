@@ -10,11 +10,45 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 {
     public sealed class LobbyRepository
     {
+        private const string TABLE_USERS = "dbo.Users";
+        private const string COLUMN_USER_ID = "user_id";
+        private const string COLUMN_DISPLAY_NAME = "display_name";
+        private const string COLUMN_PROFILE_IMAGE = "profile_image";
+        private const string COLUMN_PROFILE_IMAGE_CONTENT_TYPE = "profile_image_content_type";
+
+        private const string PARAM_PROFILE_IMAGE = "@ProfileImage";
+        private const string PARAM_PROFILE_IMAGE_CONTENT_TYPE = "@ProfileImageContentType";
+
+        private const int MAX_PROFILE_IMAGE_CONTENT_TYPE_LENGTH = 64;
+
+        private const int ORD_MEMBER_LOBBY_ID = 0;
+        private const int ORD_MEMBER_USER_ID = 1;
+        private const int ORD_MEMBER_ROLE = 2;
+        private const int ORD_MEMBER_JOINED_AT_UTC = 3;
+        private const int ORD_MEMBER_LEFT_AT_UTC = 4;
+        private const int ORD_MEMBER_IS_ACTIVE = 5;
+        private const int ORD_USER_ID = 6;
+        private const int ORD_USER_DISPLAY_NAME = 7;
+        private const int ORD_USER_PROFILE_IMAGE = 8;
+        private const int ORD_USER_PROFILE_IMAGE_CONTENT_TYPE = 9;
+
+        private const int ORD_PROFILE_USER_ID = 0;
+        private const int ORD_PROFILE_DISPLAY_NAME = 1;
+        private const int ORD_PROFILE_IMAGE = 2;
+        private const int ORD_PROFILE_IMAGE_CONTENT_TYPE = 3;
+        private const int ORD_PROFILE_CREATED_AT = 4;
+        private const int ORD_PROFILE_EMAIL = 5;
+
         private readonly string connectionString;
 
         public LobbyRepository(string connectionString)
         {
-            this.connectionString = connectionString ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new ArgumentException("Connection string is required.", nameof(connectionString));
+            }
+
+            this.connectionString = connectionString;
         }
 
         public void LeaveLobby(int userId, int lobbyId)
@@ -80,9 +114,9 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                     }
 
                     Guid uid = reader.GetGuid(0);
-                    string name = reader.IsDBNull(1) ? null : reader.GetString(1);
+                    string name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
                     byte maxPlayers = reader.GetByte(2);
-                    string accessCode = reader.IsDBNull(3) ? null : reader.GetString(3);
+                    string accessCode = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
 
                     return new LobbyInfo
                     {
@@ -114,17 +148,18 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                         members.Add(
                             new LobbyMembers
                             {
-                                lobby_id = reader.GetInt32(0),
-                                user_id = reader.GetInt32(1),
-                                role = reader.GetByte(2),
-                                joined_at_utc = reader.GetDateTime(3),
-                                left_at_utc = reader.IsDBNull(4) ? (DateTime?)null : reader.GetDateTime(4),
-                                is_active = reader.GetBoolean(5),
+                                lobby_id = reader.GetInt32(ORD_MEMBER_LOBBY_ID),
+                                user_id = reader.GetInt32(ORD_MEMBER_USER_ID),
+                                role = reader.GetByte(ORD_MEMBER_ROLE),
+                                joined_at_utc = reader.GetDateTime(ORD_MEMBER_JOINED_AT_UTC),
+                                left_at_utc = reader.IsDBNull(ORD_MEMBER_LEFT_AT_UTC) ? (DateTime?)null : reader.GetDateTime(ORD_MEMBER_LEFT_AT_UTC),
+                                is_active = reader.GetBoolean(ORD_MEMBER_IS_ACTIVE),
                                 Users = new Users
                                 {
-                                    user_id = reader.GetInt32(6),
-                                    display_name = reader.IsDBNull(7) ? null : reader.GetString(7),
-                                    profile_image_url = reader.IsDBNull(8) ? null : reader.GetString(8)
+                                    user_id = reader.GetInt32(ORD_USER_ID),
+                                    display_name = reader.IsDBNull(ORD_USER_DISPLAY_NAME) ? string.Empty : reader.GetString(ORD_USER_DISPLAY_NAME),
+                                    profile_image = reader.IsDBNull(ORD_USER_PROFILE_IMAGE) ? Array.Empty<byte>() : (byte[])reader.GetValue(ORD_USER_PROFILE_IMAGE),
+                                    profile_image_content_type = reader.IsDBNull(ORD_USER_PROFILE_IMAGE_CONTENT_TYPE) ? string.Empty : reader.GetString(ORD_USER_PROFILE_IMAGE_CONTENT_TYPE)
                                 }
                             });
                     }
@@ -144,7 +179,7 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                 sqlConnection.Open();
 
                 object obj = sqlCommand.ExecuteScalar();
-                string name = obj == null || obj == DBNull.Value ? null : Convert.ToString(obj);
+                string name = obj == null || obj == DBNull.Value ? string.Empty : Convert.ToString(obj);
 
                 return string.IsNullOrWhiteSpace(name)
                     ? string.Concat(LobbyServiceConstants.DEFAULT_PLAYER_NAME_PREFIX, userId)
@@ -170,11 +205,12 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
                     return new UpdateAccountResponse
                     {
-                        UserId = reader.GetInt32(0),
-                        DisplayName = reader.IsDBNull(1) ? null : reader.GetString(1),
-                        ProfileImageUrl = reader.IsDBNull(2) ? null : reader.GetString(2),
-                        CreatedAtUtc = reader.GetDateTime(3),
-                        Email = reader.GetString(4)
+                        UserId = reader.GetInt32(ORD_PROFILE_USER_ID),
+                        DisplayName = reader.IsDBNull(ORD_PROFILE_DISPLAY_NAME) ? string.Empty : reader.GetString(ORD_PROFILE_DISPLAY_NAME),
+                        ProfileImageBytes = reader.IsDBNull(ORD_PROFILE_IMAGE) ? Array.Empty<byte>() : (byte[])reader.GetValue(ORD_PROFILE_IMAGE),
+                        ProfileImageContentType = reader.IsDBNull(ORD_PROFILE_IMAGE_CONTENT_TYPE) ? string.Empty : reader.GetString(ORD_PROFILE_IMAGE_CONTENT_TYPE),
+                        CreatedAtUtc = reader.GetDateTime(ORD_PROFILE_CREATED_AT),
+                        Email = reader.IsDBNull(ORD_PROFILE_EMAIL) ? string.Empty : reader.GetString(ORD_PROFILE_EMAIL)
                     };
                 }
             }
@@ -213,29 +249,39 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
             }
         }
 
-        public void UpdateUserProfile(int userId, string displayName, string profileImageUrl, bool hasDisplayNameChange, bool hasProfileImageChange)
+        public void UpdateUserProfile(
+            int userId,
+            string displayName,
+            byte[] profileImageBytes,
+            string profileImageContentType,
+            bool hasDisplayNameChange,
+            bool hasProfileImageChange)
         {
-            string sqlLobby = LobbySql.BuildUpdateUser(hasDisplayNameChange, hasProfileImageChange);
-            if (string.IsNullOrWhiteSpace(sqlLobby))
+            string sql = BuildUpdateUserSql(hasDisplayNameChange, hasProfileImageChange);
+            if (string.IsNullOrWhiteSpace(sql))
             {
                 return;
             }
 
             using (var sqlConnection = new SqlConnection(connectionString))
-            using (var sqlCommand = new SqlCommand(sqlLobby, sqlConnection))
+            using (var sqlCommand = new SqlCommand(sql, sqlConnection))
             {
                 sqlCommand.Parameters.Add(LobbyServiceConstants.PARAM_ID, SqlDbType.Int).Value = userId;
 
                 if (hasDisplayNameChange)
                 {
+                    string trimmedDisplayName = (displayName ?? string.Empty).Trim();
                     sqlCommand.Parameters.Add(LobbyServiceConstants.PARAM_DISPLAY_NAME, SqlDbType.NVarChar, LobbyServiceConstants.MAX_DISPLAY_NAME_LENGTH)
-                        .Value = displayName.Trim();
+                        .Value = trimmedDisplayName;
                 }
 
                 if (hasProfileImageChange)
                 {
-                    sqlCommand.Parameters.Add(LobbyServiceConstants.PARAM_IMAGE_URL, SqlDbType.NVarChar, LobbyServiceConstants.MAX_PROFILE_IMAGE_URL_LENGTH)
-                        .Value = profileImageUrl.Trim();
+                    object bytesValue = profileImageBytes == null ? (object)DBNull.Value : profileImageBytes;
+                    object contentTypeValue = string.IsNullOrWhiteSpace(profileImageContentType) ? (object)DBNull.Value : profileImageContentType.Trim();
+
+                    sqlCommand.Parameters.Add(PARAM_PROFILE_IMAGE, SqlDbType.VarBinary, -1).Value = bytesValue;
+                    sqlCommand.Parameters.Add(PARAM_PROFILE_IMAGE_CONTENT_TYPE, SqlDbType.NVarChar, MAX_PROFILE_IMAGE_CONTENT_TYPE_LENGTH).Value = contentTypeValue;
                 }
 
                 sqlConnection.Open();
@@ -329,6 +375,34 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                 LobbyId = lobbyId,
                 LobbyUid = lobbyUid
             };
+        }
+
+        private static string BuildUpdateUserSql(bool hasDisplayNameChange, bool hasProfileImageChange)
+        {
+            if (!hasDisplayNameChange && !hasProfileImageChange)
+            {
+                return string.Empty;
+            }
+
+            var sets = new List<string>();
+
+            if (hasDisplayNameChange)
+            {
+                sets.Add(string.Format("{0} = {1}", COLUMN_DISPLAY_NAME, LobbyServiceConstants.PARAM_DISPLAY_NAME));
+            }
+
+            if (hasProfileImageChange)
+            {
+                sets.Add(string.Format("{0} = {1}", COLUMN_PROFILE_IMAGE, PARAM_PROFILE_IMAGE));
+                sets.Add(string.Format("{0} = {1}", COLUMN_PROFILE_IMAGE_CONTENT_TYPE, PARAM_PROFILE_IMAGE_CONTENT_TYPE));
+            }
+
+            return string.Format(
+                "UPDATE {0} SET {1} WHERE {2} = {3};",
+                TABLE_USERS,
+                string.Join(", ", sets),
+                COLUMN_USER_ID,
+                LobbyServiceConstants.PARAM_ID);
         }
     }
 
