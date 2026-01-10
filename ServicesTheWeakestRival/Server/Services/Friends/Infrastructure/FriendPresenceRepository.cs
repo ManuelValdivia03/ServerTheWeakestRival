@@ -9,8 +9,31 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 {
     internal sealed class FriendPresenceRepository : IFriendPresenceRepository
     {
+        private const int FLAG_TRUE = 1;
+
+        private const int ORD_FRIENDS_FROM_ID = 0;
+        private const int ORD_FRIENDS_TO_ID = 1;
+        private const int ORD_FRIENDS_SINCE_UTC = 2;
+
+        private const int ORD_PENDING_ID = 0;
+        private const int ORD_PENDING_FROM = 1;
+        private const int ORD_PENDING_TO = 2;
+        private const int ORD_PENDING_SENT_UTC = 3;
+
+        private const int ORD_SUMMARY_ACCOUNT_ID = 0;
+        private const int ORD_SUMMARY_EMAIL = 1;
+        private const int ORD_SUMMARY_DISPLAY_NAME = 2;
+        private const int ORD_SUMMARY_HAS_PROFILE_IMAGE = 3;
+        private const int ORD_SUMMARY_PROFILE_IMAGE_CODE = 4;
+        private const int ORD_SUMMARY_LAST_SEEN_UTC = 5;
+
         public List<FriendSummary> LoadFriends(FriendDbContext db, DateTime utcNow)
         {
+            if (ReferenceEquals(db, null))
+            {
+                return new List<FriendSummary>();
+            }
+
             var friends = new List<FriendSummary>();
 
             using (SqlCommand command = new SqlCommand(FriendSql.Text.FRIENDS, db.Connection, db.Transaction))
@@ -23,9 +46,12 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                 {
                     while (reader.Read())
                     {
-                        int fromId = reader.GetInt32(0);
-                        int toId = reader.GetInt32(1);
-                        DateTime sinceUtc = reader.IsDBNull(2) ? utcNow : reader.GetDateTime(2);
+                        int fromId = reader.GetInt32(ORD_FRIENDS_FROM_ID);
+                        int toId = reader.GetInt32(ORD_FRIENDS_TO_ID);
+
+                        DateTime sinceUtc = reader.IsDBNull(ORD_FRIENDS_SINCE_UTC)
+                            ? utcNow
+                            : reader.GetDateTime(ORD_FRIENDS_SINCE_UTC);
 
                         int friendId = fromId == db.MyAccountId ? toId : fromId;
 
@@ -46,6 +72,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 
         public FriendRequestSummary[] LoadPendingRequests(FriendDbContext db, string sqlText)
         {
+            if (ReferenceEquals(db, null) || string.IsNullOrWhiteSpace(sqlText))
+            {
+                return Array.Empty<FriendRequestSummary>();
+            }
+
             var list = new List<FriendRequestSummary>();
 
             using (SqlCommand command = new SqlCommand(sqlText, db.Connection, db.Transaction))
@@ -60,12 +91,12 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                     {
                         list.Add(new FriendRequestSummary
                         {
-                            FriendRequestId = reader.GetInt32(0),
-                            FromAccountId = reader.GetInt32(1),
-                            ToAccountId = reader.GetInt32(2),
-                            Message = null,
+                            FriendRequestId = reader.GetInt32(ORD_PENDING_ID),
+                            FromAccountId = reader.GetInt32(ORD_PENDING_FROM),
+                            ToAccountId = reader.GetInt32(ORD_PENDING_TO),
+                            Message = string.Empty,
                             Status = FriendRequestStatus.Pending,
-                            CreatedUtc = reader.GetDateTime(3),
+                            CreatedUtc = reader.GetDateTime(ORD_PENDING_SENT_UTC),
                             ResolvedUtc = null
                         });
                     }
@@ -77,6 +108,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 
         public void UpsertPresence(FriendDbContext db, string device)
         {
+            if (ReferenceEquals(db, null))
+            {
+                return;
+            }
+
             using (SqlCommand command = new SqlCommand(FriendSql.Text.PRESENCE_UPDATE, db.Connection, db.Transaction))
             {
                 command.Parameters.Add(FriendServiceContext.PARAM_ME, SqlDbType.Int).Value = db.MyAccountId;
@@ -110,6 +146,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 
         public FriendPresence[] GetFriendsPresence(FriendDbContext db, DateTime utcNow)
         {
+            if (ReferenceEquals(db, null))
+            {
+                return Array.Empty<FriendPresence>();
+            }
+
             var list = new List<FriendPresence>();
 
             using (SqlCommand command = new SqlCommand(FriendSql.Text.FRIENDS_PRESENCE, db.Connection, db.Transaction))
@@ -127,7 +168,7 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                         list.Add(new FriendPresence
                         {
                             AccountId = reader.GetInt32(0),
-                            IsOnline = reader.GetInt32(1) == 1,
+                            IsOnline = reader.GetInt32(1) == FLAG_TRUE,
                             LastSeenUtc = reader.IsDBNull(2) ? (DateTime?)null : reader.GetDateTime(2)
                         });
                     }
@@ -155,7 +196,7 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                         string fallbackUsername = FriendServiceContext.FALLBACK_USERNAME_PREFIX + friendId;
 
                         FriendServiceContext.Logger.WarnFormat(
-                            "LoadFriendSummary: no data for FriendId={0}. Returning fallback summary.",
+                            "LoadFriendSummary: no data for FriendId={0}.",
                             friendId);
 
                         return new FriendSummary
@@ -163,22 +204,31 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                             AccountId = friendId,
                             Username = fallbackUsername,
                             DisplayName = fallbackUsername,
-                            AvatarUrl = string.Empty,
+                            HasProfileImage = false,
+                            ProfileImageCode = string.Empty,
                             SinceUtc = sinceUtc,
                             IsOnline = false
                         };
                     }
 
-                    int accountId = reader.GetInt32(0);
+                    int accountId = reader.GetInt32(ORD_SUMMARY_ACCOUNT_ID);
 
-                    string email = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-                    string displayName = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
-                    string avatarUrl = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
-                    DateTime? lastSeenUtc = reader.IsDBNull(4) ? (DateTime?)null : reader.GetDateTime(4);
+                    string email = reader.IsDBNull(ORD_SUMMARY_EMAIL) ? string.Empty : reader.GetString(ORD_SUMMARY_EMAIL);
+                    string displayName = reader.IsDBNull(ORD_SUMMARY_DISPLAY_NAME) ? string.Empty : reader.GetString(ORD_SUMMARY_DISPLAY_NAME);
 
-                    DateTime onlineWindowStartUtc =
-                        utcNow.AddSeconds(-FriendServiceContext.ONLINE_WINDOW_SECONDS);
+                    bool hasProfileImage = reader.IsDBNull(ORD_SUMMARY_HAS_PROFILE_IMAGE)
+                        ? false
+                        : reader.GetInt32(ORD_SUMMARY_HAS_PROFILE_IMAGE) == FLAG_TRUE;
 
+                    string profileImageCode = reader.IsDBNull(ORD_SUMMARY_PROFILE_IMAGE_CODE)
+                        ? string.Empty
+                        : reader.GetString(ORD_SUMMARY_PROFILE_IMAGE_CODE);
+
+                    DateTime? lastSeenUtc = reader.IsDBNull(ORD_SUMMARY_LAST_SEEN_UTC)
+                        ? (DateTime?)null
+                        : reader.GetDateTime(ORD_SUMMARY_LAST_SEEN_UTC);
+
+                    DateTime onlineWindowStartUtc = utcNow.AddSeconds(-FriendServiceContext.ONLINE_WINDOW_SECONDS);
                     bool isOnline = lastSeenUtc.HasValue && lastSeenUtc.Value >= onlineWindowStartUtc;
 
                     string username = string.IsNullOrWhiteSpace(email)
@@ -194,7 +244,8 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                         AccountId = accountId,
                         Username = username,
                         DisplayName = effectiveDisplayName,
-                        AvatarUrl = avatarUrl,
+                        HasProfileImage = hasProfileImage,
+                        ProfileImageCode = profileImageCode ?? string.Empty,
                         SinceUtc = sinceUtc,
                         IsOnline = isOnline
                     };

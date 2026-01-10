@@ -6,19 +6,44 @@ namespace ServicesTheWeakestRival.Contracts.Data
     [DataContract]
     public sealed class GetProfileImageRequest
     {
-        [DataMember(Order = 1, IsRequired = true)] public string Token { get; set; }
-        [DataMember(Order = 2, IsRequired = true)] public int UserId { get; set; }
+        [DataMember(Order = 1, IsRequired = true)]
+        public string Token { get; set; } = string.Empty;
+
+        [DataMember(Order = 2, IsRequired = true)]
+        public int AccountId { get; set; }
+
+        [DataMember(Order = 3, IsRequired = true)]
+        public string ProfileImageCode { get; set; } = string.Empty;
+
+        [OnDeserialized]
+        private void OnDeserialized(StreamingContext context)
+        {
+            Token = Token ?? string.Empty;
+            ProfileImageCode = ProfileImageCode ?? string.Empty;
+        }
     }
 
     [DataContract]
     public sealed class GetProfileImageResponse
     {
-        [DataMember(Order = 1, IsRequired = true)] public int UserId { get; set; }
-        [DataMember(Order = 2, IsRequired = true)] public bool HasImage { get; set; }
+        [DataMember(Order = 1, IsRequired = true)]
+        public byte[] ImageBytes { get; set; } = Array.Empty<byte>();
 
-        [DataMember(Order = 3, EmitDefaultValue = false)] public byte[] ImageBytes { get; set; }
-        [DataMember(Order = 4, EmitDefaultValue = false)] public string ContentType { get; set; }
+        [DataMember(Order = 2, IsRequired = true)]
+        public string ContentType { get; set; } = string.Empty;
 
-        [DataMember(Order = 5)] public DateTime? UpdatedAtUtc { get; set; }
+        [DataMember(Order = 3, IsRequired = false)]
+        public DateTime? UpdatedAtUtc { get; set; }
+
+        [DataMember(Order = 4, IsRequired = true)]
+        public string ProfileImageCode { get; set; } = string.Empty;
+
+        [OnDeserialized]
+        private void OnDeserialized(StreamingContext context)
+        {
+            ImageBytes = ImageBytes ?? Array.Empty<byte>();
+            ContentType = ContentType ?? string.Empty;
+            ProfileImageCode = ProfileImageCode ?? string.Empty;
+        }
     }
 }

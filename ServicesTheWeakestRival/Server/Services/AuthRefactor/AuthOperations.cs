@@ -4,12 +4,8 @@ using ServicesTheWeakestRival.Server.Infrastructure;
 using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Email;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Policies;
-using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
-using ServicesTheWeakestRival.Server.Services.AuthRefactor.Validation;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows;
 using System;
-using System.Data.SqlClient;
-
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
@@ -17,8 +13,10 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
     {
         private readonly AuthRepository authRepository;
         private readonly PasswordService passwordService;
+
         private readonly PasswordPolicy passwordPolicy;
         private readonly AuthEmailDispatcher emailDispatcher;
+
         private readonly BeginRegisterWorkflow beginRegisterWorkflow;
         private readonly BeginPasswordResetWorkflow beginPasswordResetWorkflow;
         private readonly CompleteRegisterWorkflow completeRegisterWorkflow;
@@ -33,8 +31,9 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             this.authRepository = authRepository ?? throw new ArgumentNullException(nameof(authRepository));
             this.passwordService = passwordService ?? throw new ArgumentNullException(nameof(passwordService));
 
-            passwordPolicy = new PasswordPolicy(this.passwordService);
             emailDispatcher = new AuthEmailDispatcher(emailService ?? throw new ArgumentNullException(nameof(emailService)));
+            passwordPolicy = new PasswordPolicy(this.passwordService);
+
             beginRegisterWorkflow = new BeginRegisterWorkflow(this.authRepository, emailDispatcher);
             beginPasswordResetWorkflow = new BeginPasswordResetWorkflow(this.authRepository, emailDispatcher);
             completeRegisterWorkflow = new CompleteRegisterWorkflow(this.authRepository, passwordPolicy, this.passwordService);
@@ -43,7 +42,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             loginWorkflow = new LoginWorkflow(this.authRepository, passwordPolicy);
             logoutWorkflow = new LogoutWorkflow(this.authRepository);
             getProfileImageWorkflow = new GetProfileImageWorkflow(this.authRepository);
-
         }
 
         public PingResponse Ping(PingRequest request)
@@ -81,7 +79,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
         {
             return loginWorkflow.Execute(request);
         }
-
 
         public void Logout(LogoutRequest request)
         {

@@ -44,7 +44,10 @@ namespace ServicesTheWeakestRival.Contracts.Services
 
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
-        SendLobbyInviteEmailResponse SendLobbyInviteEmail(SendLobbyInviteEmailRequest request);
+        GetProfileImageResponse GetProfileImage(GetProfileImageRequest request);
 
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        SendLobbyInviteEmailResponse SendLobbyInviteEmail(SendLobbyInviteEmailRequest request);
     }
 }

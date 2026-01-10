@@ -1,6 +1,8 @@
-﻿using log4net;
+﻿// LobbyMappers.cs
+using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Services.Logic;
+using System;
 using System.Collections.Generic;
 using TheWeakestRival.Data;
 
@@ -40,8 +42,24 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
         {
             var accountMinis = new List<AccountMini>();
 
+            if (members == null)
+            {
+                return accountMinis;
+            }
+
+            if (avatarSql == null)
+            {
+                Logger.Warn("MapToAccountMini: avatarSql is null. Returning empty list.");
+                return accountMinis;
+            }
+
             foreach (LobbyMembers member in members)
             {
+                if (member == null)
+                {
+                    continue;
+                }
+
                 if (!member.is_active || member.left_at_utc.HasValue)
                 {
                     continue;
@@ -50,19 +68,26 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                 if (member.Users == null)
                 {
                     Logger.WarnFormat(
-                        "MapToAccountMini: Usuario nulo para member.user_id={0}",
+                        "MapToAccountMini: Users is null for member.user_id={0}.",
                         member.user_id);
                     continue;
                 }
 
                 UserAvatarEntity avatarEntity = avatarSql.GetByUserId(member.user_id);
 
+                byte[] profileImageBytes = member.Users.profile_image ?? Array.Empty<byte>();
+                bool hasProfileImage = profileImageBytes.Length > 0;
+
                 accountMinis.Add(
                     new AccountMini
                     {
                         AccountId = member.user_id,
-                        DisplayName = member.Users.display_name ?? (LobbyServiceConstants.DEFAULT_PLAYER_NAME_PREFIX + member.user_id),
-                        AvatarUrl = member.Users.profile_image_url,
+                        DisplayName = string.IsNullOrWhiteSpace(member.Users.display_name)
+                            ? string.Concat(LobbyServiceConstants.DEFAULT_PLAYER_NAME_PREFIX, member.user_id)
+                            : member.Users.display_name,
+                        Email = member.Users.Accounts.email ?? string.Empty,
+                        HasProfileImage = hasProfileImage,
+                        ProfileImageCode = string.Empty,
                         Avatar = MapAvatar(avatarEntity)
                     });
             }
@@ -81,11 +106,16 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
             foreach (AccountMini account in accounts)
             {
+                if (account == null)
+                {
+                    continue;
+                }
+
                 players.Add(
                     new PlayerSummary
                     {
                         UserId = account.AccountId,
-                        DisplayName = account.DisplayName,
+                        DisplayName = account.DisplayName ?? string.Empty,
                         IsOnline = true,
                         Avatar = account.Avatar
                     });

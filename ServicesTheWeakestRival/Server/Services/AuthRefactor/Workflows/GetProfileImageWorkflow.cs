@@ -3,6 +3,7 @@ using ServicesTheWeakestRival.Server.Infrastructure;
 using ServicesTheWeakestRival.Server.Infrastructure.Faults;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Validation;
 using System;
+using System.Globalization;
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 {
@@ -10,6 +11,10 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
     {
         private const string OPERATION_KEY_PREFIX = AuthServiceConstants.KEY_PREFIX_GET_PROFILE_IMAGE;
         private const string DB_CONTEXT = AuthServiceConstants.CTX_GET_PROFILE_IMAGE;
+
+        private const string MESSAGE_ACCOUNT_ID_REQUIRED = "AccountId is required.";
+
+        private const char PROFILE_IMAGE_CODE_SEPARATOR = '|';
 
         private readonly AuthRepository authRepository;
 
@@ -23,35 +28,88 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
             EnsureRequestNotNullOrThrow(request);
 
             AuthRequestValidator.EnsureValidSessionOrThrow(request.Token);
-            AuthRequestValidator.EnsureValidUserIdOrThrow(request.UserId);
+            EnsureValidAccountIdOrThrow(request.AccountId);
 
-            ProfileImageRecord record = ReadProfileImageOrThrow(request.UserId);
+            ProfileImageRecord record = ReadProfileImageOrThrow(request.AccountId);
 
-            return BuildResponse(request.UserId, record);
+            return BuildResponse(request.ProfileImageCode, record);
         }
 
-        private ProfileImageRecord ReadProfileImageOrThrow(int userId)
+        private ProfileImageRecord ReadProfileImageOrThrow(int accountId)
         {
-            return SqlExceptionFaultGuard.Execute(
-                () => authRepository.ReadUserProfileImage(userId),
+            ProfileImageRecord record = SqlExceptionFaultGuard.Execute(
+                () => authRepository.ReadUserProfileImage(accountId),
                 OPERATION_KEY_PREFIX,
                 AuthServiceConstants.ERROR_DB_ERROR,
                 DB_CONTEXT,
                 AuthServiceContext.CreateSqlTechnicalFault);
+
+            if (record != null)
+            {
+                return record;
+            }
+
+            return new ProfileImageRecord(
+                accountId,
+                Array.Empty<byte>(),
+                string.Empty,
+                null);
         }
 
-        private static GetProfileImageResponse BuildResponse(int userId, ProfileImageRecord record)
+        private static GetProfileImageResponse BuildResponse(string clientProfileImageCode, ProfileImageRecord record)
         {
-            bool hasImage = record.ImageBytes.Length > 0;
+            byte[] imageBytes = record.ImageBytes ?? Array.Empty<byte>();
+            string contentType = record.ContentType ?? string.Empty;
+            DateTime? updatedAtUtc = record.UpdatedAtUtc;
+
+            string profileImageCode = BuildProfileImageCode(updatedAtUtc, imageBytes, contentType);
+
+            bool clientHasSameImage =
+                !string.IsNullOrWhiteSpace(clientProfileImageCode)
+                && string.Equals(clientProfileImageCode, profileImageCode, StringComparison.Ordinal);
+
+            bool hasImage = imageBytes.Length > 0;
 
             return new GetProfileImageResponse
             {
-                UserId = userId,
-                HasImage = hasImage,
-                ImageBytes = record.ImageBytes,
-                ContentType = record.ContentType,
-                UpdatedAtUtc = record.UpdatedAtUtc
+                ImageBytes = clientHasSameImage ? Array.Empty<byte>() : imageBytes,
+                ContentType = !hasImage || clientHasSameImage ? string.Empty : contentType,
+                UpdatedAtUtc = updatedAtUtc,
+                ProfileImageCode = profileImageCode
             };
+        }
+
+        private static string BuildProfileImageCode(DateTime? updatedAtUtc, byte[] imageBytes, string contentType)
+        {
+            if (!updatedAtUtc.HasValue)
+            {
+                return string.Empty;
+            }
+
+            int byteCount = imageBytes?.Length ?? 0;
+            if (byteCount <= 0)
+            {
+                return string.Empty;
+            }
+
+            string safeContentType = contentType ?? string.Empty;
+
+            return string.Concat(
+                updatedAtUtc.Value.Ticks.ToString(CultureInfo.InvariantCulture),
+                PROFILE_IMAGE_CODE_SEPARATOR,
+                byteCount.ToString(CultureInfo.InvariantCulture),
+                PROFILE_IMAGE_CODE_SEPARATOR,
+                safeContentType);
+        }
+
+        private static void EnsureValidAccountIdOrThrow(int accountId)
+        {
+            if (accountId <= 0)
+            {
+                throw AuthServiceContext.ThrowFault(
+                    AuthServiceConstants.ERROR_INVALID_REQUEST,
+                    MESSAGE_ACCOUNT_ID_REQUIRED);
+            }
         }
 
         private static void EnsureRequestNotNullOrThrow(GetProfileImageRequest request)
