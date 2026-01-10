@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Configuration;
-using System.ServiceModel;
-using log4net;
+﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
-using ServicesTheWeakestRival.Server.Infrastructure;
+using System;
+using System.Configuration;
+using System.Data.SqlClient;
+using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
@@ -12,13 +11,11 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(AuthServiceContext));
 
-        private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
-
         public static int CodeTtlMinutes =>
-            ParseIntAppSetting("EmailCodeTtlMinutes", AuthServiceConstants.DEFAULT_CODE_TTL_MINUTES);
+            ParseIntAppSetting(AuthServiceConstants.APPSETTING_EMAIL_CODE_TTL_MINUTES, AuthServiceConstants.DEFAULT_CODE_TTL_MINUTES);
 
         public static int ResendCooldownSeconds =>
-            ParseIntAppSetting("EmailResendCooldownSeconds", AuthServiceConstants.DEFAULT_RESEND_COOLDOWN_SECONDS);
+            ParseIntAppSetting(AuthServiceConstants.APPSETTING_EMAIL_RESEND_COOLDOWN_SECONDS, AuthServiceConstants.DEFAULT_RESEND_COOLDOWN_SECONDS);
 
         public static string ResolveConnectionString(string name)
         {
@@ -41,7 +38,19 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
         public static AuthToken IssueToken(int userId)
         {
-            string tokenValue = Guid.NewGuid().ToString("N");
+            if (userId <= 0)
+            {
+                throw ThrowFault(AuthServiceConstants.ERROR_INVALID_REQUEST, AuthServiceConstants.MESSAGE_INVALID_USER_ID);
+            }
+
+            if (TokenStore.TryGetActiveTokenForUser(userId, out _))
+            {
+                throw ThrowFault(
+                    AuthServiceConstants.ERROR_ALREADY_LOGGED_IN,
+                    AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN);
+            }
+
+            string tokenValue = Guid.NewGuid().ToString(AuthServiceConstants.TOKEN_GUID_FORMAT);
             DateTime expiresAt = DateTime.UtcNow.AddHours(AuthServiceConstants.TOKEN_TTL_HOURS);
 
             var token = new AuthToken
@@ -51,13 +60,18 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                 ExpiresAtUtc = expiresAt
             };
 
-            TokenCache[tokenValue] = token;
+            TokenStore.StoreToken(token);
             return token;
         }
 
         public static bool TryRemoveToken(string tokenValue, out AuthToken token)
         {
-            return TokenCache.TryRemove(tokenValue, out token);
+            return TokenStore.TryRemoveToken(tokenValue, out token);
+        }
+
+        public static bool TryGetUserId(string tokenValue, out int userId)
+        {
+            return TokenStore.TryGetUserId(tokenValue, out userId);
         }
 
         public static FaultException<ServiceFault> ThrowFault(string code, string message)
@@ -75,31 +89,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
             return new FaultException<ServiceFault>(fault, new FaultReason(message));
         }
-
-        public static bool TryGetUserId(string tokenValue, out int userId)
-        {
-            userId = 0;
-
-            if (string.IsNullOrWhiteSpace(tokenValue))
-            {
-                return false;
-            }
-
-            if (!TokenCache.TryGetValue(tokenValue, out AuthToken token))
-            {
-                return false;
-            }
-
-            if (token.ExpiresAtUtc <= DateTime.UtcNow)
-            {
-                TokenCache.TryRemove(tokenValue, out _);
-                return false;
-            }
-
-            userId = token.UserId;
-            return true;
-        }
-
 
         public static FaultException<ServiceFault> ThrowTechnicalFault(
             string technicalCode,
@@ -121,6 +110,15 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
         private static int ParseIntAppSetting(string key, int @default)
         {
             return int.TryParse(ConfigurationManager.AppSettings[key], out int value) ? value : @default;
+        }
+
+        internal static Exception CreateSqlTechnicalFault(
+            string technicalErrorCode,
+            string messageKey,
+            string context,
+            SqlException ex)
+        {
+            return ThrowTechnicalFault(technicalErrorCode, messageKey, context, ex);
         }
     }
 }

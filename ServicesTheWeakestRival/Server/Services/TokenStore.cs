@@ -10,47 +10,143 @@ namespace ServicesTheWeakestRival.Server.Services
     {
         private const string CONTEXT_REVOKE_ALL_FOR_USER = "TokenStore.RevokeAllForUser";
 
-        private static readonly ILog _logger = LogManager.GetLogger(typeof(TokenStore));
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(TokenStore));
+
+        private static readonly object SyncRoot = new object();
 
         internal static readonly ConcurrentDictionary<string, ContractsToken> Cache =
             new ConcurrentDictionary<string, ContractsToken>(StringComparer.Ordinal);
 
-        internal static bool TryGetUserId(string token, out int userId)
+        internal static readonly ConcurrentDictionary<int, string> ActiveTokenByUserId =
+            new ConcurrentDictionary<int, string>();
+
+        internal static bool TryGetUserId(string tokenValue, out int userId)
         {
             userId = 0;
 
-            if (string.IsNullOrWhiteSpace(token))
+            if (string.IsNullOrWhiteSpace(tokenValue))
             {
                 return false;
             }
 
-            if (!Cache.TryGetValue(token, out var t))
+            if (!Cache.TryGetValue(tokenValue, out ContractsToken token) || token == null)
             {
                 return false;
             }
 
-            if (t.ExpiresAtUtc <= DateTime.UtcNow)
+            if (IsExpired(token))
             {
-                Cache.TryRemove(token, out _);
+                TryRemoveToken(tokenValue, out _);
                 return false;
             }
 
-            userId = t.UserId;
+            if (ActiveTokenByUserId.TryGetValue(token.UserId, out string currentTokenValue)
+                && !string.Equals(currentTokenValue, tokenValue, StringComparison.Ordinal))
+            {
+                Cache.TryRemove(tokenValue, out _);
+                return false;
+            }
+
+            userId = token.UserId;
             return true;
+        }
+
+        internal static bool TryGetActiveTokenForUser(int userId, out ContractsToken activeToken)
+        {
+            activeToken = null;
+
+            if (userId <= 0)
+            {
+                return false;
+            }
+
+            if (!ActiveTokenByUserId.TryGetValue(userId, out string tokenValue)
+                || string.IsNullOrWhiteSpace(tokenValue))
+            {
+                return false;
+            }
+
+            if (!Cache.TryGetValue(tokenValue, out ContractsToken token) || token == null)
+            {
+                ActiveTokenByUserId.TryRemove(userId, out _);
+                return false;
+            }
+
+            if (IsExpired(token))
+            {
+                TryRemoveToken(tokenValue, out _);
+                return false;
+            }
+
+            activeToken = token;
+            return true;
+        }
+
+        internal static void StoreToken(ContractsToken token)
+        {
+            if (token == null || string.IsNullOrWhiteSpace(token.Token) || token.UserId <= 0)
+            {
+                return;
+            }
+
+            lock (SyncRoot)
+            {
+                if (ActiveTokenByUserId.TryGetValue(token.UserId, out string previousTokenValue)
+                    && !string.IsNullOrWhiteSpace(previousTokenValue)
+                    && !string.Equals(previousTokenValue, token.Token, StringComparison.Ordinal))
+                {
+                    Cache.TryRemove(previousTokenValue, out _);
+                }
+
+                Cache[token.Token] = token;
+                ActiveTokenByUserId[token.UserId] = token.Token;
+            }
+        }
+
+        internal static bool TryRemoveToken(string tokenValue, out ContractsToken removedToken)
+        {
+            removedToken = null;
+
+            if (string.IsNullOrWhiteSpace(tokenValue))
+            {
+                return false;
+            }
+
+            lock (SyncRoot)
+            {
+                if (!Cache.TryRemove(tokenValue, out ContractsToken removed) || removed == null)
+                {
+                    return false;
+                }
+
+                removedToken = removed;
+
+                if (ActiveTokenByUserId.TryGetValue(removed.UserId, out string mappedTokenValue)
+                    && string.Equals(mappedTokenValue, tokenValue, StringComparison.Ordinal))
+                {
+                    ActiveTokenByUserId.TryRemove(removed.UserId, out _);
+                }
+
+                return true;
+            }
         }
 
         internal static int RevokeAllForUser(int userId)
         {
             var revokedCount = 0;
-            var canProcess = userId > 0;
 
-            if (canProcess)
+            if (userId <= 0)
             {
-                try
+                return revokedCount;
+            }
+
+            try
+            {
+                lock (SyncRoot)
                 {
                     foreach (var kv in Cache)
                     {
-                        var tokenValue = kv.Value;
+                        ContractsToken tokenValue = kv.Value;
                         if (tokenValue != null && tokenValue.UserId == userId)
                         {
                             if (Cache.TryRemove(kv.Key, out _))
@@ -60,18 +156,25 @@ namespace ServicesTheWeakestRival.Server.Services
                         }
                     }
 
-                    _logger.InfoFormat(
-                        "RevokeAllForUser: UserId={0}, RevokedCount={1}",
-                        userId,
-                        revokedCount);
+                    ActiveTokenByUserId.TryRemove(userId, out _);
                 }
-                catch (Exception ex)
-                {
-                    _logger.Error(CONTEXT_REVOKE_ALL_FOR_USER, ex);
-                }
+
+                Logger.InfoFormat(
+                    "RevokeAllForUser: UserId={0}, RevokedCount={1}",
+                    userId,
+                    revokedCount);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(CONTEXT_REVOKE_ALL_FOR_USER, ex);
             }
 
             return revokedCount;
+        }
+
+        private static bool IsExpired(ContractsToken token)
+        {
+            return token.ExpiresAtUtc <= DateTime.UtcNow;
         }
     }
 }

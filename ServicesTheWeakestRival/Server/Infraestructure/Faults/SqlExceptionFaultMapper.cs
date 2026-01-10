@@ -19,21 +19,28 @@ namespace ServicesTheWeakestRival.Server.Infrastructure.Faults
 
         public static SqlFaultMapping Map(SqlException ex, string operationKeyPrefix)
         {
+            string normalizedPrefix = NormalizePrefixOrThrow(operationKeyPrefix);
+
+            if (ex == null)
+            {
+                return new SqlFaultMapping(
+                    BuildUnknownKey(normalizedPrefix),
+                    string.Empty);
+            }
+
+            return new SqlFaultMapping(
+                BuildKey(normalizedPrefix, ex.Number),
+                BuildDetails(ex));
+        }
+
+        private static string NormalizePrefixOrThrow(string operationKeyPrefix)
+        {
             if (string.IsNullOrWhiteSpace(operationKeyPrefix))
             {
                 throw new ArgumentException("Operation key prefix is required.", nameof(operationKeyPrefix));
             }
 
-            if (ex == null)
-            {
-                return new SqlFaultMapping(
-                    BuildUnknownKey(operationKeyPrefix),
-                    string.Empty);
-            }
-
-            return new SqlFaultMapping(
-                BuildKey(operationKeyPrefix, ex.Number),
-                BuildDetails(ex));
+            return operationKeyPrefix.Trim().TrimEnd('.');
         }
 
         private static string BuildKey(string operationKeyPrefix, int sqlNumber)
