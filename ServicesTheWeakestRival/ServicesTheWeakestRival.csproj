@@ -197,6 +197,7 @@
     <Compile Include="Server\Services\Reports\ReportServiceContext.cs" />
     <Compile Include="Server\Services\StatsService.cs" />
     <Compile Include="Server\Services\Stats\StatsLogic.cs" />
+    <Compile Include="Server\Services\Stats\StatsMatchResultsWriter.cs" />
     <Compile Include="Server\Services\TokenStore.cs" />
     <Compile Include="Server\Services\WildcardService.cs" />
   </ItemGroup>

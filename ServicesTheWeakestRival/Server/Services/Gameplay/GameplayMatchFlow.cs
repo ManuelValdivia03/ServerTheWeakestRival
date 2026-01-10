@@ -1,8 +1,8 @@
 ﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
-using ServicesTheWeakestRival.Contracts.Enums;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services.Logic;
+using ServicesTheWeakestRival.Server.Services.Stats;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -301,6 +301,23 @@ namespace ServicesTheWeakestRival.Server.Services
             winner.IsWinner = true;
 
             state.ResetSurpriseExam();
+
+            int matchDbId = state.WildcardMatchId;
+
+            if (matchDbId > 0)
+            {
+                List<int> participantUserIds = state.Players
+                    .Where(p => p != null)
+                    .Select(p => p.UserId)
+                    .Distinct()
+                    .ToList();
+
+                StatsMatchResultsWriter.TryPersistFinalResults(
+                    matchDbId,
+                    winner.UserId,
+                    state.BankedPoints,
+                    participantUserIds);
+            }
 
             GameplayBroadcaster.Broadcast(
                 state,

@@ -6,25 +6,25 @@ using System.ServiceModel;
 namespace ServicesTheWeakestRival.Server.Services
 {
     [ServiceBehavior(
-    InstanceContextMode = InstanceContextMode.Single,
-    ConcurrencyMode = ConcurrencyMode.Multiple)]
+        InstanceContextMode = InstanceContextMode.Single,
+        ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class StatsService : IStatsService
     {
-        private readonly StatsLogic _statsLogic;
+        private readonly StatsLogic statsLogic;
 
         public StatsService()
         {
-            _statsLogic = new StatsLogic();
+            statsLogic = new StatsLogic();
         }
 
         public GetLeaderboardResponse GetLeaderboard(GetLeaderboardRequest request)
         {
-            return _statsLogic.GetLeaderboard(request);
+            return statsLogic.GetLeaderboard(request);
         }
 
         public GetPlayerStatsResponse GetPlayerStats(GetPlayerStatsRequest request)
         {
-            return _statsLogic.GetPlayerStats(request);
+            return statsLogic.GetPlayerStats(request);
         }
     }
 }

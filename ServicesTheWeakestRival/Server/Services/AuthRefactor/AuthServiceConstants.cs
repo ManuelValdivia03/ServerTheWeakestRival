@@ -41,11 +41,9 @@
         public const string ERROR_ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED";
         public const string ERROR_ACCOUNT_BANNED = "ACCOUNT_BANNED";
 
-        // Si antes lo usabas, ya NO debe bloquear login; ahora se reemplaza sesión.
         public const string ERROR_ALREADY_LOGGED_IN = "ALREADY_LOGGED_IN";
         public const string MESSAGE_ALREADY_LOGGED_IN = "This account is already online.";
 
-        // NUEVO: para “kick” por login en otro lado
         public const string ERROR_FORCED_LOGOUT = "FORCED_LOGOUT";
         public const string MESSAGE_FORCED_LOGOUT = "Session replaced by a new login.";
 
@@ -84,6 +82,10 @@
 
         public const string MESSAGE_PASSWORD_MIN_LENGTH_NOT_MET =
             "Password does not meet the minimum length requirements ({0} characters).";
+
+        public const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
+        public const string MESSAGE_UNEXPECTED_ERROR = "Unexpected error. Please try again later.";
+
 
         public const string MESSAGE_VERIFICATION_CODE_MISSING = "No pending code. Request a new one.";
         public const string MESSAGE_RESET_CODE_MISSING = "No pending reset code. Request a new one.";
