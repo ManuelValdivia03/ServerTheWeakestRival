@@ -47,11 +47,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             }
         }
 
-        public int AcceptIncomingRequest(FriendDbContext db, int friendRequestId)
+        public int AcceptIncomingRequest(FriendDbContext db, int requestId)
         {
             using (SqlCommand command = new SqlCommand(FriendSql.Text.ACCEPT_INCOMING, db.Connection, db.Transaction))
             {
-                command.Parameters.Add(FriendServiceContext.PARAM_REQUEST_ID, SqlDbType.Int).Value = friendRequestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_REQUEST_ID, SqlDbType.Int).Value = requestId;
                 command.Parameters.Add(FriendServiceContext.PARAM_ACCEPTED, SqlDbType.TinyInt).Value =
                     (byte)FriendRequestState.Accepted;
 
@@ -98,11 +98,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             }
         }
 
-        public FriendRequestRow ReadRequestRow(FriendDbContext db, string sqlText, int friendRequestId)
+        public FriendRequestRow ReadRequestRow(FriendDbContext db, string sqlText, int requestId)
         {
             using (SqlCommand command = new SqlCommand(sqlText, db.Connection, db.Transaction))
             {
-                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = friendRequestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = requestId;
 
                 using (SqlDataReader reader = command.ExecuteReader(CommandBehavior.SingleRow))
                 {
