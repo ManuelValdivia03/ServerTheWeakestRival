@@ -5,7 +5,7 @@ using System.Data.SqlClient;
 
 namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 {
-    internal sealed class FriendRequestRepository : Friends.IFriendRequestRepository
+    internal sealed class FriendRequestRepository : IFriendRequestRepository
     {
         public bool FriendshipExists(FriendDbContext db, int targetAccountId)
         {
@@ -47,11 +47,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             }
         }
 
-        public int AcceptIncomingRequest(FriendDbContext db, int requestId)
+        public int AcceptIncomingRequest(FriendDbContext db, int friendRequestId)
         {
             using (SqlCommand command = new SqlCommand(FriendSql.Text.ACCEPT_INCOMING, db.Connection, db.Transaction))
             {
-                command.Parameters.Add(FriendServiceContext.PARAM_REQUEST_ID, SqlDbType.Int).Value = requestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_REQUEST_ID, SqlDbType.Int).Value = friendRequestId;
                 command.Parameters.Add(FriendServiceContext.PARAM_ACCEPTED, SqlDbType.TinyInt).Value =
                     (byte)FriendRequestState.Accepted;
 
@@ -98,11 +98,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             }
         }
 
-        public FriendRequestRow ReadRequestRow(FriendDbContext db, string sqlText, int requestId)
+        public FriendRequestRow ReadRequestRow(FriendDbContext db, string sqlText, int friendRequestId)
         {
             using (SqlCommand command = new SqlCommand(sqlText, db.Connection, db.Transaction))
             {
-                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = requestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = friendRequestId;
 
                 using (SqlDataReader reader = command.ExecuteReader(CommandBehavior.SingleRow))
                 {
@@ -122,7 +122,7 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             }
         }
 
-        public int AcceptRequest(FriendDbContext db, int requestId, int myAccountId)
+        public int AcceptRequest(FriendDbContext db, int friendRequestId, int myAccountId)
         {
             using (SqlCommand command = new SqlCommand(FriendSql.Text.ACCEPT_REQUEST, db.Connection, db.Transaction))
             {
@@ -130,18 +130,18 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                     (byte)FriendRequestState.Accepted;
                 command.Parameters.Add(FriendServiceContext.PARAM_PENDING, SqlDbType.TinyInt).Value =
                     (byte)FriendRequestState.Pending;
-                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = requestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = friendRequestId;
                 command.Parameters.Add(FriendServiceContext.PARAM_ME, SqlDbType.Int).Value = myAccountId;
 
                 return command.ExecuteNonQuery();
             }
         }
 
-        public int RejectAsReceiver(FriendDbContext db, int requestId)
+        public int RejectAsReceiver(FriendDbContext db, int friendRequestId)
         {
             using (SqlCommand command = new SqlCommand(FriendSql.Text.REJECT_REQUEST, db.Connection, db.Transaction))
             {
-                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = requestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = friendRequestId;
                 command.Parameters.Add(FriendServiceContext.PARAM_ME, SqlDbType.Int).Value = db.MyAccountId;
                 command.Parameters.Add(FriendServiceContext.PARAM_REJECTED, SqlDbType.TinyInt).Value =
                     (byte)FriendRequestState.Declined;
@@ -152,11 +152,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             }
         }
 
-        public int CancelAsSender(FriendDbContext db, int requestId)
+        public int CancelAsSender(FriendDbContext db, int friendRequestId)
         {
             using (SqlCommand command = new SqlCommand(FriendSql.Text.CANCEL_REQUEST, db.Connection, db.Transaction))
             {
-                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = requestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = friendRequestId;
                 command.Parameters.Add(FriendServiceContext.PARAM_ME, SqlDbType.Int).Value = db.MyAccountId;
                 command.Parameters.Add(FriendServiceContext.PARAM_CANCELLED, SqlDbType.TinyInt).Value =
                     (byte)FriendRequestState.Cancelled;
@@ -180,11 +180,11 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             }
         }
 
-        public int MarkFriendRequestCancelled(FriendDbContext db, int requestId)
+        public int MarkFriendRequestCancelled(FriendDbContext db, int friendRequestId)
         {
             using (SqlCommand command = new SqlCommand(FriendSql.Text.MARK_CANCELLED, db.Connection, db.Transaction))
             {
-                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = requestId;
+                command.Parameters.Add(FriendServiceContext.PARAM_ID, SqlDbType.Int).Value = friendRequestId;
                 command.Parameters.Add(FriendServiceContext.PARAM_CANCELLED, SqlDbType.TinyInt).Value =
                     (byte)FriendRequestState.Cancelled;
 
