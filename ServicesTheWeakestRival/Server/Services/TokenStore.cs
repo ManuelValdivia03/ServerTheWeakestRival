@@ -6,7 +6,7 @@ using ContractsToken = ServicesTheWeakestRival.Contracts.Data.AuthToken;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    internal static class TokenStore
+    public static class TokenStore
     {
         private const string CONTEXT_REVOKE_ALL_FOR_USER = "TokenStore.RevokeAllForUser";
 
@@ -14,7 +14,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal static event Action<int> SessionsRevokedForUser;
 
-        internal static readonly ConcurrentDictionary<string, ContractsToken> Cache =
+        public static readonly ConcurrentDictionary<string, ContractsToken> Cache =
             new ConcurrentDictionary<string, ContractsToken>(StringComparer.Ordinal);
 
         internal static bool TryAddToken(ContractsToken token)

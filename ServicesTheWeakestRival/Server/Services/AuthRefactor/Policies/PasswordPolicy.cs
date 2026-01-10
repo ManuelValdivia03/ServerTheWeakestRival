@@ -1,4 +1,5 @@
-﻿using ServicesTheWeakestRival.Server.Services.Auth;
+﻿using BCrypt.Net;
+using ServicesTheWeakestRival.Server.Services.Auth;
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Policies
 {
@@ -25,7 +26,36 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Policies
 
         public void VerifyOrThrow(string password, string storedHash)
         {
-            if (!passwordService.Verify(password, storedHash))
+            if (string.IsNullOrWhiteSpace(storedHash))
+            {
+                throw AuthServiceContext.ThrowFault(
+                    AuthServiceConstants.ERROR_INVALID_CREDENTIALS,
+                    AuthServiceConstants.MESSAGE_INVALID_CREDENTIALS);
+            }
+
+            bool isValid;
+            try
+            {
+                isValid = passwordService.Verify(password, storedHash);
+            }
+            catch (SaltParseException ex)
+            {
+                System.GC.KeepAlive(ex);
+
+                throw AuthServiceContext.ThrowFault(
+                    AuthServiceConstants.ERROR_INVALID_CREDENTIALS,
+                    AuthServiceConstants.MESSAGE_INVALID_CREDENTIALS);
+            }
+            catch (System.ArgumentException ex)
+            {
+                System.GC.KeepAlive(ex);
+
+                throw AuthServiceContext.ThrowFault(
+                    AuthServiceConstants.ERROR_INVALID_CREDENTIALS,
+                    AuthServiceConstants.MESSAGE_INVALID_CREDENTIALS);
+            }
+
+            if (!isValid)
             {
                 throw AuthServiceContext.ThrowFault(
                     AuthServiceConstants.ERROR_INVALID_CREDENTIALS,

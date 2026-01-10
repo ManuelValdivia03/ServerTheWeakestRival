@@ -2,9 +2,9 @@
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
-    internal static class ProfileImageValidator
+    public static class ProfileImageValidator
     {
-        internal static void ValidateOrThrow(byte[] imageBytes, string contentType, int maxBytes)
+        public static void ValidateOrThrow(byte[] imageBytes, string contentType, int maxBytes)
         {
             if (imageBytes == null || imageBytes.Length == 0)
             {

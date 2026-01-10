@@ -4,7 +4,7 @@ using System.Text;
 
 namespace ServicesTheWeakestRival.Server.Infrastructure
 {
-    internal static class SecurityUtil
+    public static class SecurityUtil
     {
         public static string CreateNumericCode(int digits = 6)
         {
