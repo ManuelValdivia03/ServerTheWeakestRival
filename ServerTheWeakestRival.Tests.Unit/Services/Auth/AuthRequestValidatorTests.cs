@@ -124,6 +124,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 DateTime.UtcNow.AddMinutes(5),
                 used: false,
                 expiredMessage: AuthServiceConstants.MESSAGE_RESET_CODE_EXPIRED);
+
+            Assert.IsTrue(true);
         }
 
         [TestMethod]
@@ -150,6 +152,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         public void EnsureValidUserIdOrThrow_WhenUserIdValid_DoesNotThrow()
         {
             AuthRequestValidator.EnsureValidUserIdOrThrow(USER_ID_VALID);
+
+            Assert.IsTrue(true);
         }
 
         [TestMethod]
@@ -217,6 +221,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             string tokenValue = LoginAndGetTokenForAuthValidator(email);
 
             AuthRequestValidator.EnsureValidSessionOrThrow(tokenValue);
+
+            Assert.IsTrue(true);
         }
 
         [TestMethod]

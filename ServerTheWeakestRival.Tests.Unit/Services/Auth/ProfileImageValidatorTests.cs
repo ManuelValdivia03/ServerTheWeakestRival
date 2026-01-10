@@ -43,17 +43,14 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void ValidateOrThrow_WhenImageBytesIsNull_DoesNotThrow()
         {
-            ProfileImageValidator.ValidateOrThrow(null, null, MAX_BYTES);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() => ProfileImageValidator.ValidateOrThrow(null, null, MAX_BYTES));
         }
 
         [TestMethod]
         public void ValidateOrThrow_WhenImageBytesIsEmpty_DoesNotThrow()
         {
-            ProfileImageValidator.ValidateOrThrow(Array.Empty<byte>(), CONTENT_TYPE_PNG, MAX_BYTES);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ProfileImageValidator.ValidateOrThrow(Array.Empty<byte>(), CONTENT_TYPE_PNG, MAX_BYTES));
         }
 
         [TestMethod]
@@ -112,17 +109,16 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void ValidateOrThrow_WhenPngIsValid_DoesNotThrow()
         {
-            ProfileImageValidator.ValidateOrThrow(PNG_BYTES_VALID, CONTENT_TYPE_PNG, MAX_BYTES);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ProfileImageValidator.ValidateOrThrow(PNG_BYTES_VALID, CONTENT_TYPE_PNG, MAX_BYTES));
         }
+
 
         [TestMethod]
         public void ValidateOrThrow_WhenJpegIsValid_DoesNotThrow()
         {
-            ProfileImageValidator.ValidateOrThrow(JPEG_BYTES_VALID, CONTENT_TYPE_JPEG, MAX_BYTES);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ProfileImageValidator.ValidateOrThrow(JPEG_BYTES_VALID, CONTENT_TYPE_JPEG, MAX_BYTES));
         }
 
         [TestMethod]
@@ -151,9 +147,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             byte[] exactMax = new byte[MAX_BYTES];
             Array.Copy(PNG_BYTES_VALID, exactMax, Math.Min(PNG_BYTES_VALID.Length, exactMax.Length));
 
-            ProfileImageValidator.ValidateOrThrow(exactMax, CONTENT_TYPE_PNG, MAX_BYTES);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ProfileImageValidator.ValidateOrThrow(exactMax, CONTENT_TYPE_PNG, MAX_BYTES));
         }
 
         [TestMethod]
@@ -191,10 +186,22 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void ValidateOrThrow_WhenImageBytesEmpty_AndContentTypeNull_DoesNotThrow()
         {
-            ProfileImageValidator.ValidateOrThrow(Array.Empty<byte>(), null, MAX_BYTES);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ProfileImageValidator.ValidateOrThrow(Array.Empty<byte>(), null, MAX_BYTES));
         }
+
+        private static void AssertDoesNotThrow(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail("Expected no exception, but got: " + ex.GetType().Name + " - " + ex.Message);
+            }
+        }
+
 
     }
 }

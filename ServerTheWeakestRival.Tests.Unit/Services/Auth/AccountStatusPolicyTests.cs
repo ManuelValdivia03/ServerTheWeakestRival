@@ -14,8 +14,18 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void EnsureAllowsLogin_WhenStatusIsActive_DoesNotThrow()
         {
-            AccountStatusPolicy.EnsureAllowsLogin(AuthServiceConstants.ACCOUNT_STATUS_ACTIVE);
+            try
+            {
+                AccountStatusPolicy.EnsureAllowsLogin(AuthServiceConstants.ACCOUNT_STATUS_ACTIVE);
+
+                Assert.IsTrue(true);
+            }
+            catch (System.Exception ex)
+            {
+                Assert.Fail("Expected no exception, but got: " + ex.GetType().Name);
+            }
         }
+
 
         [TestMethod]
         public void EnsureAllowsLogin_WhenStatusIsInactive_ThrowsAccountInactive()

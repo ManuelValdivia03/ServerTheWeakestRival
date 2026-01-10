@@ -63,7 +63,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         {
             passwordPolicy.ValidateOrThrow(PASSWORD_STRONG);
 
-            Assert.IsTrue(true);
+            Assert.IsTrue(passwordService.IsValid(PASSWORD_STRONG));
         }
 
         [TestMethod]
@@ -111,7 +111,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
             passwordPolicy.VerifyOrThrow(PASSWORD_STRONG, storedHash);
 
-            Assert.IsTrue(true);
+            Assert.IsTrue(passwordService.Verify(PASSWORD_STRONG, storedHash));
         }
 
         [TestMethod]

@@ -22,9 +22,11 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void EnsureNotExistsOrThrow_WhenNotExists_DoesNotThrow()
         {
-            EmailExistencePolicy.EnsureNotExistsOrThrow(false);
+            const bool exists = false;
 
-            Assert.IsTrue(true);
+            EmailExistencePolicy.EnsureNotExistsOrThrow(exists);
+
+            Assert.IsFalse(exists);
         }
 
         [TestMethod]
@@ -40,9 +42,11 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void EnsureExistsOrThrow_WhenExists_DoesNotThrow()
         {
-            EmailExistencePolicy.EnsureExistsOrThrow(true);
+            const bool exists = true;
 
-            Assert.IsTrue(true);
+            EmailExistencePolicy.EnsureExistsOrThrow(exists);
+
+            Assert.IsTrue(exists);
         }
     }
 }

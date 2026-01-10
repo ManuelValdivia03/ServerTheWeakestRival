@@ -511,12 +511,16 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         [TestMethod]
         public void Logout_WhenTokenIsUnknown_DoesNotThrow()
         {
+            string unknownToken = Guid.NewGuid().ToString(AuthServiceConstants.TOKEN_GUID_FORMAT);
+
             authService.Logout(new LogoutRequest
             {
-                Token = Guid.NewGuid().ToString(AuthServiceConstants.TOKEN_GUID_FORMAT)
+                Token = unknownToken
             });
 
-            Assert.IsTrue(true);
+            bool exists = AuthServiceContext.TryGetUserId(unknownToken, out int userId);
+            Assert.IsFalse(exists);
+            Assert.AreEqual(0, userId);
         }
 
         [TestMethod]
