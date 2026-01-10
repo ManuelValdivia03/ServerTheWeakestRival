@@ -28,6 +28,9 @@ namespace ServicesTheWeakestRival.Server.Services
         public PingResponse Ping(PingRequest request) => 
             authOperations.Ping(request);
 
+        public LoginResponse GuestLogin(GuestLoginRequest request) =>
+            authOperations.GuestLogin(request);
+
         public BeginRegisterResponse BeginRegister(BeginRegisterRequest request) => 
             authOperations.BeginRegister(request);
 

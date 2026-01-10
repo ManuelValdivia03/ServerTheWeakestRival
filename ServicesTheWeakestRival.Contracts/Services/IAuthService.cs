@@ -37,5 +37,9 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]
         GetProfileImageResponse GetProfileImage(GetProfileImageRequest request);
+
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        LoginResponse GuestLogin(GuestLoginRequest request);
     }
 }

@@ -25,6 +25,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
         private readonly LoginWorkflow loginWorkflow;
         private readonly LogoutWorkflow logoutWorkflow;
         private readonly GetProfileImageWorkflow getProfileImageWorkflow;
+        private readonly GuestLoginWorkflow guestLoginWorkflow;
 
         public AuthOperations(AuthRepository authRepository, PasswordService passwordService, IEmailService emailService)
         {
@@ -42,6 +43,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             loginWorkflow = new LoginWorkflow(this.authRepository, passwordPolicy);
             logoutWorkflow = new LogoutWorkflow(this.authRepository);
             getProfileImageWorkflow = new GetProfileImageWorkflow(this.authRepository);
+            guestLoginWorkflow = new GuestLoginWorkflow(this.authRepository);
         }
 
         public PingResponse Ping(PingRequest request)
@@ -74,6 +76,12 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
         {
             return getProfileImageWorkflow.Execute(request);
         }
+
+        public LoginResponse GuestLogin(GuestLoginRequest request)
+        {
+            return guestLoginWorkflow.Execute(request);
+        }
+
 
         public LoginResponse Login(LoginRequest request)
         {

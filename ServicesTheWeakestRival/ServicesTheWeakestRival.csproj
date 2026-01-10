@@ -82,6 +82,7 @@
     <Compile Include="Server\Infraestructure\Faults\SqlExceptionFaultGuard.cs" />
     <Compile Include="Server\Infraestructure\Faults\SqlExceptionFaultMapper.cs" />
     <Compile Include="Server\Infraestructure\LobbyBroadcastHub.cs" />
+    <Compile Include="Server\Infraestructure\Randomization\CryptoRandomInt32.cs" />
     <Compile Include="Server\Infraestructure\SanctionReconciler.cs" />
     <Compile Include="Server\Infraestructure\SecurityUtil.cs" />
     <Compile Include="Server\Services\AuthRefactor\AuthOperations.cs" />
@@ -115,6 +116,7 @@
     <Compile Include="Server\Services\AuthRefactor\Workflows\CompletePasswordResetWorkflow.cs" />
     <Compile Include="Server\Services\AuthRefactor\Workflows\CompleteRegisterWorkflow.cs" />
     <Compile Include="Server\Services\AuthRefactor\Workflows\GetProfileImageWorkflow.cs" />
+    <Compile Include="Server\Services\AuthRefactor\Workflows\GuestLoginWorkflow.cs" />
     <Compile Include="Server\Services\AuthRefactor\Workflows\LoginWorkflow.cs" />
     <Compile Include="Server\Services\AuthRefactor\Workflows\LogoutWorkflow.cs" />
     <Compile Include="Server\Services\AuthRefactor\Workflows\RegisterWorkflow.cs" />

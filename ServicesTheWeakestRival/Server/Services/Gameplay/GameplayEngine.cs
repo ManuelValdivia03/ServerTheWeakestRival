@@ -2,6 +2,7 @@
 using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Services.Gameplay;
 using ServicesTheWeakestRival.Server.Services.Logic;
 using System;
 using System.Collections.Generic;
@@ -16,6 +17,15 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayEngine));
 
+        internal const string ERROR_INVALID_REQUEST = GameplayEngineConstants.ERROR_INVALID_REQUEST;
+        internal const string ERROR_UNEXPECTED = GameplayEngineConstants.ERROR_UNEXPECTED;
+
+        internal const string MESSAGE_UNEXPECTED_ERROR = GameplayEngineConstants.MESSAGE_UNEXPECTED_ERROR;
+
+        private const string CTX_GET_QUESTIONS = "GameplayEngine.GetQuestions";
+        private const string MESSAGE_REQUEST_IS_NULL = "Request is null.";
+        private const string MESSAGE_MATCH_ID_REQUIRED = "MatchId is required.";
+
         private GameplayEngine()
         {
         }
@@ -24,7 +34,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             GameplayDataAccess.ValidateGetQuestionsRequest(request);
 
-            GameplayAuth.Authenticate(request.Token);
+            Authenticate(request.Token);
 
             int maxQuestions = GameplayDataAccess.GetMaxQuestionsOrDefault(request.MaxQuestions);
 
@@ -44,18 +54,18 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                throw GameplayFaults.ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     GameplayEngineConstants.ERROR_DB,
                     GameplayEngineConstants.MESSAGE_DB_ERROR,
-                    "GameplayEngine.GetQuestions",
+                    CTX_GET_QUESTIONS,
                     ex);
             }
             catch (Exception ex)
             {
-                throw GameplayFaults.ThrowTechnicalFault(
+                throw ThrowTechnicalFault(
                     GameplayEngineConstants.ERROR_UNEXPECTED,
                     GameplayEngineConstants.MESSAGE_UNEXPECTED_ERROR,
-                    "GameplayEngine.GetQuestions",
+                    CTX_GET_QUESTIONS,
                     ex);
             }
         }
@@ -128,11 +138,30 @@ namespace ServicesTheWeakestRival.Server.Services
             return GameplayActionsFlow.ApplyWildcardFromDbOrThrow(wildcardMatchId, userId, wildcardCode, clientRoundNumber);
         }
 
+        internal int Authenticate(string token)
+        {
+            return GameplayAuth.Authenticate(token);
+        }
+
+        internal static FaultException<ServiceFault> ThrowFault(string code, string message)
+        {
+            return GameplayFaults.ThrowFault(code, message);
+        }
+
+        internal static FaultException<ServiceFault> ThrowTechnicalFault(
+            string code,
+            string message,
+            string context,
+            Exception ex)
+        {
+            return GameplayFaults.ThrowTechnicalFault(code, message, context, ex);
+        }
+
         internal void ValidateNotNullRequest(object request)
         {
             if (request == null)
             {
-                throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, "Request is null.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, MESSAGE_REQUEST_IS_NULL);
             }
         }
 
@@ -140,7 +169,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (matchId == Guid.Empty)
             {
-                throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, "MatchId is required.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, MESSAGE_MATCH_ID_REQUIRED);
             }
         }
     }
