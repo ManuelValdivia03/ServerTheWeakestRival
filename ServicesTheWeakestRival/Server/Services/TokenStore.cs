@@ -161,12 +161,12 @@ namespace ServicesTheWeakestRival.Server.Services
                     foreach (var kvp in Cache.ToArray())
                     {
                         ContractsToken token = kvp.Value;
-                        if (token != null && token.UserId == userId)
+
+                        if (token != null
+                            && token.UserId == userId
+                            && Cache.TryRemove(kvp.Key, out _))
                         {
-                            if (Cache.TryRemove(kvp.Key, out _))
-                            {
-                                revokedCount++;
-                            }
+                            revokedCount++;
                         }
                     }
 
