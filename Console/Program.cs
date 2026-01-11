@@ -47,8 +47,15 @@ namespace ConsoleServer
             }
             finally
             {
-                try { reconciler.Dispose(); }
-                catch { }
+                try 
+                { 
+                    reconciler.Dispose(); 
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Program.Main", ex);
+                    throw;
+                }
 
                 foreach (var h in hosts)
                 {
