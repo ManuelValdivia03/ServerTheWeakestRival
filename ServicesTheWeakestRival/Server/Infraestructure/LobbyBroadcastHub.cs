@@ -89,17 +89,19 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 }
             }
         }
-
         internal static bool TryGetLobbyUidForCurrentSession(out Guid lobbyUid)
         {
-            foreach (var kv in Buckets.Where(kv => kv.Value.ContainsKey(CurrentSessionId)))
+            var match = Buckets.FirstOrDefault(kv => kv.Value.ContainsKey(CurrentSessionId));
+
+            if (match.Value != null)
             {
-                lobbyUid = kv.Key;
+                lobbyUid = match.Key;
                 return true;
             }
 
             lobbyUid = Guid.Empty;
             return false;
         }
+
     }
 }

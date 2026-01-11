@@ -219,11 +219,21 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
                 channelObject.Close();
             }
-            catch
+            catch (Exception ex)
             {
-                try { channelObject.Abort(); } catch { }
+                try
+                {
+                    channelObject.Abort();
+                }
+                catch (Exception abortEx)
+                {
+                    Logger.Warn(
+                        "LobbyCallbackRegistry.CloseChannelSafe: Close failed and Abort failed.",
+                        new AggregateException(ex, abortEx));
+                }
             }
         }
+
 
         private static void RemoveIfMatches(int accountId, string entryId, string reason)
         {
