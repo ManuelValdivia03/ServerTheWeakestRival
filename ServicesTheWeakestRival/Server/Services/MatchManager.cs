@@ -43,7 +43,10 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (request.MaxPlayers <= 0)
             {
-                throw new ArgumentOutOfRangeException(nameof(request.MaxPlayers));
+                throw new ArgumentOutOfRangeException(
+                    nameof(request),
+                    request.MaxPlayers,
+                    "MaxPlayers must be greater than zero.");
             }
 
             var cfg = request.Config ?? new MatchConfigDto();
