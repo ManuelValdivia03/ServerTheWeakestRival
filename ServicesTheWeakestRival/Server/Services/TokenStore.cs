@@ -15,10 +15,10 @@ namespace ServicesTheWeakestRival.Server.Services
         private static readonly ILog Logger = LogManager.GetLogger(typeof(TokenStore));
         private static readonly object SyncRoot = new object();
 
-        public static readonly ConcurrentDictionary<string, ContractsToken> Cache =
+        public static ConcurrentDictionary<string, ContractsToken> Cache { get; } =
             new ConcurrentDictionary<string, ContractsToken>(StringComparer.Ordinal);
 
-        public static readonly ConcurrentDictionary<int, string> ActiveTokenByUserId =
+        public static ConcurrentDictionary<int, string> ActiveTokenByUserId { get; } =
             new ConcurrentDictionary<int, string>();
 
         internal static event Action<int> SessionsRevokedForUser;
