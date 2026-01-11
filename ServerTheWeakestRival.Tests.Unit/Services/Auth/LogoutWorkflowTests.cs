@@ -1,5 +1,6 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows;
@@ -184,7 +185,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
         private int CreateAccount(string email)
         {
-            string passwordHash = passwordService.Hash(PASSWORD);
+            string passwordHash = PasswordService.Hash(PASSWORD);
 
             var data = new AccountRegistrationData(
                 email,

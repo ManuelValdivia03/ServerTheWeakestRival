@@ -172,7 +172,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         public void CreateAccountAndUser_ThenGetAccountForLogin_ReturnsFoundActive()
         {
             string email = CreateUniqueEmail();
-            string passwordHash = passwordService.Hash(PASSWORD);
+            string passwordHash = PasswordService.Hash(PASSWORD);
 
             var data = new AccountRegistrationData(
                 email,
@@ -194,7 +194,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             Assert.AreEqual(newUserId, loginLookup.Account.UserId);
             Assert.AreEqual(AuthServiceConstants.ACCOUNT_STATUS_ACTIVE, loginLookup.Account.Status);
 
-            bool verified = passwordService.Verify(PASSWORD, loginLookup.Account.PasswordHash);
+            bool verified = PasswordService.Verify(PASSWORD, loginLookup.Account.PasswordHash);
             Assert.IsTrue(verified);
         }
 
@@ -202,7 +202,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         public void UpdateAccountPassword_WhenEmailExists_UpdatesPasswordHash()
         {
             string email = CreateUniqueEmail();
-            string passwordHash = passwordService.Hash(PASSWORD);
+            string passwordHash = PasswordService.Hash(PASSWORD);
 
             var data = new AccountRegistrationData(
                 email,
@@ -212,7 +212,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             int newUserId = authRepository.CreateAccountAndUser(data);
 
-            string newHash = passwordService.Hash(NEW_PASSWORD);
+            string newHash = PasswordService.Hash(NEW_PASSWORD);
             int rows = authRepository.UpdateAccountPassword(email, newHash);
 
             Assert.IsTrue(rows > 0);
@@ -222,10 +222,10 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             Assert.IsTrue(loginLookup.Found);
             Assert.AreEqual(newUserId, loginLookup.Account.UserId);
 
-            bool oldOk = passwordService.Verify(PASSWORD, loginLookup.Account.PasswordHash);
+            bool oldOk = PasswordService.Verify(PASSWORD, loginLookup.Account.PasswordHash);
             Assert.IsFalse(oldOk);
 
-            bool newOk = passwordService.Verify(NEW_PASSWORD, loginLookup.Account.PasswordHash);
+            bool newOk = PasswordService.Verify(NEW_PASSWORD, loginLookup.Account.PasswordHash);
             Assert.IsTrue(newOk);
         }
 
@@ -233,7 +233,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         public void ReadUserProfileImage_WhenNoImageSaved_ReturnsEmptyImageRecord()
         {
             string email = CreateUniqueEmail();
-            string passwordHash = passwordService.Hash(PASSWORD);
+            string passwordHash = PasswordService.Hash(PASSWORD);
 
             var data = new AccountRegistrationData(
                 email,
@@ -415,7 +415,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         {
             string email = CreateUniqueEmail();
 
-            string newHash = passwordService.Hash(NEW_PASSWORD);
+            string newHash = PasswordService.Hash(NEW_PASSWORD);
 
             int rows = authRepository.UpdateAccountPassword(email, newHash);
 
@@ -507,7 +507,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
         private void CreateAccountForEmail(string email)
         {
-            string passwordHash = passwordService.Hash(PASSWORD);
+            string passwordHash = PasswordService.Hash(PASSWORD);
 
             var data = new AccountRegistrationData(
                 email,

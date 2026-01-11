@@ -29,11 +29,6 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 
         public List<FriendSummary> LoadFriends(FriendDbContext db, DateTime utcNow)
         {
-            if (ReferenceEquals(db, null))
-            {
-                return new List<FriendSummary>();
-            }
-
             var friends = new List<FriendSummary>();
 
             using (SqlCommand command = new SqlCommand(FriendSql.Text.FRIENDS, db.Connection, db.Transaction))
@@ -72,7 +67,7 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 
         public FriendRequestSummary[] LoadPendingRequests(FriendDbContext db, string sqlText)
         {
-            if (ReferenceEquals(db, null) || string.IsNullOrWhiteSpace(sqlText))
+            if (string.IsNullOrWhiteSpace(sqlText))
             {
                 return Array.Empty<FriendRequestSummary>();
             }
@@ -108,11 +103,6 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 
         public void UpsertPresence(FriendDbContext db, string device)
         {
-            if (ReferenceEquals(db, null))
-            {
-                return;
-            }
-
             using (SqlCommand command = new SqlCommand(FriendSql.Text.PRESENCE_UPDATE, db.Connection, db.Transaction))
             {
                 command.Parameters.Add(FriendServiceContext.PARAM_ME, SqlDbType.Int).Value = db.MyAccountId;
@@ -146,11 +136,6 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
 
         public FriendPresence[] GetFriendsPresence(FriendDbContext db, DateTime utcNow)
         {
-            if (ReferenceEquals(db, null))
-            {
-                return Array.Empty<FriendPresence>();
-            }
-
             var list = new List<FriendPresence>();
 
             using (SqlCommand command = new SqlCommand(FriendSql.Text.FRIENDS_PRESENCE, db.Connection, db.Transaction))

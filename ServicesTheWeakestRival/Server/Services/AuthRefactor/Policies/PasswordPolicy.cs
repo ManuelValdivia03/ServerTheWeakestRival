@@ -36,7 +36,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Policies
             bool isValid;
             try
             {
-                isValid = passwordService.Verify(password, storedHash);
+                isValid = PasswordService.Verify(password, storedHash);
             }
             catch (SaltParseException ex)
             {

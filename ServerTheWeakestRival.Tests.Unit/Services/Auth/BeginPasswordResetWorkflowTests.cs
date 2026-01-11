@@ -17,6 +17,7 @@ using System.IO;
 using System.Reflection;
 using System.Xml.Linq;
 using System;
+using ServicesTheWeakestRival.Server.Services.Auth;
 
 namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 {
@@ -358,7 +359,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
         private void CreateAccount(string email)
         {
-            string passwordHash = passwordService.Hash(PASSWORD);
+            string passwordHash = PasswordService.Hash(PASSWORD);
 
             var data = new AccountRegistrationData(
                 email,

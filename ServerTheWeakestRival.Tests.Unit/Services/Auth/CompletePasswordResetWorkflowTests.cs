@@ -2,6 +2,7 @@
 using ServerTheWeakestRival.Tests.Unit.Infrastructure;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Infrastructure;
+using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows;
@@ -231,7 +232,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             LoginLookupResult loginRow = authRepository.GetAccountForLogin(email);
             Assert.IsTrue(loginRow.Found);
 
-            bool passwordChanged = passwordService.Verify(PASSWORD_NEW_STRONG, loginRow.Account.PasswordHash);
+            bool passwordChanged = PasswordService.Verify(PASSWORD_NEW_STRONG, loginRow.Account.PasswordHash);
             Assert.IsTrue(passwordChanged);
 
             ResetLookupResult after = authRepository.ReadLatestReset(email);
@@ -309,7 +310,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             LoginLookupResult loginRow = authRepository.GetAccountForLogin(email);
             Assert.IsTrue(loginRow.Found);
 
-            bool oldPasswordStillValid = passwordService.Verify(PASSWORD_OLD, loginRow.Account.PasswordHash);
+            bool oldPasswordStillValid = PasswordService.Verify(PASSWORD_OLD, loginRow.Account.PasswordHash);
             Assert.IsTrue(oldPasswordStillValid);
         }
 
@@ -423,7 +424,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
         private void CreateAccount(string email)
         {
-            string passwordHash = passwordService.Hash(PASSWORD_OLD);
+            string passwordHash = PasswordService.Hash(PASSWORD_OLD);
 
             var data = new AccountRegistrationData(
                 email,

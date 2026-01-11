@@ -85,7 +85,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void VerifyOrThrow_WhenPasswordHasSurroundingSpaces_ThrowsInvalidCredentials()
         {
-            string storedHash = passwordService.Hash(PASSWORD_STRONG);
+            string storedHash = PasswordService.Hash(PASSWORD_STRONG);
 
             string passwordWithSpaces = "  " + PASSWORD_STRONG + "  ";
 
@@ -97,7 +97,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void VerifyOrThrow_WhenPasswordIsIncorrect_ThrowsInvalidCredentials()
         {
-            string storedHash = passwordService.Hash(PASSWORD_STRONG);
+            string storedHash = PasswordService.Hash(PASSWORD_STRONG);
 
             var fault = FaultAssert.Capture(() => passwordPolicy.VerifyOrThrow(PASSWORD_WRONG, storedHash));
 
@@ -107,11 +107,11 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void VerifyOrThrow_WhenPasswordIsCorrect_DoesNotThrow()
         {
-            string storedHash = passwordService.Hash(PASSWORD_STRONG);
+            string storedHash = PasswordService.Hash(PASSWORD_STRONG);
 
             passwordPolicy.VerifyOrThrow(PASSWORD_STRONG, storedHash);
 
-            Assert.IsTrue(passwordService.Verify(PASSWORD_STRONG, storedHash));
+            Assert.IsTrue(PasswordService.Verify(PASSWORD_STRONG, storedHash));
         }
 
         [TestMethod]

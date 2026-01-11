@@ -7,6 +7,7 @@ using ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows;
 using System.Data;
 using System.Data.SqlClient;
 using System;
+using ServicesTheWeakestRival.Server.Services.Auth;
 
 namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 {
@@ -349,7 +350,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
         private void CreateAccount(string email)
         {
-            string passwordHash = passwordService.Hash(PASSWORD_STRONG);
+            string passwordHash = PasswordService.Hash(PASSWORD_STRONG);
 
             var data = new AccountRegistrationData(
                 email,

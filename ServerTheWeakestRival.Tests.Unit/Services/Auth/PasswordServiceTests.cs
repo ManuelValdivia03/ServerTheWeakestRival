@@ -59,9 +59,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Hash_WhenPasswordIsNull_ReturnsNonEmptyHash()
         {
-            var service = new PasswordService(MIN_LENGTH);
 
-            string hash = service.Hash(null);
+            string hash = PasswordService.Hash(null);
 
             Assert.IsFalse(string.IsNullOrWhiteSpace(hash));
         }
@@ -69,10 +68,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Hash_WhenSamePasswordHashedTwice_ReturnsDifferentHashes()
         {
-            var service = new PasswordService(MIN_LENGTH);
 
-            string hash1 = service.Hash(VALID_PASSWORD);
-            string hash2 = service.Hash(VALID_PASSWORD);
+            string hash1 = PasswordService.Hash(VALID_PASSWORD);
+            string hash2 = PasswordService.Hash(VALID_PASSWORD);
 
             Assert.AreNotEqual(hash1, hash2);
         }
@@ -80,9 +78,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenStoredHashEmpty_ReturnsFalse()
         {
-            var service = new PasswordService(MIN_LENGTH);
-
-            bool ok = service.Verify(VALID_PASSWORD, STORED_HASH_EMPTY);
+            bool ok = PasswordService.Verify(VALID_PASSWORD, STORED_HASH_EMPTY);
 
             Assert.IsFalse(ok);
         }
@@ -90,11 +86,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenPasswordMatchesStoredHash_ReturnsTrue()
         {
-            var service = new PasswordService(MIN_LENGTH);
+            string hash = PasswordService.Hash(VALID_PASSWORD);
 
-            string hash = service.Hash(VALID_PASSWORD);
-
-            bool ok = service.Verify(VALID_PASSWORD, hash);
+            bool ok = PasswordService.Verify(VALID_PASSWORD, hash);
 
             Assert.IsTrue(ok);
         }
@@ -102,11 +96,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenPasswordDoesNotMatchStoredHash_ReturnsFalse()
         {
-            var service = new PasswordService(MIN_LENGTH);
+            string hash = PasswordService.Hash(VALID_PASSWORD);
 
-            string hash = service.Hash(VALID_PASSWORD);
-
-            bool ok = service.Verify(VALID_PASSWORD_2, hash);
+            bool ok = PasswordService.Verify(VALID_PASSWORD_2, hash);
 
             Assert.IsFalse(ok);
         }
@@ -114,11 +106,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenPasswordIsNullAndHashFromEmptyPassword_ReturnsTrue()
         {
-            var service = new PasswordService(MIN_LENGTH);
+            string emptyPasswordHash = PasswordService.Hash(EMPTY);
 
-            string emptyPasswordHash = service.Hash(EMPTY);
-
-            bool ok = service.Verify(null, emptyPasswordHash);
+            bool ok = PasswordService.Verify(null, emptyPasswordHash);
 
             Assert.IsTrue(ok);
         }
@@ -162,9 +152,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Hash_WhenPasswordIsWhitespace_ReturnsNonEmptyHash()
         {
-            var service = new PasswordService(MIN_LENGTH);
-
-            string hash = service.Hash("   ");
+            string hash = PasswordService.Hash("   ");
 
             Assert.IsFalse(string.IsNullOrWhiteSpace(hash));
         }
@@ -172,9 +160,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenStoredHashIsNull_ReturnsFalse()
         {
-            var service = new PasswordService(MIN_LENGTH);
-
-            bool ok = service.Verify(VALID_PASSWORD, null);
+            bool ok = PasswordService.Verify(VALID_PASSWORD, null);
 
             Assert.IsFalse(ok);
         }
@@ -182,9 +168,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenStoredHashIsWhitespace_ReturnsFalse()
         {
-            var service = new PasswordService(MIN_LENGTH);
-
-            bool ok = service.Verify(VALID_PASSWORD, "   ");
+            bool ok = PasswordService.Verify(VALID_PASSWORD, "   ");
 
             Assert.IsFalse(ok);
         }
@@ -192,9 +176,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenStoredHashIsMalformed_ReturnsFalse()
         {
-            var service = new PasswordService(MIN_LENGTH);
-
-            bool ok = service.Verify(VALID_PASSWORD, "not-a-bcrypt-hash");
+            bool ok = PasswordService.Verify(VALID_PASSWORD, "not-a-bcrypt-hash");
 
             Assert.IsFalse(ok);
         }
@@ -202,11 +184,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenHashWasCreatedFromNullPassword_VerifyEmptyPasswordReturnsTrue()
         {
-            var service = new PasswordService(MIN_LENGTH);
+            string hashFromNull = PasswordService.Hash(null);
 
-            string hashFromNull = service.Hash(null);
-
-            bool ok = service.Verify(EMPTY, hashFromNull);
+            bool ok = PasswordService.Verify(EMPTY, hashFromNull);
 
             Assert.IsTrue(ok);
         }
@@ -214,11 +194,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Verify_WhenHashWasCreatedFromEmptyPassword_VerifyNonEmptyPasswordReturnsFalse()
         {
-            var service = new PasswordService(MIN_LENGTH);
+            string hashFromEmpty = PasswordService.Hash(EMPTY);
 
-            string hashFromEmpty = service.Hash(EMPTY);
-
-            bool ok = service.Verify(VALID_PASSWORD, hashFromEmpty);
+            bool ok = PasswordService.Verify(VALID_PASSWORD, hashFromEmpty);
 
             Assert.IsFalse(ok);
         }

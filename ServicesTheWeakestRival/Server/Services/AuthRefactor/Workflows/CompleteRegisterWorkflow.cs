@@ -138,7 +138,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
             byte[] profileImageBytes,
             string profileImageContentType)
         {
-            string passwordHash = passwordService.Hash(input.Password);
+            string passwordHash = PasswordService.Hash(input.Password);
 
             var data = new AccountRegistrationData(
                 input.Email,

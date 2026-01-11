@@ -6,6 +6,7 @@ using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Validation;
 using System.Reflection;
 using System;
+using ServicesTheWeakestRival.Server.Services.Auth;
 
 namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 {
@@ -286,7 +287,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
         private void CreateAccountForAuthValidator(string email)
         {
-            string passwordHash = passwordService.Hash(PASSWORD_VALID);
+            string passwordHash = PasswordService.Hash(PASSWORD_VALID);
 
             var data = new AccountRegistrationData(
                 email,
