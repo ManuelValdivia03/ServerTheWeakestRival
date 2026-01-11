@@ -28,7 +28,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
 
         internal static ReportCoordinator CreateDefault()
         {
-            return new ReportCoordinator(ReportCoordinatorDependencies.CreateDefault());
+            return new ReportCoordinator(ReportCoordinatorDependencies.CreateDefaultDependencies());
         }
 
         internal SubmitPlayerReportResponse SubmitPlayerReport(SubmitPlayerReportRequest request)
@@ -106,7 +106,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
                 SanctionHandler = sanctionHandler ?? throw new ArgumentNullException(nameof(sanctionHandler));
             }
 
-            internal static ReportCoordinatorDependencies CreateDefault()
+            internal static ReportCoordinatorDependencies CreateDefaultDependencies()
             {
                 var requestValidator = new ReportRequestValidator();
                 var tokenAuthenticator = new ReportTokenAuthenticator();
