@@ -89,7 +89,6 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 }
             }
 
-            // Si había un callback previo (otra sesión), lo forzamos a salir
             if (oldEntry != null && oldEntry.Callback != null && !ReferenceEquals(oldEntry.Callback, callback))
             {
                 TrySendForcedLogoutToEntry(oldEntry, REASON_REPLACED_BY_NEW_SESSION);
@@ -150,7 +149,6 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             }
         }
 
-        // ÚTIL para AuthServiceContext.IssueToken: sacar al cliente viejo aunque el nuevo aún no llame Lobby
         public static bool TryForceLogoutAndRemove(int accountId, string reason)
         {
             if (accountId <= 0)
