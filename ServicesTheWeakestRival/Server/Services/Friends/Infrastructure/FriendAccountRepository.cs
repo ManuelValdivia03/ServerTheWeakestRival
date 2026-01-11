@@ -184,11 +184,17 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                     string contentType = reader.IsDBNull(1) ? string.Empty : Convert.ToString(reader.GetValue(1));
                     DateTime? updatedAtUtc = reader.IsDBNull(2) ? (DateTime?)null : reader.GetDateTime(2);
 
-                    string code = bytes.Length == 0
-                        ? string.Empty
-                        : (updatedAtUtc.HasValue ? updatedAtUtc.Value.ToString("o") : "1");
+                    string code = string.Empty;
 
-                    return new UserProfileImageEntity(bytes ?? Array.Empty<byte>(), contentType ?? string.Empty, updatedAtUtc, code);
+                    if (bytes.Length > 0)
+                    {
+                        code = updatedAtUtc.HasValue
+                            ? updatedAtUtc.Value.ToString("o")
+                            : "1";
+                    }
+
+                    return new UserProfileImageEntity(bytes, contentType, updatedAtUtc, code);
+
                 }
             }
         }

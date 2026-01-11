@@ -89,7 +89,6 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 }
             }
 
-            // Si había un callback previo (otra sesión), lo forzamos a salir
             if (oldEntry != null && oldEntry.Callback != null && !ReferenceEquals(oldEntry.Callback, callback))
             {
                 TrySendForcedLogoutToEntry(oldEntry, REASON_REPLACED_BY_NEW_SESSION);
@@ -140,17 +139,17 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             }
             catch (Exception ex)
             {
-                Logger.WarnFormat(
-                    "LobbyCallbackRegistry.TrySendForcedLogout: callback failed. AccountId={0}",
-                    accountId);
-                Logger.Warn("LobbyCallbackRegistry.TrySendForcedLogout: exception.", ex);
+                Logger.Warn(
+                    string.Format(
+                        "LobbyCallbackRegistry.TrySendForcedLogout: callback failed. AccountId={0}",
+                        accountId),
+                    ex);
 
                 Remove(accountId);
                 return false;
             }
         }
 
-        // ÚTIL para AuthServiceContext.IssueToken: sacar al cliente viejo aunque el nuevo aún no llame Lobby
         public static bool TryForceLogoutAndRemove(int accountId, string reason)
         {
             if (accountId <= 0)
@@ -192,11 +191,12 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             }
             catch (Exception ex)
             {
-                Logger.WarnFormat(
-                    "LobbyCallbackRegistry.TrySendForcedLogoutToEntry: callback failed. AccountId={0}, Reason={1}",
-                    entry.AccountId,
-                    reason ?? string.Empty);
-                Logger.Warn("LobbyCallbackRegistry.TrySendForcedLogoutToEntry: exception.", ex);
+                Logger.Warn(
+                    string.Format(
+                        "LobbyCallbackRegistry.TrySendForcedLogoutToEntry: callback failed. AccountId={0}, Reason={1}",
+                        entry.AccountId,
+                        reason ?? string.Empty),
+                    ex);
             }
             finally
             {
@@ -221,11 +221,23 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
                 channelObject.Close();
             }
-            catch
+            catch (Exception ex)
             {
-                try { channelObject.Abort(); } catch { }
+                try
+                {
+                    channelObject.Abort();
+                }
+                catch (Exception abortEx)
+                {
+                    Logger.Warn(
+                        string.Format(
+                            "LobbyCallbackRegistry.CloseChannelSafe: Close failed and Abort failed. CloseError='{0}'",
+                            ex.Message),
+                        abortEx);
+                }
             }
         }
+
 
         private static void RemoveIfMatches(int accountId, string entryId, string reason)
         {

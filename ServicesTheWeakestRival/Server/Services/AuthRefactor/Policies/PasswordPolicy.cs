@@ -24,7 +24,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Policies
             }
         }
 
-        public void VerifyOrThrow(string password, string storedHash)
+        public static void VerifyOrThrow(string password, string storedHash)
         {
             if (string.IsNullOrWhiteSpace(storedHash))
             {
@@ -36,7 +36,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Policies
             bool isValid;
             try
             {
-                isValid = passwordService.Verify(password, storedHash);
+                isValid = PasswordService.Verify(password, storedHash);
             }
             catch (SaltParseException ex)
             {

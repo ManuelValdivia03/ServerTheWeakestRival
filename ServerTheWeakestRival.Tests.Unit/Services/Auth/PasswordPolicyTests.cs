@@ -63,13 +63,13 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         {
             passwordPolicy.ValidateOrThrow(PASSWORD_STRONG);
 
-            Assert.IsTrue(true);
+            Assert.IsTrue(passwordService.IsValid(PASSWORD_STRONG));
         }
 
         [TestMethod]
         public void VerifyOrThrow_WhenStoredHashIsEmpty_ThrowsInvalidCredentials()
         {
-            var fault = FaultAssert.Capture(() => passwordPolicy.VerifyOrThrow(PASSWORD_STRONG, string.Empty));
+            var fault = FaultAssert.Capture(() => PasswordPolicy.VerifyOrThrow(PASSWORD_STRONG, string.Empty));
 
             AssertInvalidCredentialsFault(fault);
         }
@@ -77,7 +77,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void VerifyOrThrow_WhenStoredHashIsWhitespace_ThrowsInvalidCredentials()
         {
-            var fault = FaultAssert.Capture(() => passwordPolicy.VerifyOrThrow(PASSWORD_STRONG, WHITESPACE));
+            var fault = FaultAssert.Capture(() => PasswordPolicy.VerifyOrThrow(PASSWORD_STRONG, WHITESPACE));
 
             AssertInvalidCredentialsFault(fault);
         }
@@ -85,11 +85,11 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void VerifyOrThrow_WhenPasswordHasSurroundingSpaces_ThrowsInvalidCredentials()
         {
-            string storedHash = passwordService.Hash(PASSWORD_STRONG);
+            string storedHash = PasswordService.Hash(PASSWORD_STRONG);
 
             string passwordWithSpaces = "  " + PASSWORD_STRONG + "  ";
 
-            var fault = FaultAssert.Capture(() => passwordPolicy.VerifyOrThrow(passwordWithSpaces, storedHash));
+            var fault = FaultAssert.Capture(() => PasswordPolicy.VerifyOrThrow(passwordWithSpaces, storedHash));
 
             AssertInvalidCredentialsFault(fault);
         }
@@ -97,9 +97,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void VerifyOrThrow_WhenPasswordIsIncorrect_ThrowsInvalidCredentials()
         {
-            string storedHash = passwordService.Hash(PASSWORD_STRONG);
+            string storedHash = PasswordService.Hash(PASSWORD_STRONG);
 
-            var fault = FaultAssert.Capture(() => passwordPolicy.VerifyOrThrow(PASSWORD_WRONG, storedHash));
+            var fault = FaultAssert.Capture(() => PasswordPolicy.VerifyOrThrow(PASSWORD_WRONG, storedHash));
 
             AssertInvalidCredentialsFault(fault);
         }
@@ -107,17 +107,17 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void VerifyOrThrow_WhenPasswordIsCorrect_DoesNotThrow()
         {
-            string storedHash = passwordService.Hash(PASSWORD_STRONG);
+            string storedHash = PasswordService.Hash(PASSWORD_STRONG);
 
-            passwordPolicy.VerifyOrThrow(PASSWORD_STRONG, storedHash);
+            PasswordPolicy.VerifyOrThrow(PASSWORD_STRONG, storedHash);
 
-            Assert.IsTrue(true);
+            Assert.IsTrue(PasswordService.Verify(PASSWORD_STRONG, storedHash));
         }
 
         [TestMethod]
         public void VerifyOrThrow_WhenStoredHashIsNull_ThrowsInvalidCredentials()
         {
-            var fault = FaultAssert.Capture(() => passwordPolicy.VerifyOrThrow(PASSWORD_STRONG, null));
+            var fault = FaultAssert.Capture(() => PasswordPolicy.VerifyOrThrow(PASSWORD_STRONG, null));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_CREDENTIALS, fault.Message);
@@ -128,7 +128,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         {
             const string HASH_MALFORMED = "not-a-bcrypt-hash";
 
-            var fault = FaultAssert.Capture(() => passwordPolicy.VerifyOrThrow(PASSWORD_STRONG, HASH_MALFORMED));
+            var fault = FaultAssert.Capture(() => PasswordPolicy.VerifyOrThrow(PASSWORD_STRONG, HASH_MALFORMED));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_CREDENTIALS, fault.Message);

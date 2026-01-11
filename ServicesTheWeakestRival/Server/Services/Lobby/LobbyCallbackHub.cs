@@ -3,6 +3,7 @@ using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Infrastructure;
 using System;
+using System.Linq;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ServiceModel;
@@ -30,7 +31,7 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
         public static LobbyCallbackHub Shared => shared;
 
-        public string GetCurrentSessionId()
+        public static string GetCurrentSessionId()
         {
             return OperationContext.Current != null
                 ? OperationContext.Current.SessionId
@@ -138,13 +139,12 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
         {
             string sessionId = GetCurrentSessionId();
 
-            foreach (KeyValuePair<Guid, ConcurrentDictionary<string, ILobbyClientCallback>> kv in callbackBuckets)
+            var match = callbackBuckets.FirstOrDefault(kv => kv.Value.ContainsKey(sessionId));
+
+            if (match.Value != null)
             {
-                if (kv.Value.ContainsKey(sessionId))
-                {
-                    lobbyUid = kv.Key;
-                    return true;
-                }
+                lobbyUid = match.Key;
+                return true;
             }
 
             lobbyUid = Guid.Empty;

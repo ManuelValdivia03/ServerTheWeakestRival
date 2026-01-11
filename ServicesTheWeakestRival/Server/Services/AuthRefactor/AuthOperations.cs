@@ -11,12 +11,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
     public sealed class AuthOperations
     {
-        private readonly AuthRepository authRepository;
-        private readonly PasswordService passwordService;
-
-        private readonly PasswordPolicy passwordPolicy;
-        private readonly AuthEmailDispatcher emailDispatcher;
-
         private readonly BeginRegisterWorkflow beginRegisterWorkflow;
         private readonly BeginPasswordResetWorkflow beginPasswordResetWorkflow;
         private readonly CompleteRegisterWorkflow completeRegisterWorkflow;
@@ -27,23 +21,27 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
         private readonly GetProfileImageWorkflow getProfileImageWorkflow;
         private readonly GuestLoginWorkflow guestLoginWorkflow;
 
-        public AuthOperations(AuthRepository authRepository, PasswordService passwordService, IEmailService emailService)
+        public AuthOperations(
+            AuthRepository authRepository,
+            PasswordService passwordService,
+            IEmailService emailService)
         {
-            this.authRepository = authRepository ?? throw new ArgumentNullException(nameof(authRepository));
-            this.passwordService = passwordService ?? throw new ArgumentNullException(nameof(passwordService));
+            if (authRepository == null) throw new ArgumentNullException(nameof(authRepository));
+            if (passwordService == null) throw new ArgumentNullException(nameof(passwordService));
+            if (emailService == null) throw new ArgumentNullException(nameof(emailService));
 
-            emailDispatcher = new AuthEmailDispatcher(emailService ?? throw new ArgumentNullException(nameof(emailService)));
-            passwordPolicy = new PasswordPolicy(this.passwordService);
+            var emailDispatcher = new AuthEmailDispatcher(emailService);
+            var passwordPolicy = new PasswordPolicy(passwordService);
 
-            beginRegisterWorkflow = new BeginRegisterWorkflow(this.authRepository, emailDispatcher);
-            beginPasswordResetWorkflow = new BeginPasswordResetWorkflow(this.authRepository, emailDispatcher);
-            completeRegisterWorkflow = new CompleteRegisterWorkflow(this.authRepository, passwordPolicy, this.passwordService);
-            registerWorkflow = new RegisterWorkflow(this.authRepository, passwordPolicy, this.passwordService);
-            completePasswordResetWorkflow = new CompletePasswordResetWorkflow(this.authRepository, passwordPolicy, this.passwordService);
-            loginWorkflow = new LoginWorkflow(this.authRepository, passwordPolicy);
-            logoutWorkflow = new LogoutWorkflow(this.authRepository);
-            getProfileImageWorkflow = new GetProfileImageWorkflow(this.authRepository);
-            guestLoginWorkflow = new GuestLoginWorkflow(this.authRepository);
+            beginRegisterWorkflow = new BeginRegisterWorkflow(authRepository, emailDispatcher);
+            beginPasswordResetWorkflow = new BeginPasswordResetWorkflow(authRepository, emailDispatcher);
+            completeRegisterWorkflow = new CompleteRegisterWorkflow(authRepository, passwordPolicy, passwordService);
+            registerWorkflow = new RegisterWorkflow(authRepository, passwordPolicy, passwordService);
+            completePasswordResetWorkflow = new CompletePasswordResetWorkflow(authRepository, passwordPolicy, passwordService);
+            loginWorkflow = new LoginWorkflow(authRepository, passwordPolicy);
+            logoutWorkflow = new LogoutWorkflow(authRepository);
+            getProfileImageWorkflow = new GetProfileImageWorkflow(authRepository);
+            guestLoginWorkflow = new GuestLoginWorkflow(authRepository);
         }
 
         public PingResponse Ping(PingRequest request)
@@ -81,7 +79,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
         {
             return guestLoginWorkflow.Execute(request);
         }
-
 
         public LoginResponse Login(LoginRequest request)
         {

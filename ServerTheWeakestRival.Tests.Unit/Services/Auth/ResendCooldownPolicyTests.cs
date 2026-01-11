@@ -16,17 +16,15 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void EnsureNotTooSoonOrThrow_WhenLastRequestIsNull_DoesNotThrow()
         {
-            ResendCooldownPolicy.EnsureNotTooSoonOrThrow(null, COOLDOWN_SECONDS);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ResendCooldownPolicy.EnsureNotTooSoonOrThrow(null, COOLDOWN_SECONDS));
         }
 
         [TestMethod]
         public void EnsureNotTooSoonOrThrow_WhenLastRequestHasNoValue_DoesNotThrow()
         {
-            ResendCooldownPolicy.EnsureNotTooSoonOrThrow(LastRequestUtcResult.None(), COOLDOWN_SECONDS);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ResendCooldownPolicy.EnsureNotTooSoonOrThrow(LastRequestUtcResult.None(), COOLDOWN_SECONDS));
         }
 
         [TestMethod]
@@ -34,11 +32,10 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         {
             DateTime oldUtc = DateTime.UtcNow.AddSeconds(-(COOLDOWN_SECONDS + 5));
 
-            ResendCooldownPolicy.EnsureNotTooSoonOrThrow(
-                LastRequestUtcResult.From(oldUtc),
-                COOLDOWN_SECONDS);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ResendCooldownPolicy.EnsureNotTooSoonOrThrow(
+                    LastRequestUtcResult.From(oldUtc),
+                    COOLDOWN_SECONDS));
         }
 
         [TestMethod]
@@ -60,11 +57,10 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         {
             DateTime boundaryUtc = DateTime.UtcNow.AddSeconds(-COOLDOWN_SECONDS);
 
-            ResendCooldownPolicy.EnsureNotTooSoonOrThrow(
-                LastRequestUtcResult.From(boundaryUtc),
-                COOLDOWN_SECONDS);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ResendCooldownPolicy.EnsureNotTooSoonOrThrow(
+                    LastRequestUtcResult.From(boundaryUtc),
+                    COOLDOWN_SECONDS));
         }
 
         [TestMethod]
@@ -98,12 +94,22 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void EnsureNotTooSoonOrThrow_WhenLastRequestIsVeryOld_DoesNotThrow()
         {
-            ResendCooldownPolicy.EnsureNotTooSoonOrThrow(
-                LastRequestUtcResult.From(DateTime.MinValue),
-                COOLDOWN_SECONDS);
-
-            Assert.IsTrue(true);
+            AssertDoesNotThrow(() =>
+                ResendCooldownPolicy.EnsureNotTooSoonOrThrow(
+                    LastRequestUtcResult.From(DateTime.MinValue),
+                    COOLDOWN_SECONDS));
         }
 
+        private static void AssertDoesNotThrow(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail("Expected no exception, but got: " + ex.GetType().Name + " - " + ex.Message);
+            }
+        }
     }
 }

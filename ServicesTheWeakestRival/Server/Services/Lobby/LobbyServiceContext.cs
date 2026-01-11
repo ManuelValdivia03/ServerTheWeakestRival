@@ -95,7 +95,10 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                 OperationContext context = OperationContext.Current;
                 if (context == null)
                 {
-                    Logger.Warn(LobbyServiceConstants.CTX_REGISTER_CALLBACK + ": OperationContext.Current is null.");
+                    Logger.WarnFormat(
+                        "{0}: OperationContext.Current is null.",
+                        LobbyServiceConstants.CTX_REGISTER_CALLBACK);
+
                     return false;
                 }
 

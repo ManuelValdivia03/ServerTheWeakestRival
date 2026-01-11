@@ -26,7 +26,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 
             LoginAccountRow account = ReadLoginAccountOrThrow(input.Email);
 
-            passwordPolicy.VerifyOrThrow(input.Password, account.PasswordHash);
+            PasswordPolicy.VerifyOrThrow(input.Password, account.PasswordHash);
 
             AccountStatusPolicy.EnsureAllowsLogin(account.Status);
 

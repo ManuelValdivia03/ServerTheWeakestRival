@@ -1,5 +1,6 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows;
@@ -21,42 +22,91 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void Execute_WhenRequestIsNull_DoesNothing()
         {
+            string email = BuildEmail("nullrequest");
+            int userId = CreateAccount(email);
+
+            string token = LoginAndGetToken(email);
+
+            bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
+            Assert.IsTrue(before);
+            Assert.AreEqual(userId, resolvedBefore);
+
             var workflow = new LogoutWorkflow(authRepository);
 
             workflow.Execute(null);
 
-            Assert.IsTrue(true);
+            bool after = AuthServiceContext.TryGetUserId(token, out int resolvedAfter);
+            Assert.IsTrue(after);
+            Assert.AreEqual(userId, resolvedAfter);
         }
 
         [TestMethod]
         public void Execute_WhenTokenIsNull_DoesNothing()
         {
+            string email = BuildEmail("nulltoken");
+            int userId = CreateAccount(email);
+
+            string token = LoginAndGetToken(email);
+
+            bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
+            Assert.IsTrue(before);
+            Assert.AreEqual(userId, resolvedBefore);
+
             var workflow = new LogoutWorkflow(authRepository);
 
             workflow.Execute(new LogoutRequest { Token = null });
 
-            Assert.IsTrue(true);
+            bool after = AuthServiceContext.TryGetUserId(token, out int resolvedAfter);
+            Assert.IsTrue(after);
+            Assert.AreEqual(userId, resolvedAfter);
         }
 
         [TestMethod]
         public void Execute_WhenTokenIsEmpty_DoesNothing()
         {
+            string email = BuildEmail("emptytoken");
+            int userId = CreateAccount(email);
+
+            string token = LoginAndGetToken(email);
+
+            bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
+            Assert.IsTrue(before);
+            Assert.AreEqual(userId, resolvedBefore);
+
             var workflow = new LogoutWorkflow(authRepository);
 
             workflow.Execute(new LogoutRequest { Token = EMPTY });
+
+            bool afterEmpty = AuthServiceContext.TryGetUserId(token, out int resolvedAfterEmpty);
+            Assert.IsTrue(afterEmpty);
+            Assert.AreEqual(userId, resolvedAfterEmpty);
+
             workflow.Execute(new LogoutRequest { Token = WHITESPACE });
 
-            Assert.IsTrue(true);
+            bool afterWhitespace = AuthServiceContext.TryGetUserId(token, out int resolvedAfterWhitespace);
+            Assert.IsTrue(afterWhitespace);
+            Assert.AreEqual(userId, resolvedAfterWhitespace);
         }
 
         [TestMethod]
         public void Execute_WhenTokenIsNotFound_DoesNothing()
         {
+            string email = BuildEmail("notfound");
+            int userId = CreateAccount(email);
+
+            string token = LoginAndGetToken(email);
+
+            bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
+            Assert.IsTrue(before);
+            Assert.AreEqual(userId, resolvedBefore);
+
             var workflow = new LogoutWorkflow(authRepository);
 
             workflow.Execute(new LogoutRequest { Token = Guid.NewGuid().ToString("N") });
 
-            Assert.IsTrue(true);
+            bool after = AuthServiceContext.TryGetUserId(token, out int resolvedAfter);
+            Assert.IsTrue(after);
+            Assert.AreEqual(userId, resolvedAfter);
         }
 
         [TestMethod]
@@ -135,7 +185,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
         private int CreateAccount(string email)
         {
-            string passwordHash = passwordService.Hash(PASSWORD);
+            string passwordHash = PasswordService.Hash(PASSWORD);
 
             var data = new AccountRegistrationData(
                 email,

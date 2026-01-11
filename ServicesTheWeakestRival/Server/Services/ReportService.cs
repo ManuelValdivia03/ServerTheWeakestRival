@@ -5,20 +5,22 @@ using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    [ServiceBehavior(IncludeExceptionDetailInFaults = false, InstanceContextMode = InstanceContextMode.PerCall,
+    [ServiceBehavior(
+        IncludeExceptionDetailInFaults = false,
+        InstanceContextMode = InstanceContextMode.PerCall,
         ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class ReportService : IReportService
     {
-        private readonly ReportRequestLogic _reportRequestLogic;
+        private readonly ReportCoordinator reportCoordinator;
 
         public ReportService()
         {
-            _reportRequestLogic = new ReportRequestLogic();
+            reportCoordinator = ReportCoordinator.CreateDefault();
         }
 
         public SubmitPlayerReportResponse SubmitPlayerReport(SubmitPlayerReportRequest request)
         {
-            return _reportRequestLogic.SubmitPlayerReport(request);
+            return reportCoordinator.SubmitPlayerReport(request);
         }
     }
 }

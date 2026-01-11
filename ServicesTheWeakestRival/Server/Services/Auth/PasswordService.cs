@@ -22,12 +22,12 @@ namespace ServicesTheWeakestRival.Server.Services.Auth
             return !string.IsNullOrWhiteSpace(password) && password.Trim().Length >= minLength;
         }
 
-        public string Hash(string password)
+        public static string Hash(string password)
         {
             return BCrypt.Net.BCrypt.HashPassword(password ?? string.Empty);
         }
 
-        public bool Verify(string password, string storedHash)
+        public static bool Verify(string password, string storedHash)
         {
             if (string.IsNullOrWhiteSpace(storedHash))
             {

@@ -25,7 +25,7 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
         private const string SP_SANCTIONS_RECONCILE = "dbo.usp_sanctions_reconcile";
 
-        private static readonly ILog DefaultLogger = LogManager.GetLogger(typeof(SanctionReconciler));
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(SanctionReconciler));
 
         private readonly string _connectionString;
         private readonly ILog _logger;
@@ -39,7 +39,7 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
         public SanctionReconciler(string connectionString, ILog logger = null)
         {
             _connectionString = ResolveConnectionString(connectionString);
-            _logger = logger ?? DefaultLogger;
+            _logger = logger ?? Logger;
 
             _intervalSeconds = ClampIntervalSeconds(ReadIntervalSecondsFromConfigOrDefault());
         }

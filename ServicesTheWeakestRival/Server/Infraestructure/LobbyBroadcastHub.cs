@@ -2,18 +2,22 @@
 using ServicesTheWeakestRival.Contracts.Services;
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Infrastructure
 {
     internal static class LobbyBroadcastHub
     {
+        private const string SESSION_ID_FORMAT_NO_HYPHENS = "N";
+
+        private const string WARN_BROADCAST_CALLBACK_FAILED_FORMAT =
+            "LobbyBroadcastHub.Broadcast: callback failed. LobbyUid={0}, SessionId={1}";
+
         private static readonly ILog Logger = LogManager.GetLogger(typeof(LobbyBroadcastHub));
 
         private static readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, ILobbyClientCallback>> Buckets =
             new ConcurrentDictionary<Guid, ConcurrentDictionary<string, ILobbyClientCallback>>();
-
-        private const string SESSION_ID_FORMAT_NO_HYPHENS = "N";
 
         internal static string CurrentSessionId =>
             OperationContext.Current != null
@@ -27,7 +31,7 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 return;
             }
 
-            var bucket = Buckets.GetOrAdd(
+            ConcurrentDictionary<string, ILobbyClientCallback> bucket = Buckets.GetOrAdd(
                 lobbyUid,
                 _ => new ConcurrentDictionary<string, ILobbyClientCallback>());
 
@@ -41,7 +45,7 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 return;
             }
 
-            if (!Buckets.TryGetValue(lobbyUid, out var bucket))
+            if (!Buckets.TryGetValue(lobbyUid, out ConcurrentDictionary<string, ILobbyClientCallback> bucket))
             {
                 return;
             }
@@ -61,7 +65,7 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 return;
             }
 
-            if (!Buckets.TryGetValue(lobbyUid, out var bucket))
+            if (!Buckets.TryGetValue(lobbyUid, out ConcurrentDictionary<string, ILobbyClientCallback> bucket))
             {
                 return;
             }
@@ -76,29 +80,28 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 {
                     bucket.TryRemove(kv.Key, out _);
 
-                    Logger.WarnFormat(
-                        "LobbyBroadcastHub.Broadcast: callback failed. LobbyUid={0}, SessionId={1}",
+                    string message = string.Format(
+                        WARN_BROADCAST_CALLBACK_FAILED_FORMAT,
                         lobbyUid,
                         kv.Key);
 
-                    Logger.Warn("LobbyBroadcastHub.Broadcast exception.", ex);
+                    Logger.Warn(message, ex);
                 }
             }
         }
-
         internal static bool TryGetLobbyUidForCurrentSession(out Guid lobbyUid)
         {
-            foreach (var kv in Buckets)
+            var match = Buckets.FirstOrDefault(kv => kv.Value.ContainsKey(CurrentSessionId));
+
+            if (match.Value != null)
             {
-                if (kv.Value.ContainsKey(CurrentSessionId))
-                {
-                    lobbyUid = kv.Key;
-                    return true;
-                }
+                lobbyUid = match.Key;
+                return true;
             }
 
             lobbyUid = Guid.Empty;
             return false;
         }
+
     }
 }

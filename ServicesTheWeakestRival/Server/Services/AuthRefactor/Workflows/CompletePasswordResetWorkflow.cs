@@ -113,7 +113,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 
         private void ApplyPasswordChangeOrThrow(string email, string newPassword)
         {
-            string passwordHash = passwordService.Hash(newPassword);
+            string passwordHash = PasswordService.Hash(newPassword);
 
             int rows = SqlExceptionFaultGuard.Execute(
                 () => authRepository.UpdateAccountPassword(email, passwordHash),
