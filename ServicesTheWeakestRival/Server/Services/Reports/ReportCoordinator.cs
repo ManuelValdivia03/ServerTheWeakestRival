@@ -2,6 +2,7 @@
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Infrastructure.Faults;
 using System;
+using System.Configuration;
 using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services.Reports
@@ -55,12 +56,36 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             {
                 throw;
             }
+            catch (TimeoutException ex)
+            {
+                Logger.Error(ReportConstants.Context.TimeoutSubmit, ex);
+                throw ReportFaultFactory.Create(
+                    ReportConstants.FaultCode.Timeout,
+                    ReportConstants.MessageKey.Timeout);
+            }
+            catch (CommunicationException ex)
+            {
+                Logger.Error(ReportConstants.Context.CommunicationSubmit, ex);
+                throw ReportFaultFactory.Create(
+                    ReportConstants.FaultCode.Communication,
+                    ReportConstants.MessageKey.Communication);
+            }
+            catch (ConfigurationErrorsException ex)
+            {
+                Logger.Error(ReportConstants.Context.ConfigurationSubmit, ex);
+                throw ReportFaultFactory.Create(
+                    ReportConstants.FaultCode.Configuration,
+                    ReportConstants.MessageKey.Configuration);
+            }
             catch (Exception ex)
             {
                 Logger.Error(ReportConstants.Context.UnexpectedSubmit, ex);
-                throw ReportFaultFactory.Create(ReportConstants.FaultCode.Unexpected, ReportConstants.MessageKey.Unexpected);
+                throw ReportFaultFactory.Create(
+                    ReportConstants.FaultCode.Unexpected,
+                    ReportConstants.MessageKey.Unexpected);
             }
         }
+
 
         private sealed class ReportCoordinatorDependencies
         {

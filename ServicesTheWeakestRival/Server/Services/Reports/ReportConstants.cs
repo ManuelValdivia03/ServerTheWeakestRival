@@ -8,6 +8,9 @@
             internal const string SqlSubmitPlayerReport = "ReportRepository.SubmitPlayerReport";
             internal const string TokenAuth = "ReportTokenAuthenticator.AuthenticateOrThrow";
             internal const string UnexpectedSubmit = "ReportCoordinator.SubmitPlayerReport.Unexpected";
+            internal const string TimeoutSubmit = "ReportCoordinator.SubmitPlayerReport.Timeout";
+            internal const string CommunicationSubmit = "ReportCoordinator.SubmitPlayerReport.Communication";
+            internal const string ConfigurationSubmit = "ReportCoordinator.SubmitPlayerReport.Configuration";
         }
 
         internal static class OperationKeyPrefix
@@ -25,6 +28,9 @@
             internal const string CommentTooLong = "REPORT_COMMENT_TOO_LONG";
 
             internal const string DbError = "REPORT_DB_ERROR";
+            internal const string Timeout = "REPORT_TIMEOUT";
+            internal const string Communication = "REPORT_COMMUNICATION_ERROR";
+            internal const string Configuration = "REPORT_CONFIGURATION_ERROR";
             internal const string Unexpected = "REPORT_UNEXPECTED";
         }
 
@@ -37,6 +43,9 @@
             internal const string InvalidReason = "Report.SubmitPlayerReport.Validation.InvalidReason";
             internal const string CommentTooLong = "Report.SubmitPlayerReport.Validation.CommentTooLong";
 
+            internal const string Timeout = "Report.SubmitPlayerReport.Timeout";
+            internal const string Communication = "Report.SubmitPlayerReport.Communication";
+            internal const string Configuration = "Report.SubmitPlayerReport.Configuration";
             internal const string Unexpected = "Report.SubmitPlayerReport.Unexpected";
         }
 
