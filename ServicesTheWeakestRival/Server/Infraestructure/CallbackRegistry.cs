@@ -139,10 +139,11 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             }
             catch (Exception ex)
             {
-                Logger.WarnFormat(
-                    "LobbyCallbackRegistry.TrySendForcedLogout: callback failed. AccountId={0}",
-                    accountId);
-                Logger.Warn("LobbyCallbackRegistry.TrySendForcedLogout: exception.", ex);
+                Logger.Warn(
+                    string.Format(
+                        "LobbyCallbackRegistry.TrySendForcedLogout: callback failed. AccountId={0}",
+                        accountId),
+                    ex);
 
                 Remove(accountId);
                 return false;
@@ -190,11 +191,12 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
             }
             catch (Exception ex)
             {
-                Logger.WarnFormat(
-                    "LobbyCallbackRegistry.TrySendForcedLogoutToEntry: callback failed. AccountId={0}, Reason={1}",
-                    entry.AccountId,
-                    reason ?? string.Empty);
-                Logger.Warn("LobbyCallbackRegistry.TrySendForcedLogoutToEntry: exception.", ex);
+                Logger.Warn(
+                    string.Format(
+                        "LobbyCallbackRegistry.TrySendForcedLogoutToEntry: callback failed. AccountId={0}, Reason={1}",
+                        entry.AccountId,
+                        reason ?? string.Empty),
+                    ex);
             }
             finally
             {
@@ -228,8 +230,10 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
                 catch (Exception abortEx)
                 {
                     Logger.Warn(
-                        "LobbyCallbackRegistry.CloseChannelSafe: Close failed and Abort failed.",
-                        new AggregateException(ex, abortEx));
+                        string.Format(
+                            "LobbyCallbackRegistry.CloseChannelSafe: Close failed and Abort failed. CloseError='{0}'",
+                            ex.Message),
+                        abortEx);
                 }
             }
         }

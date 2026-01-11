@@ -201,9 +201,9 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
                     string email = reader.IsDBNull(ORD_SUMMARY_EMAIL) ? string.Empty : reader.GetString(ORD_SUMMARY_EMAIL);
                     string displayName = reader.IsDBNull(ORD_SUMMARY_DISPLAY_NAME) ? string.Empty : reader.GetString(ORD_SUMMARY_DISPLAY_NAME);
 
-                    bool hasProfileImage = reader.IsDBNull(ORD_SUMMARY_HAS_PROFILE_IMAGE)
-                        ? false
-                        : reader.GetInt32(ORD_SUMMARY_HAS_PROFILE_IMAGE) == FLAG_TRUE;
+                    bool hasProfileImage =
+                        !reader.IsDBNull(ORD_SUMMARY_HAS_PROFILE_IMAGE)
+                        && reader.GetInt32(ORD_SUMMARY_HAS_PROFILE_IMAGE) == FLAG_TRUE;
 
                     string profileImageCode = reader.IsDBNull(ORD_SUMMARY_PROFILE_IMAGE_CODE)
                         ? string.Empty

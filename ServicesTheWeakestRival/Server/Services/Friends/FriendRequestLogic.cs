@@ -1,5 +1,4 @@
-﻿// FriendRequestLogic.cs
-using ServicesTheWeakestRival.Contracts.Data;
+﻿using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Infrastructure.Faults;
 using ServicesTheWeakestRival.Server.Services.Friends;
 using ServicesTheWeakestRival.Server.Services.Friends.Infrastructure;
@@ -117,10 +116,11 @@ namespace ServicesTheWeakestRival.Server.Services
                                 ex,
                                 FriendServiceContext.OP_KEY_SEND_FRIEND_REQUEST);
 
-                            FriendServiceContext.Logger.Error("SendFriendRequest: SQL exception.", ex);
-                            FriendServiceContext.Logger.ErrorFormat(
-                                "SendFriendRequest: mapped SQL fault. Key={0}",
-                                mapped.MessageKey);
+                            FriendServiceContext.Logger.Error(
+                                string.Format(
+                                    "SendFriendRequest: SQL exception mapped. Key={0}",
+                                    mapped.MessageKey),
+                                ex);
 
                             throw FriendServiceContext.ThrowFault(
                                 FriendServiceContext.ERROR_DB,
