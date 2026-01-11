@@ -1,6 +1,7 @@
 ﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Services.Gameplay;
 using ServicesTheWeakestRival.Server.Services.Logic;
 using ServicesTheWeakestRival.Server.Services.Stats;
 using System;
@@ -18,10 +19,10 @@ namespace ServicesTheWeakestRival.Server.Services
         private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayMatchFlow));
 
         internal static void JoinMatchInternal(
-            MatchRuntimeState state,
-            Guid matchId,
-            int userId,
-            IGameplayServiceCallback callback)
+    MatchRuntimeState state,
+    Guid matchId,
+    int userId,
+    IGameplayServiceCallback callback)
         {
             if (state == null)
             {
@@ -30,7 +31,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (callback == null)
             {
-                throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, "Missing callback channel.");
+                throw GameplayFaults.ThrowFault(
+                    GameplayEngineConstants.ERROR_INVALID_REQUEST,
+                    "Missing callback channel.");
             }
 
             lock (state.SyncRoot)
@@ -52,7 +55,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                     else
                     {
-                        MatchPlayerRuntime existingRuntime = state.Players.Find(p => p.UserId == userId);
+                        MatchPlayerRuntime existingRuntime = state.Players.Find(p => p != null && p.UserId == userId);
                         if (existingRuntime == null)
                         {
                             throw GameplayFaults.ThrowFault(
@@ -62,9 +65,16 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                MatchPlayerRuntime existingPlayer = state.Players.Find(p => p.UserId == userId);
+                MatchPlayerRuntime existingPlayer = state.Players.Find(p => p != null && p.UserId == userId);
                 if (existingPlayer != null)
                 {
+                    if (existingPlayer.IsEliminated)
+                    {
+                        throw GameplayFaults.ThrowFault(
+                            GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED,
+                            GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED_MESSAGE);
+                    }
+
                     existingPlayer.Callback = callback;
                 }
                 else
@@ -91,7 +101,10 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             GameplayMatchRegistry.TrackPlayerMatch(userId, matchId);
+
+            GameplayDisconnectHub.RegisterCurrentSession(matchId, userId, callback);
         }
+
 
         internal static void StartMatchInternal(MatchRuntimeState state, GameplayStartMatchRequest request, int hostUserId)
         {
@@ -286,7 +299,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             List<MatchPlayerRuntime> alivePlayers = state.Players
-                .Where(p => !p.IsEliminated)
+                .Where(p => p != null && !p.IsEliminated)
                 .ToList();
 
             if (alivePlayers.Count != 1)
@@ -323,6 +336,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 state,
                 cb => cb.OnMatchFinished(state.MatchId, GameplayBroadcaster.BuildPlayerSummary(winner, isOnline: true)),
                 "GameplayEngine.MatchFinished");
+
+            GameplayDisconnectHub.CleanupMatch(state.MatchId);
 
             GameplayMatchRegistry.CleanupFinishedMatch(state);
         }

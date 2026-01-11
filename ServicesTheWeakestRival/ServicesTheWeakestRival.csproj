@@ -147,6 +147,7 @@
     <Compile Include="Server\Services\GameplayService.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayActionsFlow.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayDataAccess.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayDisconnectHub.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayEngine.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayEngineConstants.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayEventLogic.cs" />
@@ -154,6 +155,8 @@
     <Compile Include="Server\Services\Gameplay\GameplayInfrastructure.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayMatchFlow.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayMatchLogic.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayPlayerExitFlow.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayPlayerExitPersistence.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayQuestionsLogic.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayRuntimeStore.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayServiceContext.cs" />
