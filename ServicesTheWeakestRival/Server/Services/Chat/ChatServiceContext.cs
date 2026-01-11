@@ -10,6 +10,12 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
 {
     public static class ChatServiceContext
     {
+        private const string AUTH_LOG_FORMAT = "{0}: {1}";
+
+        private const string AUTH_REASON_MISSING_TOKEN = "missing auth token.";
+        private const string AUTH_REASON_INVALID_TOKEN = "invalid auth token.";
+        private const string AUTH_REASON_INVALID_USER_ID = "token with invalid UserId.";
+
         private static readonly ILog Logger = LogManager.GetLogger(typeof(ChatServiceContext));
 
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
@@ -31,13 +37,13 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
         {
             if (string.IsNullOrWhiteSpace(authToken))
             {
-                Logger.Warn(ChatServiceConstants.CTX_AUTH + ": missing auth token.");
+                Logger.WarnFormat(AUTH_LOG_FORMAT, ChatServiceConstants.CTX_AUTH, AUTH_REASON_MISSING_TOKEN);
                 throw ThrowFault(ChatServiceConstants.ERROR_UNAUTHORIZED, ChatServiceConstants.MESSAGE_TOKEN_REQUIRED);
             }
 
             if (!TokenCache.TryGetValue(authToken, out var token) || token == null)
             {
-                Logger.Warn(ChatServiceConstants.CTX_AUTH + ": invalid auth token.");
+                Logger.WarnFormat(AUTH_LOG_FORMAT, ChatServiceConstants.CTX_AUTH, AUTH_REASON_INVALID_TOKEN);
                 throw ThrowFault(ChatServiceConstants.ERROR_UNAUTHORIZED, ChatServiceConstants.MESSAGE_TOKEN_INVALID);
             }
 
@@ -53,7 +59,7 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
 
             if (token.UserId <= 0)
             {
-                Logger.Warn(ChatServiceConstants.CTX_AUTH + ": token with invalid UserId.");
+                Logger.WarnFormat(AUTH_LOG_FORMAT, ChatServiceConstants.CTX_AUTH, AUTH_REASON_INVALID_USER_ID);
                 throw ThrowFault(ChatServiceConstants.ERROR_UNAUTHORIZED, ChatServiceConstants.MESSAGE_TOKEN_INVALID);
             }
 
