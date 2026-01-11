@@ -18,9 +18,12 @@ namespace ConsoleServer
         private const string MESSAGE_SERVICE_STARTED_FORMAT = "Servicio iniciado: {0}";
         private const string MESSAGE_RUNNING = "Servicios WCF corriendo. Presiona ENTER para salir.";
 
+        private const int EXIT_CODE_SUCCESS = 0;
+        private const int EXIT_CODE_FAILURE = 1;
+
         private static readonly ILog Logger = LogManager.GetLogger(typeof(Program));
 
-        public static void Main()
+        public static int Main()
         {
             string connectionString = GetConnectionStringOrThrow();
 
@@ -36,11 +39,13 @@ namespace ConsoleServer
 
                 Console.WriteLine(MESSAGE_RUNNING);
                 Console.ReadLine();
+
+                return EXIT_CODE_SUCCESS;
             }
             catch (Exception ex)
             {
                 Logger.Error(CONTEXT_MAIN, ex);
-                throw;
+                return EXIT_CODE_FAILURE;
             }
             finally
             {
