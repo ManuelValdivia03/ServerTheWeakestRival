@@ -33,7 +33,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             var fault = new ServiceFault
             {
                 Code = technicalErrorCode ?? string.Empty,
-                Message = messageKey ?? string.Empty,  // KEY para Lang
+                Message = messageKey ?? string.Empty,  
                 Details = context ?? string.Empty
             };
 

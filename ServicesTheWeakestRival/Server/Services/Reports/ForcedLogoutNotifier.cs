@@ -8,46 +8,54 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
 {
     internal sealed class ForcedLogoutNotifier
     {
+        private const int MIN_ACCOUNT_ID = 1;
+
         private static readonly ILog Logger = LogManager.GetLogger(typeof(ForcedLogoutNotifier));
 
         private const string ContextSend = "ForcedLogoutNotifier.TrySendForcedLogoutToAccount";
+        private const string ContextAbort = "ForcedLogoutNotifier.AbortChannelSafe";
 
         internal void TrySendForcedLogoutToAccount(int accountId, ForcedLogoutNotification notification)
         {
-            if (accountId <= 0 || notification == null)
+            if (accountId >= MIN_ACCOUNT_ID && notification != null)
             {
-                return;
+                TrySendForcedLogoutToAccountInternal(accountId, notification);
             }
+        }
 
-            if (!LobbyCallbackRegistry.TryGet(accountId, out var callback) || callback == null)
+        private static void TrySendForcedLogoutToAccountInternal(int accountId, ForcedLogoutNotification notification)
+        {
+            if (LobbyCallbackRegistry.TryGet(accountId, out var callback) && callback != null)
             {
-                return;
-            }
+                ICommunicationObject channelObject = callback as ICommunicationObject;
 
-            ICommunicationObject channelObject = callback as ICommunicationObject;
-
-            try
-            {
-                callback.ForcedLogout(notification);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ContextSend, ex);
-            }
-            finally
-            {
-                LobbyCallbackRegistry.Remove(accountId);
-
-                if (channelObject != null)
+                try
                 {
-                    try
-                    {
-                        channelObject.Abort();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Warn(ContextSend, ex);
-                    }
+                    callback.ForcedLogout(notification);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ContextSend, ex);
+                }
+                finally
+                {
+                    LobbyCallbackRegistry.Remove(accountId);
+                    AbortChannelSafe(channelObject);
+                }
+            }
+        }
+
+        private static void AbortChannelSafe(ICommunicationObject channelObject)
+        {
+            if (channelObject != null)
+            {
+                try
+                {
+                    channelObject.Abort();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ContextAbort, ex);
                 }
             }
         }

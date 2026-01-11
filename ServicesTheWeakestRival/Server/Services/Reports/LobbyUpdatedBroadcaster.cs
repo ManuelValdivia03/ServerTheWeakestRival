@@ -20,91 +20,122 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
 
         private const string ParamLobbyUid = "@u";
         private const string ParamLobbyId = "@id";
+        private const string ParamLobbyIdInt = "@LobbyId";
 
-        internal void TryBroadcastLobbyUpdated(Guid lobbyUid)
+        private const string LogBroadcastFailedFormat =
+            "BroadcastLobbyUpdated: failed callback. LobbyUid={0}, AccountId={1}";
+
+        internal bool TryBroadcastLobbyUpdated(Guid lobbyUid)
         {
             if (lobbyUid == Guid.Empty)
             {
-                return;
+                return false;
             }
-
-            string connectionString =
-                ConfigurationManager.ConnectionStrings[ReportSql.MainConnectionStringName].ConnectionString;
 
             try
             {
-                using (var connection = new SqlConnection(connectionString))
+                using (SqlConnection connection = CreateOpenConnection())
                 {
-                    connection.Open();
+                    LobbyInfo lobbyInfo = BuildLobbyInfoSafe(connection, lobbyUid);
 
-                    LobbyInfo lobbyInfo = BuildLobbyInfo(connection, lobbyUid);
-                    if (lobbyInfo == null || lobbyInfo.Players == null)
+                    bool canBroadcast = lobbyInfo != null && lobbyInfo.Players != null && lobbyInfo.Players.Count > 0;
+                    if (canBroadcast)
                     {
-                        return;
+                        BroadcastLobbyUpdatedToPlayers(lobbyUid, lobbyInfo);
+                        return true;
                     }
 
-                    foreach (var player in lobbyInfo.Players)
-                    {
-                        if (player == null || player.AccountId <= 0)
-                        {
-                            continue;
-                        }
-
-                        if (!LobbyCallbackRegistry.TryGet(player.AccountId, out var callback) || callback == null)
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            callback.OnLobbyUpdated(lobbyInfo);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.WarnFormat(
-                                "BroadcastLobbyUpdated: failed callback. LobbyUid={0}, AccountId={1}",
-                                lobbyUid,
-                                player.AccountId);
-
-                            Logger.Warn(ContextBroadcastLobbyUpdated, ex);
-                            LobbyCallbackRegistry.Remove(player.AccountId);
-                        }
-                    }
+                    return false;
                 }
             }
             catch (Exception ex)
             {
                 Logger.Warn(ContextBroadcastLobbyUpdated, ex);
+                return false;
             }
         }
 
-        private static LobbyInfo BuildLobbyInfo(SqlConnection connection, Guid lobbyUid)
+        private static SqlConnection CreateOpenConnection()
+        {
+            string connectionString =
+                ConfigurationManager.ConnectionStrings[ReportSql.MainConnectionStringName].ConnectionString;
+
+            var connection = new SqlConnection(connectionString);
+            connection.Open();
+
+            return connection;
+        }
+
+        private static LobbyInfo BuildLobbyInfoSafe(SqlConnection connection, Guid lobbyUid)
         {
             try
             {
-                int lobbyId = GetLobbyIdFromUid(connection, lobbyUid);
-                if (lobbyId <= 0)
-                {
-                    return null;
-                }
-
-                LobbyInfo baseInfo = LoadLobbyInfoByIntId(connection, lobbyId);
-                if (baseInfo == null)
-                {
-                    return null;
-                }
-
-                List<LobbyMembers> members = GetLobbyMembers(connection, lobbyId);
-
-                var avatarSql = new UserAvatarSql(connection.ConnectionString);
-                baseInfo.Players = MapToAccountMini(members, avatarSql);
-
-                return baseInfo;
+                return BuildLobbyInfo(connection, lobbyUid);
             }
             catch (Exception ex)
             {
                 Logger.Warn(ContextBuildLobbyInfo, ex);
                 return null;
+            }
+        }
+
+        private static LobbyInfo BuildLobbyInfo(SqlConnection connection, Guid lobbyUid)
+        {
+            int lobbyId = GetLobbyIdFromUid(connection, lobbyUid);
+            if (lobbyId <= 0)
+            {
+                return null;
+            }
+
+            LobbyInfo baseInfo = LoadLobbyInfoByIntId(connection, lobbyId);
+            if (baseInfo == null)
+            {
+                return null;
+            }
+
+            List<LobbyMembers> members = GetLobbyMembers(connection, lobbyId);
+
+            var avatarSql = new UserAvatarSql(connection.ConnectionString);
+            baseInfo.Players = MapToAccountMini(members, avatarSql);
+
+            return baseInfo;
+        }
+
+        private static void BroadcastLobbyUpdatedToPlayers(Guid lobbyUid, LobbyInfo lobbyInfo)
+        {
+            if (lobbyInfo != null && lobbyInfo.Players != null)
+            {
+                foreach (AccountMini player in lobbyInfo.Players)
+                {
+                    if (IsValidAccount(player))
+                    {
+                        SendLobbyUpdatedToPlayerSafe(lobbyUid, player.AccountId, lobbyInfo);
+                    }
+                }
+            }
+        }
+
+        private static bool IsValidAccount(AccountMini player)
+        {
+            return player != null && player.AccountId > 0;
+        }
+
+        private static void SendLobbyUpdatedToPlayerSafe(Guid lobbyUid, int accountId, LobbyInfo lobbyInfo)
+        {
+            bool hasCallback = LobbyCallbackRegistry.TryGet(accountId, out var callback) && callback != null;
+            if (hasCallback)
+            {
+                try
+                {
+                    callback.OnLobbyUpdated(lobbyInfo);
+                }
+                catch (Exception ex)
+                {
+                    Logger.WarnFormat(LogBroadcastFailedFormat, lobbyUid, accountId);
+                    Logger.Warn(ContextBroadcastLobbyUpdated, ex);
+
+                    LobbyCallbackRegistry.Remove(accountId);
+                }
             }
         }
 
@@ -155,7 +186,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
 
             using (var cmd = new SqlCommand(LobbySql.Text.GET_LOBBY_MEMBERS_WITH_USERS, connection))
             {
-                cmd.Parameters.Add("@LobbyId", SqlDbType.Int).Value = lobbyId;
+                cmd.Parameters.Add(ParamLobbyIdInt, SqlDbType.Int).Value = lobbyId;
 
                 using (var reader = cmd.ExecuteReader())
                 {
@@ -188,40 +219,41 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
         private static List<AccountMini> MapToAccountMini(List<LobbyMembers> members, UserAvatarSql avatarSql)
         {
             var result = new List<AccountMini>();
-            if (members == null)
+
+            if (members != null)
             {
-                return result;
-            }
-
-            foreach (var member in members)
-            {
-                if (member?.Users == null)
+                foreach (LobbyMembers member in members)
                 {
-                    continue;
-                }
-
-                if (!member.is_active || member.left_at_utc.HasValue)
-                {
-                    continue;
-                }
-
-                var avatarEntity = avatarSql.GetByUserId(member.user_id);
-
-                byte[] profileImageBytes = member.Users.profile_image ?? Array.Empty<byte>();
-                bool hasProfileImage = profileImageBytes.Length > 0;
-
-                string email = member.Users.Accounts != null ? (member.Users.Accounts.email ?? string.Empty) : string.Empty;
-
-                result.Add(
-                    new AccountMini
+                    if (member?.Users == null)
                     {
-                        AccountId = member.user_id,
-                        DisplayName = member.Users.display_name ?? string.Empty,
-                        Email = email,
-                        HasProfileImage = hasProfileImage,
-                        ProfileImageCode = string.Empty,
-                        Avatar = MapAvatar(avatarEntity)
-                    });
+                        continue;
+                    }
+
+                    if (!member.is_active || member.left_at_utc.HasValue)
+                    {
+                        continue;
+                    }
+
+                    var avatarEntity = avatarSql.GetByUserId(member.user_id);
+
+                    byte[] profileImageBytes = member.Users.profile_image ?? Array.Empty<byte>();
+                    bool hasProfileImage = profileImageBytes.Length > 0;
+
+                    string email = member.Users.Accounts != null
+                        ? (member.Users.Accounts.email ?? string.Empty)
+                        : string.Empty;
+
+                    result.Add(
+                        new AccountMini
+                        {
+                            AccountId = member.user_id,
+                            DisplayName = member.Users.display_name ?? string.Empty,
+                            Email = email,
+                            HasProfileImage = hasProfileImage,
+                            ProfileImageCode = string.Empty,
+                            Avatar = MapAvatar(avatarEntity)
+                        });
+                }
             }
 
             return result;
