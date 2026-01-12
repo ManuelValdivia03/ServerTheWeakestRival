@@ -20,18 +20,18 @@
 
         public static class FaultCode
         {
-            public const string RequestNull = "Error";
-            public const string TokenInvalid = "Error";
-            public const string InvalidTarget = "Error";
-            public const string SelfReport = "Error";
-            public const string InvalidReason = "Error";
-            public const string CommentTooLong = "Error";
+            public const string RequestNull = "Solicitud nula";
+            public const string TokenInvalid = "Token inválido";
+            public const string InvalidTarget = "Objetivo inválido";
+            public const string SelfReport = "Auto-reporte no permitido";
+            public const string InvalidReason = "Motivo inválido";
+            public const string CommentTooLong = "Comentario demasiado largo";
 
-            public const string DbError = "Error";
-            public const string Timeout = "Error";
-            public const string Communication = "Error";
-            public const string Configuration = "Error";
-            public const string Unexpected = "Error";
+            public const string DbError = "Error de base de datos";
+            public const string Timeout = "Tiempo de espera agotado";
+            public const string Communication = "Error de comunicación";
+            public const string Configuration = "Error de configuración";
+            public const string Unexpected = "Error inesperado";
         }
 
         public static class MessageKey

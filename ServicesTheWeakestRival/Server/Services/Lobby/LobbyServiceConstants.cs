@@ -14,14 +14,14 @@
 
         public const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        public const string ERROR_NOT_FOUND = "Error";
-        public const string ERROR_INVALID_REQUEST = "Error";
-        public const string ERROR_VALIDATION_ERROR = "Error";
-        public const string ERROR_UNAUTHORIZED = "Error";
-        public const string ERROR_EMAIL_TAKEN = "Error";
+        public const string ERROR_NOT_FOUND = "No encontrado";
+        public const string ERROR_INVALID_REQUEST = "Solicitud inválida";
+        public const string ERROR_VALIDATION_ERROR = "Error de validación";
+        public const string ERROR_UNAUTHORIZED = "No autorizado";
+        public const string ERROR_EMAIL_TAKEN = "Correo ya registrado";
 
-        public const string ERROR_DB = "Error";
-        public const string ERROR_UNEXPECTED = "Error";
+        public const string ERROR_DB = "Error de base de datos";
+        public const string ERROR_UNEXPECTED = "Error inesperado";
 
         public const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
@@ -29,7 +29,7 @@
         public const string MESSAGE_UNEXPECTED_ERROR =
             "Ocurrió un error inesperado. Intenta de nuevo más tarde.";
 
-        public const string MESSAGE_ACCESS_CODE_REQUIRED = "AccessCode requerido.";
+        public const string MESSAGE_ACCESS_CODE_REQUIRED = "El AccessCode es obligatorio.";
 
         public const string PARAM_USER_ID = "@UserId";
         public const string PARAM_LOBBY_ID = "@LobbyId";
@@ -63,6 +63,5 @@
         public const string CTX_START_LOBBY_MATCH = "LobbyService.StartLobbyMatch";
         public const string CTX_UPDATE_AVATAR = "LobbyService.UpdateAvatar";
         internal const string CTX_SEND_CHAT_MESSAGE = "LobbyService.SendChatMessage";
-
     }
 }

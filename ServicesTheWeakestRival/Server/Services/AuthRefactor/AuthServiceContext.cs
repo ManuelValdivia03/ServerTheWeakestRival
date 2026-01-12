@@ -168,7 +168,6 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             string context,
             System.Data.SqlClient.SqlException ex)
         {
-            // Provide a user-friendly message while keeping SQL diagnostics in Details
             string userMessage = "No se pudo conectar con la base de datos. Intenta de nuevo más tarde.";
 
             string safeContext = context ?? string.Empty;

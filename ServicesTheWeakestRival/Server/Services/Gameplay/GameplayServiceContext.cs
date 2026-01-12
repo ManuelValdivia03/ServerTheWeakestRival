@@ -18,26 +18,26 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
         internal const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        internal const string ERROR_INVALID_REQUEST = "Error";
-        internal const string ERROR_DB = "Error";
-        internal const string ERROR_UNEXPECTED = "Error";
-        internal const string ERROR_MATCH_NOT_FOUND = "Error";
-        internal const string ERROR_NOT_PLAYER_TURN = "Error";
-        internal const string ERROR_DUEL_NOT_ACTIVE = "Error";
-        internal const string ERROR_NOT_WEAKEST_RIVAL = "Error";
-        internal const string ERROR_INVALID_DUEL_TARGET = "Error";
-        internal const string ERROR_MATCH_ALREADY_STARTED = "Error";
-        internal const string ERROR_NO_QUESTIONS = "Error";
+        internal const string ERROR_INVALID_REQUEST = "Solicitud inválida";
+        internal const string ERROR_DB = "Error de base de datos";
+        internal const string ERROR_UNEXPECTED = "Error inesperado";
+        internal const string ERROR_MATCH_NOT_FOUND = "Partida no encontrada";
+        internal const string ERROR_NOT_PLAYER_TURN = "No es tu turno";
+        internal const string ERROR_DUEL_NOT_ACTIVE = "Duelo no activo";
+        internal const string ERROR_NOT_WEAKEST_RIVAL = "Acción no permitida";
+        internal const string ERROR_INVALID_DUEL_TARGET = "Objetivo inválido";
+        internal const string ERROR_MATCH_ALREADY_STARTED = "Partida ya iniciada";
+        internal const string ERROR_NO_QUESTIONS = "Sin preguntas";
 
         internal const string FALLBACK_LOCALE_EN_US = "en-US";
 
-        internal const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
-        internal const string ERROR_MATCH_NOT_FOUND_MESSAGE = "Match not found.";
-        internal const string ERROR_NOT_PLAYER_TURN_MESSAGE = "It is not the player turn.";
-        internal const string ERROR_DUEL_NOT_ACTIVE_MESSAGE = "Duel is not active.";
-        internal const string ERROR_NOT_WEAKEST_RIVAL_MESSAGE = "Only weakest rival can choose duel opponent.";
-        internal const string ERROR_INVALID_DUEL_TARGET_MESSAGE = "Invalid duel opponent.";
-        internal const string ERROR_MATCH_ALREADY_STARTED_MESSAGE = "Match already started. Joining is not allowed.";
+        internal const string ERROR_INVALID_REQUEST_MESSAGE = "La solicitud es nula.";
+        internal const string ERROR_MATCH_NOT_FOUND_MESSAGE = "No se encontró la partida.";
+        internal const string ERROR_NOT_PLAYER_TURN_MESSAGE = "No es el turno del jugador.";
+        internal const string ERROR_DUEL_NOT_ACTIVE_MESSAGE = "El duelo no está activo.";
+        internal const string ERROR_NOT_WEAKEST_RIVAL_MESSAGE = "Solo el rival más débil puede elegir oponente.";
+        internal const string ERROR_INVALID_DUEL_TARGET_MESSAGE = "Oponente de duelo inválido.";
+        internal const string ERROR_MATCH_ALREADY_STARTED_MESSAGE = "La partida ya inició. No está permitido unirse.";
         internal const string ERROR_NO_QUESTIONS_MESSAGE = "No se encontraron preguntas para la dificultad/idioma solicitados.";
 
         internal const string MESSAGE_DB_ERROR =
@@ -71,7 +71,7 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
         {
             if (matchId == Guid.Empty)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchId is required.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, "El MatchId es obligatorio.");
             }
         }
 
@@ -86,7 +86,7 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
                 throw ThrowTechnicalFault(
                     "CONFIG_ERROR",
-                    "Configuration error. Please contact support.",
+                    "Error de configuración. Por favor contacta a soporte.",
                     "GameplayService.GetConnectionString",
                     new ConfigurationErrorsException(
                         string.Format("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME)));
@@ -129,17 +129,17 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                throw ThrowFault("AUTH_REQUIRED", "Missing token.");
+                throw ThrowFault("AUTH_REQUIRED", "Falta el token.");
             }
 
             if (!TokenCache.TryGetValue(token, out AuthToken authToken))
             {
-                throw ThrowFault("AUTH_INVALID", "Invalid token.");
+                throw ThrowFault("AUTH_INVALID", "Token inválido.");
             }
 
             if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
             {
-                throw ThrowFault("AUTH_EXPIRED", "Token expired.");
+                throw ThrowFault("AUTH_EXPIRED", "El token expiró.");
             }
 
             return authToken.UserId;

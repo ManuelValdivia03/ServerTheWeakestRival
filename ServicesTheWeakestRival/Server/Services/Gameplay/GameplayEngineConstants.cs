@@ -6,16 +6,16 @@ namespace ServicesTheWeakestRival.Server.Services
     {
         internal const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        internal const string ERROR_INVALID_REQUEST = "Error";
-        internal const string ERROR_DB = "Error";
-        internal const string ERROR_UNEXPECTED = "Error";
-        internal const string ERROR_MATCH_NOT_FOUND = "Error";
-        internal const string ERROR_NOT_PLAYER_TURN = "Error";
-        internal const string ERROR_DUEL_NOT_ACTIVE = "Error";
-        internal const string ERROR_NOT_WEAKEST_RIVAL = "Error";
-        internal const string ERROR_INVALID_DUEL_TARGET = "Error";
-        internal const string ERROR_MATCH_ALREADY_STARTED = "Error";
-        internal const string ERROR_NO_QUESTIONS = "Error";
+        internal const string ERROR_INVALID_REQUEST = "Solicitud inválida";
+        internal const string ERROR_DB = "Error de base de datos";
+        internal const string ERROR_UNEXPECTED = "Error inesperado";
+        internal const string ERROR_MATCH_NOT_FOUND = "Partida no encontrada";
+        internal const string ERROR_NOT_PLAYER_TURN = "No es tu turno";
+        internal const string ERROR_DUEL_NOT_ACTIVE = "Duelo no activo";
+        internal const string ERROR_NOT_WEAKEST_RIVAL = "Acción no permitida";
+        internal const string ERROR_INVALID_DUEL_TARGET = "Objetivo inválido";
+        internal const string ERROR_MATCH_ALREADY_STARTED = "Partida ya iniciada";
+        internal const string ERROR_NO_QUESTIONS = "Sin preguntas";
 
         internal const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
@@ -26,13 +26,13 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string FALLBACK_LOCALE_EN_US = "en-US";
 
         internal const string ERROR_MATCH_ALREADY_STARTED_MESSAGE =
-            "Match already started. Joining is not allowed.";
+            "La partida ya inició. No está permitido unirse.";
 
-        internal const string ERROR_MATCH_NOT_FOUND_MESSAGE = "Match not found.";
-        internal const string ERROR_NOT_PLAYER_TURN_MESSAGE = "It is not the player turn.";
-        internal const string ERROR_DUEL_NOT_ACTIVE_MESSAGE = "Duel is not active.";
-        internal const string ERROR_NOT_WEAKEST_RIVAL_MESSAGE = "Only weakest rival can choose duel opponent.";
-        internal const string ERROR_INVALID_DUEL_TARGET_MESSAGE = "Invalid duel opponent.";
+        internal const string ERROR_MATCH_NOT_FOUND_MESSAGE = "No se encontró la partida.";
+        internal const string ERROR_NOT_PLAYER_TURN_MESSAGE = "No es el turno del jugador.";
+        internal const string ERROR_DUEL_NOT_ACTIVE_MESSAGE = "El duelo no está activo.";
+        internal const string ERROR_NOT_WEAKEST_RIVAL_MESSAGE = "Solo el rival más débil puede elegir oponente.";
+        internal const string ERROR_INVALID_DUEL_TARGET_MESSAGE = "Oponente de duelo inválido.";
         internal const string ERROR_NO_QUESTIONS_MESSAGE =
             "No se encontraron preguntas para la dificultad/idioma solicitados.";
 
@@ -82,7 +82,7 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string SURPRISE_EXAM_RESOLVE_REASON_ALL_ANSWERED = "ALL_ANSWERED";
 
         internal const string SURPRISE_EXAM_BANKING_NOT_ALLOWED_MESSAGE =
-            "Special event in progress. Banking is not allowed.";
+            "Evento especial en progreso. No se permite bancar.";
 
         internal const decimal BOMB_BANK_DELTA = 0.50m;
         internal const decimal MIN_BANKED_POINTS = 0.00m;

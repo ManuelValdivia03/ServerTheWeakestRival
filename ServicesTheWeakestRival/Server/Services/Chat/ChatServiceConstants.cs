@@ -24,38 +24,56 @@
         public const string PARAM_MAX_COUNT = "@max_count";
         public const string PARAM_SINCE_ID = "@since_id";
 
-        public const string DEFAULT_USER_PREFIX = "User";
+        public const string DEFAULT_USER_PREFIX = "Usuario";
 
-        public const string ERROR_CONFIG = "Error";
-        public const string ERROR_UNAUTHORIZED = "Error";
-        public const string ERROR_INVALID_REQUEST = "Error";
-        public const string ERROR_VALIDATION = "Error";
-        public const string ERROR_DB = "Error";
-        public const string ERROR_TIMEOUT = "Error";
-        public const string ERROR_CANCELLED = "Error";
-        public const string ERROR_INVALID_OPERATION = "Error";
-        public const string ERROR_UNEXPECTED = "Error";
+        public const string ERROR_CONFIG = "Error de configuración";
+        public const string ERROR_UNAUTHORIZED = "No autorizado";
+        public const string ERROR_INVALID_REQUEST = "Solicitud inválida";
+        public const string ERROR_VALIDATION = "Error de validación";
+        public const string ERROR_DB = "Error de base de datos";
+        public const string ERROR_TIMEOUT = "Tiempo de espera agotado";
+        public const string ERROR_CANCELLED = "Operación cancelada";
+        public const string ERROR_INVALID_OPERATION = "Operación inválida";
+        public const string ERROR_UNEXPECTED = "Error inesperado";
 
-        public const string MESSAGE_CONFIG_MISSING = "Missing connection string 'TheWeakestRivalDb'.";
-        public const string MESSAGE_TOKEN_REQUIRED = "Auth token is required.";
-        public const string MESSAGE_TOKEN_INVALID = "Auth token is invalid.";
-        public const string MESSAGE_TOKEN_EXPIRED = "Auth token has expired.";
+        public const string MESSAGE_CONFIG_MISSING =
+            "Falta la cadena de conexión 'TheWeakestRivalDb'.";
+        public const string MESSAGE_TOKEN_REQUIRED =
+            "El token de autenticación es obligatorio.";
+        public const string MESSAGE_TOKEN_INVALID =
+            "El token de autenticación es inválido.";
+        public const string MESSAGE_TOKEN_EXPIRED =
+            "El token de autenticación expiró.";
 
-        public const string MESSAGE_REQUEST_NULL = "Request cannot be null.";
-        public const string MESSAGE_TEXT_EMPTY = "MessageText cannot be empty.";
-        public const string MESSAGE_TEXT_TOO_LONG_PREFIX = "MessageText exceeds ";
-        public const string MESSAGE_TEXT_TOO_LONG_SUFFIX = " characters.";
+        public const string MESSAGE_REQUEST_NULL =
+            "La solicitud no puede ser nula.";
+        public const string MESSAGE_TEXT_EMPTY =
+            "El texto del mensaje no puede estar vacío.";
+        public const string MESSAGE_TEXT_TOO_LONG_PREFIX =
+            "El texto del mensaje excede ";
+        public const string MESSAGE_TEXT_TOO_LONG_SUFFIX =
+            " caracteres.";
 
-        public const string MESSAGE_DB_SEND = "A database error occurred while sending the chat message.";
-        public const string MESSAGE_DB_GET = "A database error occurred while retrieving chat messages.";
-        public const string MESSAGE_TIMEOUT_SEND = "The operation timed out while sending the chat message.";
-        public const string MESSAGE_TIMEOUT_GET = "The operation timed out while retrieving chat messages.";
-        public const string MESSAGE_CANCEL_SEND = "The operation was cancelled while sending the chat message.";
-        public const string MESSAGE_CANCEL_GET = "The operation was cancelled while retrieving chat messages.";
-        public const string MESSAGE_INVALIDOP_SEND = "An invalid operation occurred while sending the chat message.";
-        public const string MESSAGE_INVALIDOP_GET = "An invalid operation occurred while retrieving chat messages.";
-        public const string MESSAGE_UNEXPECTED_SEND = "An unexpected error occurred while sending the chat message.";
-        public const string MESSAGE_UNEXPECTED_GET = "An unexpected error occurred while retrieving chat messages.";
+        public const string MESSAGE_DB_SEND =
+            "Ocurrió un error de base de datos al enviar el mensaje del chat.";
+        public const string MESSAGE_DB_GET =
+            "Ocurrió un error de base de datos al obtener los mensajes del chat.";
+        public const string MESSAGE_TIMEOUT_SEND =
+            "Se agotó el tiempo de espera al enviar el mensaje del chat.";
+        public const string MESSAGE_TIMEOUT_GET =
+            "Se agotó el tiempo de espera al obtener los mensajes del chat.";
+        public const string MESSAGE_CANCEL_SEND =
+            "La operación fue cancelada al enviar el mensaje del chat.";
+        public const string MESSAGE_CANCEL_GET =
+            "La operación fue cancelada al obtener los mensajes del chat.";
+        public const string MESSAGE_INVALIDOP_SEND =
+            "Ocurrió una operación inválida al enviar el mensaje del chat.";
+        public const string MESSAGE_INVALIDOP_GET =
+            "Ocurrió una operación inválida al obtener los mensajes del chat.";
+        public const string MESSAGE_UNEXPECTED_SEND =
+            "Ocurrió un error inesperado al enviar el mensaje del chat.";
+        public const string MESSAGE_UNEXPECTED_GET =
+            "Ocurrió un error inesperado al obtener los mensajes del chat.";
 
         public const string CTX_SEND = "ChatService.SendChatMessage";
         public const string CTX_GET = "ChatService.GetChatMessages";
