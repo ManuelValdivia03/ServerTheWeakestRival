@@ -55,9 +55,9 @@
         public const string MESSAGE_PASSWORD_RESET_EMAIL_FAILED = "Failed to send password reset email. Please try again later.";
         public const string MESSAGE_INVALID_SESSION = "Invalid session.";
         public const string MESSAGE_INVALID_CREDENTIALS = "Email or password is incorrect.";
-        public const string MESSAGE_ACCOUNT_NOT_ACTIVE = "Account is not active.";
-        public const string MESSAGE_ACCOUNT_SUSPENDED = "Account is suspended.";
-        public const string MESSAGE_ACCOUNT_BANNED = "Account is banned.";
+        public const string MESSAGE_ACCOUNT_NOT_ACTIVE = "Auth.Account.NotActive";
+        public const string MESSAGE_ACCOUNT_SUSPENDED = "Auth.Account.Suspended";
+        public const string MESSAGE_ACCOUNT_BANNED = "Auth.Account.Banned";
 
         public const string MESSAGE_UNEXPECTED_DB_LOGIN = "Unexpected database error while logging in.";
         public const string MESSAGE_UNEXPECTED_DB_LOGOUT = "Unexpected database error while logging out.";
