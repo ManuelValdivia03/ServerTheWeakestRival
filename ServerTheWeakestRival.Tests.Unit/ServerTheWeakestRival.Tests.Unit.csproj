@@ -125,6 +125,7 @@
     <Compile Include="Infrastructure\SqlExceptionFaultMapperTests.cs" />
     <Compile Include="Infrastructure\TestAccountFactory.cs" />
     <Compile Include="Infrastructure\TestConfigBootstrapper.cs" />
+    <Compile Include="Infrastructure\TestTokenFactory.cs" />
     <Compile Include="Infrastructure\TokenStoreTestCleaner.cs" />
     <Compile Include="Infrastructure\TokenStoreTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -162,6 +163,8 @@
     <Compile Include="Services\Friends\SearchAccountsIntegrationTests.cs" />
     <Compile Include="Services\Friends\SendFriendRequestIntegrationTests.cs" />
     <Compile Include="Services\Friends\SendLobbyInviteEmailTests.cs" />
+    <Compile Include="Services\Lobby\LobbyAccountOperationsIntegrationTests.cs" />
+    <Compile Include="Services\Lobby\LobbyRepositoryIntegrationTests.cs" />
     <Compile Include="Services\Report\ReportCoordinatorSubmitPlayerReportTests.cs" />
     <Compile Include="Services\Report\ReportRequestValidatorTests.cs" />
     <Compile Include="Services\Report\Integration\ReportService_SubmitPlayerReport_IntegrationTests.cs" />
