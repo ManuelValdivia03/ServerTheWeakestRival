@@ -149,6 +149,8 @@
     <Compile Include="Services\Auth\ProfileImageValidatorTests.cs" />
     <Compile Include="Services\Auth\RegisterWorkflowTests.cs" />
     <Compile Include="Services\Auth\ResendCooldownPolicyTests.cs" />
+    <Compile Include="Services\Chat\ChatOperationIntegrationTests.cs" />
+    <Compile Include="Services\Chat\ChatRepositoryIntegrationTests.cs" />
     <Compile Include="Services\Report\ReportCoordinatorSubmitPlayerReportTests.cs" />
     <Compile Include="Services\Report\ReportRequestValidatorTests.cs" />
     <Compile Include="Services\Report\Integration\ReportService_SubmitPlayerReport_IntegrationTests.cs" />
