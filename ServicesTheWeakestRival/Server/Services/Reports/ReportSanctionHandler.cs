@@ -5,7 +5,8 @@ using System;
 
 namespace ServicesTheWeakestRival.Server.Services.Reports
 {
-    internal sealed class ReportSanctionHandler
+    internal sealed class ReportSanctionHandler : IReportSanctionHandler
+
     {
         private const int MIN_VALID_ID = 1;
 
@@ -28,7 +29,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             forcedLogoutNotifier = dependencies.ForcedLogoutNotifier;
         }
 
-        internal void HandleIfSanctionApplied(SubmitPlayerReportRequest request, SubmitPlayerReportResponse response)
+        public void HandleIfSanctionApplied(SubmitPlayerReportRequest request, SubmitPlayerReportResponse response)
         {
             bool shouldHandle = IsSanctionFlowApplicable(request, response);
             if (shouldHandle)

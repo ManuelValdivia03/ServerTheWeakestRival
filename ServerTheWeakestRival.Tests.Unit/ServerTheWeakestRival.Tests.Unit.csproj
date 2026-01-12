@@ -149,6 +149,10 @@
     <Compile Include="Services\Auth\ProfileImageValidatorTests.cs" />
     <Compile Include="Services\Auth\RegisterWorkflowTests.cs" />
     <Compile Include="Services\Auth\ResendCooldownPolicyTests.cs" />
+    <Compile Include="Services\Report\ReportCoordinatorSubmitPlayerReportTests.cs" />
+    <Compile Include="Services\Report\ReportRequestValidatorTests.cs" />
+    <Compile Include="Services\Report\Integration\ReportService_SubmitPlayerReport_IntegrationTests.cs" />
+    <Compile Include="Services\Report\ReportTokenAuthenticatorTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Console\ConnectionStrings.secrets.config">
@@ -172,9 +176,7 @@
       <Name>TheWeakestRival.Data</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Services\Report\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets" Condition="Exists('$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets')" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

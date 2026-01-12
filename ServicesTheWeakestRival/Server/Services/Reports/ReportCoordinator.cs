@@ -11,14 +11,18 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(ReportCoordinator));
 
-        private readonly ReportRequestValidator requestValidator;
-        private readonly ReportTokenAuthenticator tokenAuthenticator;
-        private readonly ReportRepository reportRepository;
-        private readonly ReportSanctionHandler sanctionHandler;
+        private readonly IReportRequestValidator requestValidator;
+        private readonly IReportTokenAuthenticator tokenAuthenticator;
+        private readonly IReportRepository reportRepository;
+        private readonly IReportSanctionHandler sanctionHandler;
 
         private ReportCoordinator(ReportCoordinatorDependencies dependencies)
         {
             if (dependencies == null) throw new ArgumentNullException(nameof(dependencies));
+            if (dependencies.RequestValidator == null) throw new ArgumentNullException(nameof(dependencies.RequestValidator));
+            if (dependencies.TokenAuthenticator == null) throw new ArgumentNullException(nameof(dependencies.TokenAuthenticator));
+            if (dependencies.ReportRepository == null) throw new ArgumentNullException(nameof(dependencies.ReportRepository));
+            if (dependencies.SanctionHandler == null) throw new ArgumentNullException(nameof(dependencies.SanctionHandler));
 
             requestValidator = dependencies.RequestValidator;
             tokenAuthenticator = dependencies.TokenAuthenticator;
@@ -29,6 +33,11 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
         internal static ReportCoordinator CreateDefault()
         {
             return new ReportCoordinator(ReportCoordinatorDependencies.CreateDefaultDependencies());
+        }
+
+        internal static ReportCoordinator CreateForTests(ReportCoordinatorDependencies dependencies)
+        {
+            return new ReportCoordinator(dependencies);
         }
 
         internal SubmitPlayerReportResponse SubmitPlayerReport(SubmitPlayerReportRequest request)
@@ -83,47 +92,6 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
                 throw ReportFaultFactory.Create(
                     ReportConstants.FaultCode.Unexpected,
                     ReportConstants.MessageKey.Unexpected);
-            }
-        }
-
-
-        private sealed class ReportCoordinatorDependencies
-        {
-            internal ReportRequestValidator RequestValidator { get; }
-            internal ReportTokenAuthenticator TokenAuthenticator { get; }
-            internal ReportRepository ReportRepository { get; }
-            internal ReportSanctionHandler SanctionHandler { get; }
-
-            private ReportCoordinatorDependencies(
-                ReportRequestValidator requestValidator,
-                ReportTokenAuthenticator tokenAuthenticator,
-                ReportRepository reportRepository,
-                ReportSanctionHandler sanctionHandler)
-            {
-                RequestValidator = requestValidator ?? throw new ArgumentNullException(nameof(requestValidator));
-                TokenAuthenticator = tokenAuthenticator ?? throw new ArgumentNullException(nameof(tokenAuthenticator));
-                ReportRepository = reportRepository ?? throw new ArgumentNullException(nameof(reportRepository));
-                SanctionHandler = sanctionHandler ?? throw new ArgumentNullException(nameof(sanctionHandler));
-            }
-
-            internal static ReportCoordinatorDependencies CreateDefaultDependencies()
-            {
-                var requestValidator = new ReportRequestValidator();
-                var tokenAuthenticator = new ReportTokenAuthenticator();
-                var reportRepository = new ReportRepository();
-
-                var userIdResolver = new ReportUserIdResolver();
-                var lobbyBroadcaster = new LobbyUpdatedBroadcaster();
-                var forcedLogoutNotifier = new ForcedLogoutNotifier();
-
-                var sanctionHandler = new ReportSanctionHandler(
-                    new ReportSanctionDependencies(userIdResolver, lobbyBroadcaster, forcedLogoutNotifier));
-
-                return new ReportCoordinatorDependencies(
-                    requestValidator,
-                    tokenAuthenticator,
-                    reportRepository,
-                    sanctionHandler);
             }
         }
     }

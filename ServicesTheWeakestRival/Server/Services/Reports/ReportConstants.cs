@@ -1,72 +1,72 @@
 ﻿namespace ServicesTheWeakestRival.Server.Services.Reports
 {
-    internal static class ReportConstants
+    public static class ReportConstants
     {
         internal static class Context
         {
-            internal const string SubmitPlayerReport = "ReportCoordinator.SubmitPlayerReport";
-            internal const string SqlSubmitPlayerReport = "ReportRepository.SubmitPlayerReport";
-            internal const string TokenAuth = "ReportTokenAuthenticator.AuthenticateOrThrow";
-            internal const string UnexpectedSubmit = "ReportCoordinator.SubmitPlayerReport.Unexpected";
-            internal const string TimeoutSubmit = "ReportCoordinator.SubmitPlayerReport.Timeout";
-            internal const string CommunicationSubmit = "ReportCoordinator.SubmitPlayerReport.Communication";
-            internal const string ConfigurationSubmit = "ReportCoordinator.SubmitPlayerReport.Configuration";
+            public const string SubmitPlayerReport = "ReportCoordinator.SubmitPlayerReport";
+            public const string SqlSubmitPlayerReport = "ReportRepository.SubmitPlayerReport";
+            public const string TokenAuth = "ReportTokenAuthenticator.AuthenticateOrThrow";
+            public const string UnexpectedSubmit = "ReportCoordinator.SubmitPlayerReport.Unexpected";
+            public const string TimeoutSubmit = "ReportCoordinator.SubmitPlayerReport.Timeout";
+            public const string CommunicationSubmit = "ReportCoordinator.SubmitPlayerReport.Communication";
+            public const string ConfigurationSubmit = "ReportCoordinator.SubmitPlayerReport.Configuration";
         }
 
-        internal static class OperationKeyPrefix
+        public static class OperationKeyPrefix
         {
-            internal const string SubmitPlayerReport = "Report.SubmitPlayerReport";
+            public const string SubmitPlayerReport = "Report.SubmitPlayerReport";
         }
 
-        internal static class FaultCode
+        public static class FaultCode
         {
-            internal const string RequestNull = "REPORT_REQUEST_NULL";
-            internal const string TokenInvalid = "REPORT_TOKEN_INVALID";
-            internal const string InvalidTarget = "REPORT_INVALID_TARGET";
-            internal const string SelfReport = "REPORT_SELF";
-            internal const string InvalidReason = "REPORT_INVALID_REASON";
-            internal const string CommentTooLong = "REPORT_COMMENT_TOO_LONG";
+            public const string RequestNull = "REPORT_REQUEST_NULL";
+            public const string TokenInvalid = "REPORT_TOKEN_INVALID";
+            public const string InvalidTarget = "REPORT_INVALID_TARGET";
+            public const string SelfReport = "REPORT_SELF";
+            public const string InvalidReason = "REPORT_INVALID_REASON";
+            public const string CommentTooLong = "REPORT_COMMENT_TOO_LONG";
 
-            internal const string DbError = "REPORT_DB_ERROR";
-            internal const string Timeout = "REPORT_TIMEOUT";
-            internal const string Communication = "REPORT_COMMUNICATION_ERROR";
-            internal const string Configuration = "REPORT_CONFIGURATION_ERROR";
-            internal const string Unexpected = "REPORT_UNEXPECTED";
+            public const string DbError = "REPORT_DB_ERROR";
+            public const string Timeout = "REPORT_TIMEOUT";
+            public const string Communication = "REPORT_COMMUNICATION_ERROR";
+            public const string Configuration = "REPORT_CONFIGURATION_ERROR";
+            public const string Unexpected = "REPORT_UNEXPECTED";
         }
 
-        internal static class MessageKey
+        public static class MessageKey
         {
-            internal const string RequestNull = "Report.SubmitPlayerReport.Validation.RequestNull";
-            internal const string TokenInvalid = "Report.SubmitPlayerReport.Validation.TokenInvalid";
-            internal const string InvalidTarget = "Report.SubmitPlayerReport.Validation.InvalidTarget";
-            internal const string SelfReport = "Report.SubmitPlayerReport.Validation.SelfReport";
-            internal const string InvalidReason = "Report.SubmitPlayerReport.Validation.InvalidReason";
-            internal const string CommentTooLong = "Report.SubmitPlayerReport.Validation.CommentTooLong";
+            public const string RequestNull = "Report.SubmitPlayerReport.Validation.RequestNull";
+            public const string TokenInvalid = "Report.SubmitPlayerReport.Validation.TokenInvalid";
+            public const string InvalidTarget = "Report.SubmitPlayerReport.Validation.InvalidTarget";
+            public const string SelfReport = "Report.SubmitPlayerReport.Validation.SelfReport";
+            public const string InvalidReason = "Report.SubmitPlayerReport.Validation.InvalidReason";
+            public const string CommentTooLong = "Report.SubmitPlayerReport.Validation.CommentTooLong";
 
-            internal const string Timeout = "Report.SubmitPlayerReport.Timeout";
-            internal const string Communication = "Report.SubmitPlayerReport.Communication";
-            internal const string Configuration = "Report.SubmitPlayerReport.Configuration";
-            internal const string Unexpected = "Report.SubmitPlayerReport.Unexpected";
+            public const string Timeout = "Report.SubmitPlayerReport.Timeout";
+            public const string Communication = "Report.SubmitPlayerReport.Communication";
+            public const string Configuration = "Report.SubmitPlayerReport.Configuration";
+            public const string Unexpected = "Report.SubmitPlayerReport.Unexpected";
         }
 
-        internal static class Sql
+        public static class Sql
         {
-            internal const string MainConnectionStringName = "TheWeakestRivalDb";
+            public const string MainConnectionStringName = "TheWeakestRivalDb";
 
-            internal const string SpSubmitPlayerReport = "dbo.sp_submit_player_report";
+            public const string SpSubmitPlayerReport = "dbo.sp_submit_player_report";
 
-            internal const string ParamReporterAccountId = "@reporter_account_id";
-            internal const string ParamReportedAccountId = "@reported_account_id";
-            internal const string ParamLobbyId = "@lobby_id";
-            internal const string ParamReasonCode = "@reason_code";
-            internal const string ParamComment = "@comment";
+            public const string ParamReporterAccountId = "@reporter_account_id";
+            public const string ParamReportedAccountId = "@reported_account_id";
+            public const string ParamLobbyId = "@lobby_id";
+            public const string ParamReasonCode = "@reason_code";
+            public const string ParamComment = "@comment";
 
-            internal const string OutReportId = "@report_id";
-            internal const string OutSanctionApplied = "@sanction_applied";
-            internal const string OutSanctionType = "@sanction_type";
-            internal const string OutSanctionEndAtUtc = "@sanction_end_at_utc";
+            public const string OutReportId = "@report_id";
+            public const string OutSanctionApplied = "@sanction_applied";
+            public const string OutSanctionType = "@sanction_type";
+            public const string OutSanctionEndAtUtc = "@sanction_end_at_utc";
 
-            internal const int CommentMaxLength = 500;
+            public const int CommentMaxLength = 500;
         }
     }
 }

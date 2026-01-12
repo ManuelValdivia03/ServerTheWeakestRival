@@ -4,9 +4,9 @@ using System;
 
 namespace ServicesTheWeakestRival.Server.Services.Reports
 {
-    internal sealed class ReportRequestValidator
+    internal sealed class ReportRequestValidator : IReportRequestValidator
     {
-        internal void ValidateSubmitPlayerReportRequest(SubmitPlayerReportRequest request)
+        public void ValidateSubmitPlayerReportRequest(SubmitPlayerReportRequest request)
         {
             if (request == null)
             {
@@ -25,7 +25,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             }
         }
 
-        internal void ValidateReporterAndTarget(int reporterAccountId, int reportedAccountId)
+        public void ValidateReporterAndTarget(int reporterAccountId, int reportedAccountId)
         {
             if (reportedAccountId <= 0)
             {

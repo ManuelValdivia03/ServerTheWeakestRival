@@ -6,9 +6,9 @@ using System.Data.SqlClient;
 
 namespace ServicesTheWeakestRival.Server.Services.Reports
 {
-    internal sealed class ReportRepository
+    internal sealed class ReportRepository : IReportRepository
     {
-        internal SubmitPlayerReportResponse SubmitPlayerReport(int reporterAccountId, SubmitPlayerReportRequest request)
+        public SubmitPlayerReportResponse SubmitPlayerReport(int reporterAccountId, SubmitPlayerReportRequest request)
         {
             string connectionString =
                 ConfigurationManager.ConnectionStrings[ReportConstants.Sql.MainConnectionStringName].ConnectionString;

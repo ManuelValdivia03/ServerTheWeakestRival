@@ -1,8 +1,8 @@
 ﻿namespace ServicesTheWeakestRival.Server.Services.Reports
 {
-    internal sealed class ReportTokenAuthenticator
+    internal sealed class ReportTokenAuthenticator : IReportTokenAuthenticator
     {
-        internal int AuthenticateOrThrow(string token)
+        public int AuthenticateOrThrow(string token)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
