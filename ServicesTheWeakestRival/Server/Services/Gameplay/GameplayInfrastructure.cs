@@ -193,6 +193,16 @@ namespace ServicesTheWeakestRival.Server.Services
                 }
             }
         }
+
+        internal static void UntrackPlayerMatch(int userId)
+        {
+            if (userId <= 0)
+            {
+                return;
+            }
+
+            PlayerMatchByUserId.TryRemove(userId, out _);
+        }
     }
 
     internal static class GameplayBroadcaster

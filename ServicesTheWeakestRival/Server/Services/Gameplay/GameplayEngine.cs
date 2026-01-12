@@ -1,5 +1,4 @@
-﻿// GameplayEngine.cs  (fachada <500 líneas)
-using log4net;
+﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services.Gameplay;
