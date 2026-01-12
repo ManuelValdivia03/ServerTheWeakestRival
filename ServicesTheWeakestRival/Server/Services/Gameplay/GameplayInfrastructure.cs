@@ -90,7 +90,9 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (wildcardMatchId <= 0)
             {
-                throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, "WildcardMatchId inválido.");
+                throw GameplayFaults.ThrowFault(
+                    GameplayEngineConstants.ERROR_INVALID_REQUEST,
+                    "WildcardMatchId inválido.");
             }
 
             if (RuntimeMatchByWildcardMatchId.TryGetValue(wildcardMatchId, out Guid runtimeMatchId))
@@ -155,12 +157,10 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (expectedPlayerUserIds != null)
             {
-                foreach (int id in expectedPlayerUserIds)
+                IEnumerable<int> validExpectedPlayerIds = expectedPlayerUserIds.Where(id => id > 0);
+                foreach (int id in validExpectedPlayerIds)
                 {
-                    if (id > 0)
-                    {
-                        set.TryAdd(id, 0);
-                    }
+                    set.TryAdd(id, 0);
                 }
             }
 
@@ -185,12 +185,10 @@ namespace ServicesTheWeakestRival.Server.Services
             Matches.TryRemove(state.MatchId, out _);
             ExpectedPlayersByMatchId.TryRemove(state.MatchId, out _);
 
-            foreach (MatchPlayerRuntime player in state.Players)
+            IEnumerable<MatchPlayerRuntime> players = state.Players.Where(p => p != null);
+            foreach (MatchPlayerRuntime player in players)
             {
-                if (player != null)
-                {
-                    PlayerMatchByUserId.TryRemove(player.UserId, out _);
-                }
+                PlayerMatchByUserId.TryRemove(player.UserId, out _);
             }
         }
 
@@ -208,6 +206,9 @@ namespace ServicesTheWeakestRival.Server.Services
     internal static class GameplayBroadcaster
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayBroadcaster));
+
+        private const string MESSAGE_CALLBACK_FAILED =
+            "{0}: callback failed. PlayerUserId={1}";
 
         internal static PlayerSummary BuildPlayerSummary(MatchPlayerRuntime player, bool isOnline)
         {
@@ -236,7 +237,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 catch (Exception ex)
                 {
                     Logger.WarnFormat(
-                        "{0}: callback failed. PlayerUserId={1}",
+                        MESSAGE_CALLBACK_FAILED,
                         logContext,
                         player.UserId);
 

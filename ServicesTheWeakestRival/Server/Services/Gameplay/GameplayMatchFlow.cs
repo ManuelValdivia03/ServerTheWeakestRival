@@ -18,11 +18,20 @@ namespace ServicesTheWeakestRival.Server.Services
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayMatchFlow));
 
+        private const string ERROR_MISSING_CALLBACK_MESSAGE = "Missing callback channel.";
+        private const string ERROR_WILDCARD_MATCH_ID_INVALID_MESSAGE = "WildcardMatchId inválido.";
+
+        private const string CTX_JOIN_MATCH_INTERNAL = "GameplayEngine.JoinMatchInternal";
+        private const string CTX_START_MATCH_INTERNAL = "GameplayEngine.StartMatchInternal";
+        private const string CTX_MATCH_FINISHED = "GameplayEngine.MatchFinished";
+        private const string CTX_TURN_ORDER = "GameplayEngine.TurnOrder";
+        private const string CTX_TURN_ORDER_CHANGED = "GameplayEngine.TurnOrderChanged";
+
         internal static void JoinMatchInternal(
-    MatchRuntimeState state,
-    Guid matchId,
-    int userId,
-    IGameplayServiceCallback callback)
+            MatchRuntimeState state,
+            Guid matchId,
+            int userId,
+            IGameplayServiceCallback callback)
         {
             if (state == null)
             {
@@ -33,66 +42,16 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 throw GameplayFaults.ThrowFault(
                     GameplayEngineConstants.ERROR_INVALID_REQUEST,
-                    "Missing callback channel.");
+                    ERROR_MISSING_CALLBACK_MESSAGE);
             }
 
             lock (state.SyncRoot)
             {
                 bool hasStarted = state.HasStarted || state.IsInitialized;
 
-                if (hasStarted)
-                {
-                    if (GameplayMatchRegistry.TryGetExpectedPlayers(matchId, out ConcurrentDictionary<int, byte> expectedPlayers) &&
-                        expectedPlayers != null &&
-                        expectedPlayers.Count > 0)
-                    {
-                        if (!expectedPlayers.ContainsKey(userId))
-                        {
-                            throw GameplayFaults.ThrowFault(
-                                GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED,
-                                GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED_MESSAGE);
-                        }
-                    }
-                    else
-                    {
-                        MatchPlayerRuntime existingRuntime = state.Players.Find(p => p != null && p.UserId == userId);
-                        if (existingRuntime == null)
-                        {
-                            throw GameplayFaults.ThrowFault(
-                                GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED,
-                                GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED_MESSAGE);
-                        }
-                    }
-                }
+                EnsureJoinAllowedOrThrow(state, matchId, userId, hasStarted);
 
-                MatchPlayerRuntime existingPlayer = state.Players.Find(p => p != null && p.UserId == userId);
-                if (existingPlayer != null)
-                {
-                    if (existingPlayer.IsEliminated)
-                    {
-                        throw GameplayFaults.ThrowFault(
-                            GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED,
-                            GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED_MESSAGE);
-                    }
-
-                    existingPlayer.Callback = callback;
-                }
-                else
-                {
-                    string displayName = string.Format(
-                        CultureInfo.CurrentCulture,
-                        GameplayEngineConstants.DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE,
-                        userId);
-
-                    UserAvatarEntity avatarEntity = GameplayDataAccess.GetAvatarByUserId(userId);
-
-                    MatchPlayerRuntime player = new MatchPlayerRuntime(userId, displayName, callback)
-                    {
-                        Avatar = GameplayDataAccess.MapAvatar(avatarEntity)
-                    };
-
-                    state.Players.Add(player);
-                }
+                UpsertPlayerCallbackOrAddPlayer(state, userId, callback);
 
                 if (hasStarted && state.IsInitialized)
                 {
@@ -101,10 +60,72 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             GameplayMatchRegistry.TrackPlayerMatch(userId, matchId);
-
             GameplayDisconnectHub.RegisterCurrentSession(matchId, userId, callback);
         }
 
+        private static void EnsureJoinAllowedOrThrow(MatchRuntimeState state, Guid matchId, int userId, bool hasStarted)
+        {
+            if (!hasStarted)
+            {
+                return;
+            }
+
+            if (IsUserAllowedToRejoinStartedMatch(state, matchId, userId))
+            {
+                return;
+            }
+
+            throw GameplayFaults.ThrowFault(
+                GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED,
+                GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED_MESSAGE);
+        }
+
+        private static bool IsUserAllowedToRejoinStartedMatch(MatchRuntimeState state, Guid matchId, int userId)
+        {
+            if (GameplayMatchRegistry.TryGetExpectedPlayers(matchId, out ConcurrentDictionary<int, byte> expectedPlayers) &&
+                expectedPlayers != null &&
+                expectedPlayers.Count > 0)
+            {
+                return expectedPlayers.ContainsKey(userId);
+            }
+
+            MatchPlayerRuntime existingRuntime = state.Players.Find(p => p != null && p.UserId == userId);
+            return existingRuntime != null;
+        }
+
+        private static void UpsertPlayerCallbackOrAddPlayer(
+            MatchRuntimeState state,
+            int userId,
+            IGameplayServiceCallback callback)
+        {
+            MatchPlayerRuntime existingPlayer = state.Players.Find(p => p != null && p.UserId == userId);
+            if (existingPlayer != null)
+            {
+                if (existingPlayer.IsEliminated)
+                {
+                    throw GameplayFaults.ThrowFault(
+                        GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED,
+                        GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED_MESSAGE);
+                }
+
+                existingPlayer.Callback = callback;
+                return;
+            }
+
+            string displayName = string.Format(
+                CultureInfo.CurrentCulture,
+                GameplayEngineConstants.DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE,
+                userId);
+
+            UserAvatarEntity avatarEntity = GameplayDataAccess.GetAvatarByUserId(userId);
+
+            MatchPlayerRuntime player = new MatchPlayerRuntime(userId, displayName, callback)
+            {
+                Avatar = GameplayDataAccess.MapAvatar(avatarEntity)
+            };
+
+            state.Players.Add(player);
+        }
 
         internal static void StartMatchInternal(MatchRuntimeState state, GameplayStartMatchRequest request, int hostUserId)
         {
@@ -131,33 +152,14 @@ namespace ServicesTheWeakestRival.Server.Services
                     {
                         GameplayMatchRegistry.StoreOrMergeExpectedPlayers(request.MatchId, request.ExpectedPlayerUserIds, hostUserId);
 
-                        List<QuestionWithAnswersDto> questions = GameplayDataAccess.LoadQuestionsWithLocaleFallback(
+                        List<QuestionWithAnswersDto> questions = LoadQuestionsOrThrow(
                             request.Difficulty,
                             request.LocaleCode,
                             maxQuestions);
 
-                        if (questions == null || questions.Count == 0)
-                        {
-                            throw GameplayFaults.ThrowFault(
-                                GameplayEngineConstants.ERROR_NO_QUESTIONS,
-                                GameplayEngineConstants.ERROR_NO_QUESTIONS_MESSAGE);
-                        }
-
                         InitializeMatchState(state, request, hostUserId, questions);
 
-                        GameplaySpecialEvents.TryStartDarkModeEvent(state);
-                        GameplaySpecialEvents.TryStartExtraWildcardEvent(state);
-
-                        if (GameplaySpecialEvents.TryStartSurpriseExamEvent(state))
-                        {
-                            return;
-                        }
-
-                        bool hasLightningStarted = GameplaySpecialEvents.TryStartLightningChallenge(state);
-                        if (!hasLightningStarted)
-                        {
-                            GameplayTurnFlow.SendNextQuestion(state);
-                        }
+                        StartInitialSpecialEventsAndFirstTurn(state);
                     }
                     catch
                     {
@@ -175,7 +177,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw GameplayFaults.ThrowTechnicalFault(
                     GameplayEngineConstants.ERROR_DB,
                     GameplayEngineConstants.MESSAGE_DB_ERROR,
-                    "GameplayEngine.StartMatchInternal",
+                    CTX_START_MATCH_INTERNAL,
                     ex);
             }
             catch (Exception ex)
@@ -183,8 +185,42 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw GameplayFaults.ThrowTechnicalFault(
                     GameplayEngineConstants.ERROR_UNEXPECTED,
                     GameplayEngineConstants.MESSAGE_UNEXPECTED_ERROR,
-                    "GameplayEngine.StartMatchInternal",
+                    CTX_START_MATCH_INTERNAL,
                     ex);
+            }
+        }
+
+        private static List<QuestionWithAnswersDto> LoadQuestionsOrThrow(byte difficulty, string localeCode, int maxQuestions)
+        {
+            List<QuestionWithAnswersDto> questions = GameplayDataAccess.LoadQuestionsWithLocaleFallback(
+                difficulty,
+                localeCode,
+                maxQuestions);
+
+            if (questions == null || questions.Count == 0)
+            {
+                throw GameplayFaults.ThrowFault(
+                    GameplayEngineConstants.ERROR_NO_QUESTIONS,
+                    GameplayEngineConstants.ERROR_NO_QUESTIONS_MESSAGE);
+            }
+
+            return questions;
+        }
+
+        private static void StartInitialSpecialEventsAndFirstTurn(MatchRuntimeState state)
+        {
+            GameplaySpecialEvents.TryStartDarkModeEvent(state);
+            GameplaySpecialEvents.TryStartExtraWildcardEvent(state);
+
+            if (GameplaySpecialEvents.TryStartSurpriseExamEvent(state))
+            {
+                return;
+            }
+
+            bool hasLightningStarted = GameplaySpecialEvents.TryStartLightningChallenge(state);
+            if (!hasLightningStarted)
+            {
+                GameplayTurnFlow.SendNextQuestion(state);
             }
         }
 
@@ -225,7 +261,6 @@ namespace ServicesTheWeakestRival.Server.Services
             EnsureHostPlayerRegistered(state, hostUserId);
 
             ResetRoundStateForStart(state);
-
             ShufflePlayersForStart(state);
 
             GameplayBroadcaster.BroadcastTurnOrderInitialized(state);
@@ -234,7 +269,7 @@ namespace ServicesTheWeakestRival.Server.Services
         internal static void StartNextRound(MatchRuntimeState state)
         {
             List<MatchPlayerRuntime> alivePlayers = state.Players
-                .Where(p => !p.IsEliminated)
+                .Where(p => p != null && !p.IsEliminated)
                 .ToList();
 
             if (alivePlayers.Count < GameplayEngineConstants.MIN_PLAYERS_TO_CONTINUE)
@@ -243,6 +278,26 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
+            ResetRoundStateForNextRound(state);
+
+            EnsureCurrentPlayerIndexPointsToAlivePlayerOrReturn(state);
+
+            GameplaySpecialEvents.TryStartDarkModeEvent(state);
+
+            if (GameplaySpecialEvents.TryStartSurpriseExamEvent(state))
+            {
+                return;
+            }
+
+            bool hasLightningStarted = GameplaySpecialEvents.TryStartLightningChallenge(state);
+            if (!hasLightningStarted)
+            {
+                GameplayTurnFlow.SendNextQuestion(state);
+            }
+        }
+
+        private static void ResetRoundStateForNextRound(MatchRuntimeState state)
+        {
             state.RoundNumber++;
             state.QuestionsAskedThisRound = 0;
             state.CurrentChain = 0m;
@@ -263,32 +318,25 @@ namespace ServicesTheWeakestRival.Server.Services
 
             state.RestoreTurnAfterLightning();
             state.ResetLightningChallenge();
+        }
 
-            if (state.CurrentPlayerIndex < 0 ||
-                state.CurrentPlayerIndex >= state.Players.Count ||
-                state.Players[state.CurrentPlayerIndex].IsEliminated)
-            {
-                int firstAlive = state.Players.FindIndex(p => !p.IsEliminated);
-                if (firstAlive < 0)
-                {
-                    return;
-                }
-
-                state.CurrentPlayerIndex = firstAlive;
-            }
-
-            GameplaySpecialEvents.TryStartDarkModeEvent(state);
-
-            if (GameplaySpecialEvents.TryStartSurpriseExamEvent(state))
+        private static void EnsureCurrentPlayerIndexPointsToAlivePlayerOrReturn(MatchRuntimeState state)
+        {
+            if (state.CurrentPlayerIndex >= 0 &&
+                state.CurrentPlayerIndex < state.Players.Count &&
+                state.Players[state.CurrentPlayerIndex] != null &&
+                !state.Players[state.CurrentPlayerIndex].IsEliminated)
             {
                 return;
             }
 
-            bool hasLightningStarted = GameplaySpecialEvents.TryStartLightningChallenge(state);
-            if (!hasLightningStarted)
+            int firstAlive = state.Players.FindIndex(p => p != null && !p.IsEliminated);
+            if (firstAlive < 0)
             {
-                GameplayTurnFlow.SendNextQuestion(state);
+                return;
             }
+
+            state.CurrentPlayerIndex = firstAlive;
         }
 
         internal static void FinishMatchWithWinnerIfApplicable(MatchRuntimeState state)
@@ -335,10 +383,9 @@ namespace ServicesTheWeakestRival.Server.Services
             GameplayBroadcaster.Broadcast(
                 state,
                 cb => cb.OnMatchFinished(state.MatchId, GameplayBroadcaster.BuildPlayerSummary(winner, isOnline: true)),
-                "GameplayEngine.MatchFinished");
+                CTX_MATCH_FINISHED);
 
             GameplayDisconnectHub.CleanupMatch(state.MatchId);
-
             GameplayMatchRegistry.CleanupFinishedMatch(state);
         }
 

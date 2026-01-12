@@ -94,7 +94,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 if (state.IsSurpriseExamActive)
                 {
-                    throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, GameplayEngineConstants.SURPRISE_EXAM_BANKING_NOT_ALLOWED_MESSAGE);
+                    throw GameplayFaults.ThrowFault(
+                        GameplayEngineConstants.ERROR_INVALID_REQUEST,
+                        GameplayEngineConstants.SURPRISE_EXAM_BANKING_NOT_ALLOWED_MESSAGE);
                 }
 
                 GameplayTurnFlow.GetCurrentPlayerOrThrow(state, userId);
@@ -137,33 +139,40 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 int serverRoundNumber = state.RoundNumber;
 
-                if (clientRoundNumber != serverRoundNumber)
+                int effectiveRoundNumber = clientRoundNumber;
+                if (effectiveRoundNumber != serverRoundNumber)
                 {
                     Logger.WarnFormat(
                         "ApplyWildcardFromDbOrThrow: round mismatch. MatchId={0}, UserId={1}, Code={2}, ClientRound={3}, ServerRound={4}. Using server round.",
                         wildcardMatchId,
                         userId,
                         wildcardCode ?? string.Empty,
-                        clientRoundNumber,
+                        effectiveRoundNumber,
                         serverRoundNumber);
 
-                    clientRoundNumber = serverRoundNumber;
+                    effectiveRoundNumber = serverRoundNumber;
                 }
 
                 if (state.IsInVotePhase || state.IsInDuelPhase || state.IsSurpriseExamActive || GameplaySpecialEvents.IsLightningActive(state))
                 {
-                    throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_WILDCARD_INVALID_TIMING, GameplayEngineConstants.ERROR_WILDCARD_INVALID_TIMING_MESSAGE);
+                    throw GameplayFaults.ThrowFault(
+                        GameplayEngineConstants.ERROR_WILDCARD_INVALID_TIMING,
+                        GameplayEngineConstants.ERROR_WILDCARD_INVALID_TIMING_MESSAGE);
                 }
 
                 MatchPlayerRuntime actor = state.Players.FirstOrDefault(p => p != null && p.UserId == userId);
                 if (actor == null || actor.IsEliminated)
                 {
-                    throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, "Player not in match or eliminated.");
+                    throw GameplayFaults.ThrowFault(
+                        GameplayEngineConstants.ERROR_INVALID_REQUEST,
+                        "Player not in match or eliminated.");
                 }
 
                 if (actor.BlockWildcardsRoundNumber == state.RoundNumber)
                 {
-                    throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_WILDCARDS_BLOCKED, GameplayEngineConstants.ERROR_WILDCARDS_BLOCKED_MESSAGE);
+                    throw GameplayFaults.ThrowFault(
+                        GameplayEngineConstants.ERROR_WILDCARDS_BLOCKED,
+                        GameplayEngineConstants.ERROR_WILDCARDS_BLOCKED_MESSAGE);
                 }
 
                 MatchPlayerRuntime current = GameplayTurnFlow.GetCurrentPlayerOrThrow(state, userId);

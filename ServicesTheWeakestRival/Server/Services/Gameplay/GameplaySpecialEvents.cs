@@ -27,7 +27,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int randomValue = GameplayRandom.Next(GameplayEngineConstants.BOMB_QUESTION_RANDOM_MIN_VALUE, GameplayEngineConstants.BOMB_QUESTION_RANDOM_MAX_VALUE);
+            int randomValue = GameplayRandom.Next(
+                GameplayEngineConstants.BOMB_QUESTION_RANDOM_MIN_VALUE,
+                GameplayEngineConstants.BOMB_QUESTION_RANDOM_MAX_VALUE);
+
             if (randomValue >= GameplayEngineConstants.BOMB_QUESTION_PROBABILITY_PERCENT)
             {
                 return false;
@@ -37,7 +40,12 @@ namespace ServicesTheWeakestRival.Server.Services
             state.HasSpecialEventThisRound = true;
 
             string deltaDisplay = GameplayEngineConstants.BOMB_BANK_DELTA.ToString("0.00", CultureInfo.InvariantCulture);
-            string description = string.Format(CultureInfo.CurrentCulture, GameplayEngineConstants.SPECIAL_EVENT_BOMB_QUESTION_DESCRIPTION_TEMPLATE, targetPlayer.DisplayName, deltaDisplay);
+
+            string description = string.Format(
+                CultureInfo.CurrentCulture,
+                GameplayEngineConstants.SPECIAL_EVENT_BOMB_QUESTION_DESCRIPTION_TEMPLATE,
+                targetPlayer.DisplayName,
+                deltaDisplay);
 
             GameplayBroadcaster.Broadcast(
                 state,
@@ -54,7 +62,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
-            decimal previousBank = state.BankedPoints < GameplayEngineConstants.MIN_BANKED_POINTS ? GameplayEngineConstants.MIN_BANKED_POINTS : state.BankedPoints;
+            decimal previousBank = state.BankedPoints < GameplayEngineConstants.MIN_BANKED_POINTS
+                ? GameplayEngineConstants.MIN_BANKED_POINTS
+                : state.BankedPoints;
+
             decimal delta = isCorrect ? GameplayEngineConstants.BOMB_BANK_DELTA : -GameplayEngineConstants.BOMB_BANK_DELTA;
 
             decimal updatedBank = previousBank + delta;
@@ -105,7 +116,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int randomValue = GameplayRandom.Next(GameplayEngineConstants.SURPRISE_EXAM_RANDOM_MIN_VALUE, GameplayEngineConstants.SURPRISE_EXAM_RANDOM_MAX_VALUE);
+            int randomValue = GameplayRandom.Next(
+                GameplayEngineConstants.SURPRISE_EXAM_RANDOM_MIN_VALUE,
+                GameplayEngineConstants.SURPRISE_EXAM_RANDOM_MAX_VALUE);
+
             if (randomValue >= GameplayEngineConstants.SURPRISE_EXAM_PROBABILITY_PERCENT)
             {
                 return false;
@@ -225,7 +239,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     return;
                 }
 
-                ResolveSurpriseExam(state, GameplayEngineConstants.SURPRISE_EXAM_RESOLVE_REASON_TIMEOUT);
+                ResolveSurpriseExam(state);
             }
         }
 
@@ -298,7 +312,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (exam.PendingUserIds.Count <= 0)
             {
-                ResolveSurpriseExam(state, GameplayEngineConstants.SURPRISE_EXAM_RESOLVE_REASON_ALL_ANSWERED);
+                ResolveSurpriseExam(state);
             }
 
             return new AnswerResult
@@ -311,7 +325,7 @@ namespace ServicesTheWeakestRival.Server.Services
             };
         }
 
-        private static void ResolveSurpriseExam(MatchRuntimeState state, string reasonCode)
+        private static void ResolveSurpriseExam(MatchRuntimeState state)
         {
             SurpriseExamState exam = state.SurpriseExam;
 
@@ -334,8 +348,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
             bool allCorrect = total > 0 && correct == total;
 
-            decimal previousBank = state.BankedPoints < GameplayEngineConstants.MIN_BANKED_POINTS ? GameplayEngineConstants.MIN_BANKED_POINTS : state.BankedPoints;
-            decimal delta = allCorrect ? GameplayEngineConstants.SURPRISE_EXAM_SUCCESS_BONUS : -GameplayEngineConstants.SURPRISE_EXAM_FAILURE_PENALTY;
+            decimal previousBank = state.BankedPoints < GameplayEngineConstants.MIN_BANKED_POINTS
+                ? GameplayEngineConstants.MIN_BANKED_POINTS
+                : state.BankedPoints;
+
+            decimal delta = allCorrect
+                ? GameplayEngineConstants.SURPRISE_EXAM_SUCCESS_BONUS
+                : -GameplayEngineConstants.SURPRISE_EXAM_FAILURE_PENALTY;
 
             decimal updatedBank = previousBank + delta;
             if (updatedBank < GameplayEngineConstants.MIN_BANKED_POINTS)
@@ -416,7 +435,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int randomValue = GameplayRandom.Next(GameplayEngineConstants.LIGHTNING_RANDOM_MIN_VALUE, GameplayEngineConstants.LIGHTNING_RANDOM_MAX_VALUE);
+            int randomValue = GameplayRandom.Next(
+                GameplayEngineConstants.LIGHTNING_RANDOM_MIN_VALUE,
+                GameplayEngineConstants.LIGHTNING_RANDOM_MAX_VALUE);
+
             if (randomValue >= GameplayEngineConstants.LIGHTNING_PROBABILITY_PERCENT)
             {
                 return false;
@@ -594,7 +616,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int probabilityValue = GameplayRandom.Next(GameplayEngineConstants.EXTRA_WILDCARD_RANDOM_MIN_VALUE, GameplayEngineConstants.EXTRA_WILDCARD_RANDOM_MAX_VALUE);
+            int probabilityValue = GameplayRandom.Next(
+                GameplayEngineConstants.EXTRA_WILDCARD_RANDOM_MIN_VALUE,
+                GameplayEngineConstants.EXTRA_WILDCARD_RANDOM_MAX_VALUE);
+
             if (probabilityValue >= GameplayEngineConstants.EXTRA_WILDCARD_PROBABILITY_PERCENT)
             {
                 return false;
@@ -629,7 +654,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 Logger.Error("GameplayEngine.TryAwardLightningWildcard", ex);
             }
 
-            string description = string.Format(CultureInfo.CurrentCulture, GameplayEngineConstants.SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE, targetPlayer.DisplayName);
+            string description = string.Format(
+                CultureInfo.CurrentCulture,
+                GameplayEngineConstants.SPECIAL_EVENT_LIGHTNING_WILDCARD_DESCRIPTION_TEMPLATE,
+                targetPlayer.DisplayName);
 
             GameplayBroadcaster.Broadcast(
                 state,
@@ -657,7 +685,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 Logger.Error("GameplayEngine.TryAwardExtraWildcard", ex);
             }
 
-            string description = string.Format(CultureInfo.CurrentCulture, GameplayEngineConstants.SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE, targetPlayer.DisplayName);
+            string description = string.Format(
+                CultureInfo.CurrentCulture,
+                GameplayEngineConstants.SPECIAL_EVENT_EXTRA_WILDCARD_DESCRIPTION_TEMPLATE,
+                targetPlayer.DisplayName);
 
             GameplayBroadcaster.Broadcast(
                 state,
@@ -677,7 +708,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            int randomValue = GameplayRandom.Next(GameplayEngineConstants.DARK_MODE_RANDOM_MIN_VALUE, GameplayEngineConstants.DARK_MODE_RANDOM_MAX_VALUE);
+            int randomValue = GameplayRandom.Next(
+                GameplayEngineConstants.DARK_MODE_RANDOM_MIN_VALUE,
+                GameplayEngineConstants.DARK_MODE_RANDOM_MAX_VALUE);
+
             if (randomValue >= GameplayEngineConstants.DARK_MODE_PROBABILITY_PERCENT)
             {
                 return false;
@@ -689,7 +723,10 @@ namespace ServicesTheWeakestRival.Server.Services
 
             GameplayBroadcaster.Broadcast(
                 state,
-                cb => cb.OnSpecialEvent(state.MatchId, GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_STARTED_CODE, GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_STARTED_DESCRIPTION),
+                cb => cb.OnSpecialEvent(
+                    state.MatchId,
+                    GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_STARTED_CODE,
+                    GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_STARTED_DESCRIPTION),
                 "GameplayEngine.DarkMode.Started");
 
             return true;
@@ -706,7 +743,10 @@ namespace ServicesTheWeakestRival.Server.Services
 
             GameplayBroadcaster.Broadcast(
                 state,
-                cb => cb.OnSpecialEvent(state.MatchId, GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_ENDED_CODE, GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_ENDED_DESCRIPTION),
+                cb => cb.OnSpecialEvent(
+                    state.MatchId,
+                    GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_ENDED_CODE,
+                    GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_ENDED_DESCRIPTION),
                 "GameplayEngine.DarkMode.Ended");
 
             state.IsDarkModeActive = false;
@@ -733,7 +773,10 @@ namespace ServicesTheWeakestRival.Server.Services
                     voter.Callback.OnSpecialEvent(
                         state.MatchId,
                         GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_VOTE_REVEAL_CODE,
-                        string.Format(CultureInfo.CurrentCulture, GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_VOTE_REVEAL_DESCRIPTION_TEMPLATE, targetDisplayName));
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            GameplayEngineConstants.SPECIAL_EVENT_DARK_MODE_VOTE_REVEAL_DESCRIPTION_TEMPLATE,
+                            targetDisplayName));
                 }
                 catch (Exception ex)
                 {
@@ -755,7 +798,10 @@ namespace ServicesTheWeakestRival.Server.Services
                 return target.DisplayName;
             }
 
-            return string.Format(CultureInfo.CurrentCulture, GameplayEngineConstants.DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE, targetUserId.Value);
+            return string.Format(
+                CultureInfo.CurrentCulture,
+                GameplayEngineConstants.DARK_MODE_FALLBACK_PLAYER_NAME_TEMPLATE,
+                targetUserId.Value);
         }
     }
 }
