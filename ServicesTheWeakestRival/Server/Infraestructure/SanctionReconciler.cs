@@ -1,4 +1,5 @@
 ﻿using log4net;
+using ServicesTheWeakestRival.Server.Infrastructure.Faults;
 using System;
 using System.Configuration;
 using System.Data;
@@ -14,6 +15,8 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
         private const string CONTEXT_RECONCILE = "SanctionReconciler.Reconcile";
         private const string CONTEXT_DISPOSE = "SanctionReconciler.Dispose";
 
+        private const string OPERATION_KEY_PREFIX_RECONCILE = "Sanction.Reconcile";
+
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
         private const string APPSETTING_INTERVAL_SECONDS = "SanctionReconcilerIntervalSeconds";
@@ -25,88 +28,90 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
         private const string SP_SANCTIONS_RECONCILE = "dbo.usp_sanctions_reconcile";
 
-        private static readonly ILog Logger = LogManager.GetLogger(typeof(SanctionReconciler));
+        private static readonly ILog DefaultLogger = LogManager.GetLogger(typeof(SanctionReconciler));
 
-        private readonly string _connectionString;
-        private readonly ILog _logger;
+        private readonly string connectionString;
+        private readonly ILog logger;
 
-        private Timer _timer;
-        private int _isRunning;
-        private int _isDisposed;
+        private Timer timer;
+        private int isRunning;
+        private int isDisposed;
 
-        private readonly int _intervalSeconds;
+        private readonly int intervalSeconds;
 
         public SanctionReconciler(string connectionString, ILog logger = null)
         {
-            _connectionString = ResolveConnectionString(connectionString);
-            _logger = logger ?? Logger;
+            this.connectionString = ResolveConnectionString(connectionString);
+            this.logger = logger ?? DefaultLogger;
 
-            _intervalSeconds = ClampIntervalSeconds(ReadIntervalSecondsFromConfigOrDefault());
+            intervalSeconds = ClampIntervalSeconds(ReadIntervalSecondsFromConfigOrDefault());
         }
 
         public bool Start()
         {
-            if (Volatile.Read(ref _isDisposed) == 1)
+            if (Volatile.Read(ref isDisposed) == 1)
             {
                 return false;
             }
 
-            if (_timer != null)
+            if (timer != null)
             {
                 return true;
             }
 
             try
             {
-                _timer = new Timer(
+                timer = new Timer(
                     callback: _ => TickSafe(),
                     state: null,
                     dueTime: TimeSpan.Zero,
-                    period: TimeSpan.FromSeconds(_intervalSeconds));
+                    period: TimeSpan.FromSeconds(intervalSeconds));
 
-                _logger.InfoFormat(
+                this.logger.InfoFormat(
                     "{0}: started. IntervalSeconds={1}",
                     CONTEXT_START,
-                    _intervalSeconds);
+                    intervalSeconds);
 
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.Error(CONTEXT_START, ex);
+                this.logger.Error(CONTEXT_START, ex);
                 return false;
             }
         }
 
         private void TickSafe()
         {
-            if (Volatile.Read(ref _isDisposed) == 1)
+            bool canRun = Volatile.Read(ref isDisposed) == 0;
+            if (canRun)
             {
-                return;
-            }
-
-            if (Interlocked.Exchange(ref _isRunning, 1) == 1)
-            {
-                return; // evita re-entradas si tarda más que el intervalo
-            }
-
-            try
-            {
-                ReconcileOnce();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(CONTEXT_TICK, ex);
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _isRunning, 0);
+                bool acquired = Interlocked.Exchange(ref isRunning, 1) == 0;
+                if (acquired)
+                {
+                    try
+                    {
+                        ReconcileOnce();
+                    }
+                    catch (SqlException ex)
+                    {
+                        LogSqlException(ex);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(CONTEXT_TICK, ex);
+                    }
+                    finally
+                    {
+                        Interlocked.Exchange(ref isRunning, 0);
+                    }
+                }
             }
         }
 
         private void ReconcileOnce()
         {
-            using (var connection = new SqlConnection(_connectionString))
+            using (var connection = new SqlConnection(connectionString))
             using (var command = new SqlCommand(SP_SANCTIONS_RECONCILE, connection))
             {
                 command.CommandType = CommandType.StoredProcedure;
@@ -116,11 +121,24 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
                 int rows = command.ExecuteNonQuery();
 
-                _logger.DebugFormat(
+                logger.DebugFormat(
                     "{0}: executed. Rows={1}",
                     CONTEXT_RECONCILE,
                     rows);
             }
+        }
+
+        private void LogSqlException(SqlException ex)
+        {
+            SqlFaultMapping mapping = SqlExceptionFaultMapper.Map(ex, OPERATION_KEY_PREFIX_RECONCILE);
+
+            logger.ErrorFormat(
+                "{0}: SqlException. Key={1}, Details={2}",
+                CONTEXT_RECONCILE,
+                mapping.MessageKey,
+                mapping.Details);
+
+            logger.Error(CONTEXT_RECONCILE, ex);
         }
 
         private static int ReadIntervalSecondsFromConfigOrDefault()
@@ -163,26 +181,25 @@ namespace ServicesTheWeakestRival.Server.Infrastructure
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _isDisposed, 1) == 1)
+            bool shouldDispose = Interlocked.Exchange(ref isDisposed, 1) == 0;
+            if (shouldDispose)
             {
-                return;
-            }
-
-            try
-            {
-                var timer = _timer;
-                _timer = null;
-
-                if (timer != null)
+                try
                 {
-                    timer.Dispose();
-                }
+                    Timer current = timer;
+                    timer = null;
 
-                _logger.Info(CONTEXT_DISPOSE);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(CONTEXT_DISPOSE, ex);
+                    if (current != null)
+                    {
+                        current.Dispose();
+                    }
+
+                    logger.Info(CONTEXT_DISPOSE);
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(CONTEXT_DISPOSE, ex);
+                }
             }
         }
     }

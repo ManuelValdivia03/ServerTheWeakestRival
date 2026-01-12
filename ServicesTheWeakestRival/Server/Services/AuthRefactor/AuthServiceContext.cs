@@ -66,11 +66,9 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                     AuthServiceConstants.MESSAGE_INVALID_USER_ID);
             }
 
-            // Si ya tiene token activo, tus pruebas esperan "already logged in"
             if (TokenStore.ActiveTokenByUserId.TryGetValue(userId, out string activeTokenValue) &&
                 !string.IsNullOrWhiteSpace(activeTokenValue))
             {
-                // Limpieza defensiva: si el token activo ya no existe o expiró, lo removemos y dejamos reintentar
                 if (!TokenStore.Cache.TryGetValue(activeTokenValue, out AuthToken activeToken) || activeToken == null)
                 {
                     TokenStore.ActiveTokenByUserId.TryRemove(userId, out _);
