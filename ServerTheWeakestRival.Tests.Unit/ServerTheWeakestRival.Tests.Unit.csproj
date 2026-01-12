@@ -123,6 +123,7 @@
     <Compile Include="Infrastructure\FaultAssert.cs" />
     <Compile Include="Infrastructure\SqlExceptionFaultGuardTests.cs" />
     <Compile Include="Infrastructure\SqlExceptionFaultMapperTests.cs" />
+    <Compile Include="Infrastructure\TestAccountFactory.cs" />
     <Compile Include="Infrastructure\TestConfigBootstrapper.cs" />
     <Compile Include="Infrastructure\TokenStoreTestCleaner.cs" />
     <Compile Include="Infrastructure\TokenStoreTests.cs" />
@@ -151,6 +152,16 @@
     <Compile Include="Services\Auth\ResendCooldownPolicyTests.cs" />
     <Compile Include="Services\Chat\ChatOperationIntegrationTests.cs" />
     <Compile Include="Services\Chat\ChatRepositoryIntegrationTests.cs" />
+    <Compile Include="Services\Friends\AcceptFriendRequestIntegrationTests.cs" />
+    <Compile Include="Services\Friends\GetAccountsByIdsIntegrationTests.cs" />
+    <Compile Include="Services\Friends\GetFriendsPresenceIntegrationTests.cs" />
+    <Compile Include="Services\Friends\ListFriendsIntegrationTests.cs" />
+    <Compile Include="Services\Friends\PresenceHeartbeatIntegrationTests.cs" />
+    <Compile Include="Services\Friends\RejectFriendRequestIntegrationTests.cs" />
+    <Compile Include="Services\Friends\RemoveFriendIntegrationTests.cs" />
+    <Compile Include="Services\Friends\SearchAccountsIntegrationTests.cs" />
+    <Compile Include="Services\Friends\SendFriendRequestIntegrationTests.cs" />
+    <Compile Include="Services\Friends\SendLobbyInviteEmailTests.cs" />
     <Compile Include="Services\Report\ReportCoordinatorSubmitPlayerReportTests.cs" />
     <Compile Include="Services\Report\ReportRequestValidatorTests.cs" />
     <Compile Include="Services\Report\Integration\ReportService_SubmitPlayerReport_IntegrationTests.cs" />
