@@ -24,105 +24,121 @@
 
         public const string PARAMETER_EMAIL = "@Email";
 
-        public const string ERROR_CONFIG = "Error";
-        public const string ERROR_INVALID_REQUEST = "Error";
-        public const string ERROR_EMAIL_TAKEN = "Error";
-        public const string ERROR_TOO_SOON = "Error";
-        public const string ERROR_CODE_MISSING = "Error";
-        public const string ERROR_CODE_EXPIRED = "Error";
-        public const string ERROR_CODE_INVALID = "error";
-        public const string ERROR_DB_ERROR = "Error";
-        public const string ERROR_INVALID_CREDENTIALS = "Error";
-        public const string ERROR_SMTP = "Error";
-        public const string ERROR_EMAIL_NOT_FOUND = "Error";
-        public const string ERROR_WEAK_PASSWORD = "Error";
+        public const string CONFIG = "Error de configuración";
+        public const string INVALID_REQUEST = "Error de solicitud inválida";
+        public const string EMAIL_TAKEN = "Error: correo ya registrado";
+        public const string TOO_SOON = "Error: espera requerida";
+        public const string CODE_MISSING = "Error: código no encontrado";
+        public const string CODE_EXPIRED = "Error: código expirado";
+        public const string CODE_INVALID = "Error: código inválido";
+        public const string DB_ERROR = "Error de base de datos";
+        public const string INVALID_CREDENTIALS = "Error: credenciales inválidas";
+        public const string SMTP = "Error del servicio de correo";
+        public const string EMAIL_NOT_FOUND = "Error: correo no encontrado";
+        public const string WEAK_PASSWORD = "Error: contraseña débil";
 
-        public const string ERROR_ACCOUNT_INACTIVE = "Error";
-        public const string ERROR_ACCOUNT_SUSPENDED = "Error";
-        public const string ERROR_ACCOUNT_BANNED = "Error";
+        public const string ACCOUNT_INACTIVE = "Error: cuenta inactiva";
+        public const string ACCOUNT_SUSPENDED = "Error: cuenta suspendida";
+        public const string ACCOUNT_BANNED = "Error: cuenta baneada";
 
-        public const string ERROR_ALREADY_LOGGED_IN = "Error";
-        public const string MESSAGE_ALREADY_LOGGED_IN = "Auth.IssueToken.AlreadyLoggedIn";
+        public const string ALREADY_LOGGED_IN = "Error: ya hay una sesión iniciada";
+        public const string ALREADY_LOGGED_IN_MESSAGE_KEY = "Auth.IssueToken.AlreadyLoggedIn";
 
-        public const string ERROR_FORCED_LOGOUT = "Error";
-        public const string MESSAGE_FORCED_LOGOUT = "Session replaced by a new login.";
+        public const string FORCED_LOGOUT = "Error al forzar cierre de sesión";
+        public const string FORCED_LOGOUT_MESSAGE = "Tu sesión fue reemplazada por otro inicio de sesión.";
 
-        public const string MESSAGE_INVALID_REQUEST = "Invalid request.";
-        public const string MESSAGE_CONFIG_ERROR = "Auth.ResolveConnectionString.Configuration";
-        public const string MESSAGE_PAYLOAD_NULL = "Request payload is null.";
-        public const string MESSAGE_EMAIL_REQUIRED = "Email is required.";
-        public const string MESSAGE_VERIFICATION_EMAIL_FAILED = "Failed to send verification email. Please try again later.";
-        public const string MESSAGE_PASSWORD_RESET_EMAIL_FAILED = "Failed to send password reset email. Please try again later.";
-        public const string MESSAGE_INVALID_SESSION = "Invalid session.";
-        public const string MESSAGE_INVALID_CREDENTIALS = "Email or password is incorrect.";
-        public const string MESSAGE_ACCOUNT_NOT_ACTIVE = "Auth.Account.NotActive";
-        public const string MESSAGE_ACCOUNT_SUSPENDED = "Auth.Account.Suspended";
-        public const string MESSAGE_ACCOUNT_BANNED = "Auth.Account.Banned";
+        public const string INVALID_REQUEST_MESSAGE = "Solicitud inválida.";
+        public const string CONFIG_ERROR_MESSAGE = "Ocurrió un error de configuración.";
+        public const string PAYLOAD_NULL_MESSAGE = "La solicitud es nula.";
+        public const string EMAIL_REQUIRED_MESSAGE = "El correo es obligatorio.";
+        public const string VERIFICATION_EMAIL_FAILED_MESSAGE =
+            "No se pudo enviar el correo de verificación. Intenta de nuevo más tarde.";
+        public const string PASSWORD_RESET_EMAIL_FAILED_MESSAGE =
+            "No se pudo enviar el correo para restablecer la contraseña. Intenta de nuevo más tarde.";
+        public const string INVALID_SESSION_MESSAGE = "Sesión inválida.";
+        public const string INVALID_CREDENTIALS_MESSAGE = "Correo o contraseña incorrectos.";
+        public const string ACCOUNT_NOT_ACTIVE_MESSAGE = "La cuenta no está activa.";
+        public const string ACCOUNT_SUSPENDED_MESSAGE = "La cuenta está suspendida.";
+        public const string ACCOUNT_BANNED_MESSAGE = "La cuenta está baneada.";
 
-        public const string MESSAGE_UNEXPECTED_DB_LOGIN = "Unexpected database error while logging in.";
-        public const string MESSAGE_UNEXPECTED_DB_LOGOUT = "Unexpected database error while logging out.";
-        public const string MESSAGE_COMPLETE_REGISTER_REQUIRED_FIELDS = "Email, display name, password and code are required.";
+        public const string UNEXPECTED_DB_LOGIN_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al iniciar sesión.";
+        public const string UNEXPECTED_DB_LOGOUT_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al cerrar sesión.";
+        public const string COMPLETE_REGISTER_REQUIRED_FIELDS_MESSAGE =
+            "El correo, nombre visible, contraseña y código son obligatorios.";
 
-        public const string MESSAGE_VERIFICATION_CODE_EXPIRED = "Verification code expired. Request a new one.";
-        public const string MESSAGE_UNEXPECTED_DB_COMPLETE_REGISTER = "Unexpected database error while completing registration.";
-        public const string MESSAGE_ACCOUNT_NOT_CREATED = "Account was not created.";
+        public const string VERIFICATION_CODE_EXPIRED_MESSAGE =
+            "El código de verificación expiró. Solicita uno nuevo.";
+        public const string UNEXPECTED_DB_COMPLETE_REGISTER_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al completar el registro.";
+        public const string ACCOUNT_NOT_CREATED_MESSAGE = "No se pudo crear la cuenta.";
 
-        public const string MESSAGE_COMPLETE_RESET_REQUIRED_FIELDS = "Email, code and new password are required.";
-        public const string MESSAGE_RESET_CODE_EXPIRED = "Reset code expired. Request a new one.";
-        public const string MESSAGE_EMAIL_NOT_REGISTERED = "Auth.Email.NotRegistered";
-        public const string MESSAGE_UNEXPECTED_DB_COMPLETE_RESET = "Unexpected database error while completing password reset.";
+        public const string COMPLETE_RESET_REQUIRED_FIELDS_MESSAGE =
+            "El correo, el código y la nueva contraseña son obligatorios.";
+        public const string RESET_CODE_EXPIRED_MESSAGE =
+            "El código de restablecimiento expiró. Solicita uno nuevo.";
+        public const string EMAIL_NOT_REGISTERED_MESSAGE_KEY = "Auth.Email.NotRegistered";
+        public const string UNEXPECTED_DB_COMPLETE_RESET_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al completar el restablecimiento de contraseña.";
 
-        public const string MESSAGE_REGISTER_REQUIRED_FIELDS = "Email, display name and password are required.";
-        public const string MESSAGE_UNEXPECTED_DB_REGISTER = "Unexpected database error while registering.";
+        public const string REGISTER_REQUIRED_FIELDS_MESSAGE =
+            "El correo, nombre visible y contraseña son obligatorios.";
+        public const string UNEXPECTED_DB_REGISTER_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al registrar.";
 
-        public const string MESSAGE_PONG = "pong";
-        public const string MESSAGE_USER_ID_REQUIRED = "UserId is required.";
+        public const string PONG_MESSAGE = "pong";
+        public const string USER_ID_REQUIRED_MESSAGE = "El UserId es obligatorio.";
 
-        public const string MESSAGE_PROFILE_IMAGE_DB_ERROR = "Unexpected database error while reading profile image.";
+        public const string PROFILE_IMAGE_DB_ERROR_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al leer la imagen de perfil.";
 
-        public const string MESSAGE_PASSWORD_MIN_LENGTH_NOT_MET =
-            "Password does not meet the minimum length requirements ({0} characters).";
+        public const string PASSWORD_MIN_LENGTH_NOT_MET_MESSAGE =
+            "La contraseña no cumple con la longitud mínima requerida ({0} caracteres).";
 
-        public const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
-        public const string MESSAGE_UNEXPECTED_ERROR = "Auth.Unexpected";
+        public const string UNEXPECTED = "UNEXPECTED_ERROR";
+        public const string UNEXPECTED_ERROR_MESSAGE_KEY = "Auth.Unexpected";
 
+        public const string VERIFICATION_CODE_MISSING_MESSAGE =
+            "No hay un código pendiente. Solicita uno nuevo.";
+        public const string RESET_CODE_MISSING_MESSAGE =
+            "No hay un código de restablecimiento pendiente. Solicita uno nuevo.";
 
-        public const string MESSAGE_VERIFICATION_CODE_MISSING = "No pending code. Request a new one.";
-        public const string MESSAGE_RESET_CODE_MISSING = "No pending reset code. Request a new one.";
+        public const string EMAIL_TAKEN_MESSAGE_KEY = "Auth.Email.Taken";
+        public const string TOO_SOON_MESSAGE = "Espera antes de solicitar otro código.";
 
-        public const string MESSAGE_EMAIL_TAKEN = "Auth.Email.Taken";
-        public const string MESSAGE_TOO_SOON = "Please wait before requesting another code.";
+        public const string UNEXPECTED_DB_BEGIN_REGISTER_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al iniciar el registro.";
+        public const string UNEXPECTED_DB_BEGIN_RESET_MESSAGE =
+            "Ocurrió un error inesperado de base de datos al iniciar el restablecimiento de contraseña.";
+        public const string RESET_CODE_INVALID_MESSAGE = "El código de restablecimiento es inválido.";
+        public const string VERIFICATION_CODE_INVALID_MESSAGE = "El código de verificación es inválido.";
 
-        public const string MESSAGE_UNEXPECTED_DB_BEGIN_REGISTER = "Unexpected database error while starting registration.";
-        public const string MESSAGE_UNEXPECTED_DB_BEGIN_RESET = "Unexpected database error while starting password reset.";
-        public const string MESSAGE_RESET_CODE_INVALID = "Invalid reset code.";
-        public const string MESSAGE_VERIFICATION_CODE_INVALID = "Codigo de verificacion invalido.";
+        public const string GET_CONNECTION_CONTEXT = "AuthService.GetConnectionString";
+        public const string BEGIN_REGISTER_CONTEXT = "BeginRegister.EmailSender";
+        public const string COMPLETE_REGISTER_CONTEXT = "CompleteRegister.Tx";
+        public const string REGISTER_CONTEXT = "Register.Tx";
+        public const string LOGIN_CONTEXT = "Login.Db";
+        public const string LOGOUT_LEAVE_ALL_CONTEXT = "Logout.LeaveAllByUser";
+        public const string BEGIN_RESET_CONTEXT = "BeginPasswordReset.EmailSender";
+        public const string COMPLETE_RESET_CONTEXT = "CompletePasswordReset.Tx";
+        public const string GET_PROFILE_IMAGE_CONTEXT = "GetProfileImage.Db";
 
-        public const string CTX_GET_CONNECTION = "AuthService.GetConnectionString";
-        public const string CTX_BEGIN_REGISTER = "BeginRegister.EmailSender";
-        public const string CTX_COMPLETE_REGISTER = "CompleteRegister.Tx";
-        public const string CTX_REGISTER = "Register.Tx";
-        public const string CTX_LOGIN = "Login.Db";
-        public const string CTX_LOGOUT_LEAVE_ALL = "Logout.LeaveAllByUser";
-        public const string CTX_BEGIN_RESET = "BeginPasswordReset.EmailSender";
-        public const string CTX_COMPLETE_RESET = "CompletePasswordReset.Tx";
-        public const string CTX_GET_PROFILE_IMAGE = "GetProfileImage.Db";
+        public const string EMAIL_CODE_TTL_MINUTES_APPSETTING = "EmailCodeTtlMinutes";
+        public const string EMAIL_RESEND_COOLDOWN_SECONDS_APPSETTING = "EmailResendCooldownSeconds";
 
-        public const string APPSETTING_EMAIL_CODE_TTL_MINUTES = "EmailCodeTtlMinutes";
-        public const string APPSETTING_EMAIL_RESEND_COOLDOWN_SECONDS = "EmailResendCooldownSeconds";
-
-        public const string MESSAGE_INVALID_USER_ID = "Auth.IssueToken.InvalidUserId";
+        public const string INVALID_USER_ID_MESSAGE_KEY = "Auth.IssueToken.InvalidUserId";
 
         public const string TOKEN_GUID_FORMAT = "N";
         public const int SQL_TRUE = 1;
 
-        public const string KEY_PREFIX_BEGIN_REGISTER = "Auth.BeginRegister";
-        public const string KEY_PREFIX_BEGIN_RESET = "Auth.BeginPasswordReset";
-        public const string KEY_PREFIX_COMPLETE_REGISTER = "Auth.CompleteRegister";
-        public const string KEY_PREFIX_COMPLETE_RESET = "Auth.CompletePasswordReset";
-        public const string KEY_PREFIX_REGISTER = "Error al registrarse en base de datos";
-        public const string KEY_PREFIX_LOGIN = "Auth.Login";
-        public const string KEY_PREFIX_LOGOUT = "Auth.Logout";
-        public const string KEY_PREFIX_GET_PROFILE_IMAGE = "Auth.GetProfileImage";
+        public const string BEGIN_REGISTER_KEY_PREFIX = "Auth.BeginRegister";
+        public const string BEGIN_RESET_KEY_PREFIX = "Auth.BeginPasswordReset";
+        public const string COMPLETE_REGISTER_KEY_PREFIX = "Auth.CompleteRegister";
+        public const string COMPLETE_RESET_KEY_PREFIX = "Auth.CompletePasswordReset";
+        public const string REGISTER_KEY_PREFIX = "Error al registrarse en base de datos";
+        public const string LOGIN_KEY_PREFIX = "Auth.Login";
+        public const string LOGOUT_KEY_PREFIX = "Auth.Logout";
+        public const string GET_PROFILE_IMAGE_KEY_PREFIX = "Auth.GetProfileImage";
     }
 }
