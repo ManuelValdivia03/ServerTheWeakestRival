@@ -52,9 +52,9 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             {
                 SubmitPlayerReportResponse response = SqlExceptionFaultGuard.Execute(
                     operation: () => reportRepository.SubmitPlayerReport(reporterAccountId, request),
-                    operationKeyPrefix: ReportConstants.OperationKeyPrefix.SubmitPlayerReport,
-                    technicalErrorCode: ReportConstants.FaultCode.DbError,
-                    context: ReportConstants.Context.SqlSubmitPlayerReport,
+                    operationKeyPrefix: ReportConstants.OperationKeyPrefix.SUBMIT_PLAYER_REPORT,
+                    technicalErrorCode: ReportConstants.FaultCode.DB_ERROR,
+                    context: ReportConstants.Context.SQL_SUBMIT_PLAYER_REPORT,
                     technicalFaultFactory: ReportFaultFactory.CreateTechnicalFault);
 
                 sanctionHandler.HandleIfSanctionApplied(request, response);
@@ -67,31 +67,31 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             }
             catch (TimeoutException ex)
             {
-                Logger.Error(ReportConstants.Context.TimeoutSubmit, ex);
+                Logger.Error(ReportConstants.Context.TIMEOUT_SUBMIT, ex);
                 throw ReportFaultFactory.Create(
-                    ReportConstants.FaultCode.Timeout,
-                    ReportConstants.MessageKey.Timeout);
+                    ReportConstants.FaultCode.TIMEOUT,
+                    ReportConstants.MessageKey.TIMEOUT);
             }
             catch (CommunicationException ex)
             {
-                Logger.Error(ReportConstants.Context.CommunicationSubmit, ex);
+                Logger.Error(ReportConstants.Context.COMMUNICATION_SUBMIT, ex);
                 throw ReportFaultFactory.Create(
-                    ReportConstants.FaultCode.Communication,
-                    ReportConstants.MessageKey.Communication);
+                    ReportConstants.FaultCode.COMMUNICATION,
+                    ReportConstants.MessageKey.COMMUNICATION);
             }
             catch (ConfigurationErrorsException ex)
             {
-                Logger.Error(ReportConstants.Context.ConfigurationSubmit, ex);
+                Logger.Error(ReportConstants.Context.CONFIGURATION_SUBMIT, ex);
                 throw ReportFaultFactory.Create(
-                    ReportConstants.FaultCode.Configuration,
-                    ReportConstants.MessageKey.Configuration);
+                    ReportConstants.FaultCode.CONFIGURATION,
+                    ReportConstants.MessageKey.CONFIGURATION);
             }
             catch (Exception ex)
             {
-                Logger.Error(ReportConstants.Context.UnexpectedSubmit, ex);
+                Logger.Error(ReportConstants.Context.UNEXPECTED_SUBMIT, ex);
                 throw ReportFaultFactory.Create(
-                    ReportConstants.FaultCode.Unexpected,
-                    ReportConstants.MessageKey.Unexpected);
+                    ReportConstants.FaultCode.UNEXPECTED,
+                    ReportConstants.MessageKey.UNEXPECTED);
             }
         }
     }

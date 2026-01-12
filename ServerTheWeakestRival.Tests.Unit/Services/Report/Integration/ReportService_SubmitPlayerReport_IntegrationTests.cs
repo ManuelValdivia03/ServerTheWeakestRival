@@ -43,7 +43,7 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Reports
         private const int OUTSIDE_WINDOW_EXTRA_MINUTES = 1;
 
         private static readonly string SqlMessageKeyPrefix =
-            string.Concat(ReportConstants.OperationKeyPrefix.SubmitPlayerReport, ".Sql.");
+            string.Concat(ReportConstants.OperationKeyPrefix.SUBMIT_PLAYER_REPORT, ".Sql.");
 
         private static readonly object RegistrationSyncRoot = new object();
 
@@ -139,8 +139,8 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -165,8 +165,8 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -191,8 +191,8 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.InvalidReason,
-                ReportConstants.MessageKey.InvalidReason);
+                ReportConstants.FaultCode.INVALID_REASON,
+                ReportConstants.MessageKey.INVALID_REASON);
         }
 
         [TestMethod]
@@ -211,7 +211,7 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Reports
                 ReportedAccountId = reportedAccountId,
                 LobbyId = null,
                 ReasonCode = ReportReasonCode.Spam,
-                Comment = new string('a', ReportConstants.Sql.CommentMaxLength + extraChars)
+                Comment = new string('a', ReportConstants.Sql.COMMENT_MAX_LENGTH + extraChars)
             };
 
             FaultException<ServiceFault> fault =
@@ -219,8 +219,8 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.CommentTooLong,
-                ReportConstants.MessageKey.CommentTooLong);
+                ReportConstants.FaultCode.COMMENT_TOO_LONG,
+                ReportConstants.MessageKey.COMMENT_TOO_LONG);
         }
 
         [TestMethod]
@@ -239,8 +239,8 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.SelfReport,
-                ReportConstants.MessageKey.SelfReport);
+                ReportConstants.FaultCode.SELFREPORT,
+                ReportConstants.MessageKey.SELF_REPORT);
         }
 
         [TestMethod]
@@ -621,13 +621,13 @@ END
             var section = (ConnectionStringsSection)config.GetSection("connectionStrings");
 
             ConnectionStringSettings current =
-                section.ConnectionStrings[ReportConstants.Sql.MainConnectionStringName];
+                section.ConnectionStrings[ReportConstants.Sql.MAIN_CONNECTION_STRING_NAME];
 
             if (current == null)
             {
                 section.ConnectionStrings.Add(
                     new ConnectionStringSettings(
-                        ReportConstants.Sql.MainConnectionStringName,
+                        ReportConstants.Sql.MAIN_CONNECTION_STRING_NAME,
                         mainConnectionString,
                         SQL_PROVIDER_NAME));
             }
@@ -712,7 +712,7 @@ WHERE report_id = @ReportId;";
             Assert.IsNotNull(fault);
             Assert.IsNotNull(fault.Detail);
 
-            Assert.AreEqual(ReportConstants.FaultCode.DbError, fault.Detail.Code);
+            Assert.AreEqual(ReportConstants.FaultCode.DB_ERROR, fault.Detail.Code);
             Assert.IsFalse(string.IsNullOrWhiteSpace(fault.Detail.Message));
 
             bool hasPrefix = fault.Detail.Message.StartsWith(SqlMessageKeyPrefix, StringComparison.Ordinal);

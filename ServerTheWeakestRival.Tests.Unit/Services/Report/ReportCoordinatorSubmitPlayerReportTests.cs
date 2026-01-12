@@ -88,8 +88,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.Timeout,
-                ReportConstants.MessageKey.Timeout);
+                ReportConstants.FaultCode.TIMEOUT,
+                ReportConstants.MessageKey.TIMEOUT);
         }
 
         [TestMethod]
@@ -105,8 +105,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.Communication,
-                ReportConstants.MessageKey.Communication);
+                ReportConstants.FaultCode.COMMUNICATION,
+                ReportConstants.MessageKey.COMMUNICATION);
         }
 
         [TestMethod]
@@ -122,8 +122,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.Configuration,
-                ReportConstants.MessageKey.Configuration);
+                ReportConstants.FaultCode.CONFIGURATION,
+                ReportConstants.MessageKey.CONFIGURATION);
         }
 
         [TestMethod]
@@ -139,16 +139,16 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.Unexpected,
-                ReportConstants.MessageKey.Unexpected);
+                ReportConstants.FaultCode.UNEXPECTED,
+                ReportConstants.MessageKey.UNEXPECTED);
         }
 
         [TestMethod]
         public void SubmitPlayerReport_WhenRepositoryThrowsServiceFault_RethrowsSameFault()
         {
             FaultException<ServiceFault> expected = ReportFaultFactory.Create(
-                ReportConstants.FaultCode.DbError,
-                ReportConstants.MessageKey.Unexpected);
+                ReportConstants.FaultCode.DB_ERROR,
+                ReportConstants.MessageKey.UNEXPECTED);
 
             var fakeRepository = FakeRepository.Throwing(expected);
 
@@ -186,8 +186,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
         public void SubmitPlayerReport_WhenValidateRequestThrowsFault_Rethrows_AndDoesNotCallAuthRepoOrSanction()
         {
             FaultException<ServiceFault> expected = ReportFaultFactory.Create(
-                ReportConstants.FaultCode.RequestNull,
-                ReportConstants.MessageKey.RequestNull);
+                ReportConstants.FaultCode.REQUEST_NULL,
+                ReportConstants.MessageKey.REQUEST_NULL);
 
             var fakeValidator = FakeValidator.ThrowingOnValidateRequest(expected);
             var fakeAuthenticator = new FakeAuthenticator(REPORTER_ACCOUNT_ID);
@@ -214,8 +214,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
         public void SubmitPlayerReport_WhenAuthenticatorThrowsFault_Rethrows_AndDoesNotCallRepoOrSanction()
         {
             FaultException<ServiceFault> expected = ReportFaultFactory.Create(
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
 
             var fakeValidator = new FakeValidator();
             var fakeAuthenticator = FakeAuthenticator.Throwing(expected);
@@ -244,8 +244,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
         public void SubmitPlayerReport_WhenValidateReporterAndTargetThrowsFault_Rethrows_AndDoesNotCallRepoOrSanction()
         {
             FaultException<ServiceFault> expected = ReportFaultFactory.Create(
-                ReportConstants.FaultCode.SelfReport,
-                ReportConstants.MessageKey.SelfReport);
+                ReportConstants.FaultCode.SELFREPORT,
+                ReportConstants.MessageKey.SELF_REPORT);
 
             var fakeValidator = FakeValidator.ThrowingOnValidateReporterAndTarget(expected);
             var fakeAuthenticator = new FakeAuthenticator(REPORTER_ACCOUNT_ID);

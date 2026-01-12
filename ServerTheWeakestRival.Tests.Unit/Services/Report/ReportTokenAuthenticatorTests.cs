@@ -46,8 +46,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -58,8 +58,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -70,8 +70,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -84,8 +84,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -106,8 +106,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -122,8 +122,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
 
             Assert.IsFalse(TokenStore.Cache.ContainsKey(VALID_TOKEN));
         }
@@ -139,8 +139,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
         [TestMethod]
@@ -153,8 +153,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.TokenInvalid,
-                ReportConstants.MessageKey.TokenInvalid);
+                ReportConstants.FaultCode.TOKEN_INVALID,
+                ReportConstants.MessageKey.TOKEN_INVALID);
         }
 
 

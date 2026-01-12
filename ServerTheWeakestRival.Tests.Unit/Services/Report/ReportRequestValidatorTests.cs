@@ -29,8 +29,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.RequestNull,
-                ReportConstants.MessageKey.RequestNull);
+                ReportConstants.FaultCode.REQUEST_NULL,
+                ReportConstants.MessageKey.REQUEST_NULL);
         }
 
         [TestMethod]
@@ -50,8 +50,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.InvalidReason,
-                ReportConstants.MessageKey.InvalidReason);
+                ReportConstants.FaultCode.INVALID_REASON,
+                ReportConstants.MessageKey.INVALID_REASON);
         }
 
         [TestMethod]
@@ -65,7 +65,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
                 ReportedAccountId = VALID_REPORTED_ID,
                 LobbyId = null,
                 ReasonCode = ReportReasonCode.Harassment,
-                Comment = new string('a', ReportConstants.Sql.CommentMaxLength + extraChars)
+                Comment = new string('a', ReportConstants.Sql.COMMENT_MAX_LENGTH + extraChars)
             };
 
             FaultException<ServiceFault> fault =
@@ -73,8 +73,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.CommentTooLong,
-                ReportConstants.MessageKey.CommentTooLong);
+                ReportConstants.FaultCode.COMMENT_TOO_LONG,
+                ReportConstants.MessageKey.COMMENT_TOO_LONG);
         }
 
         [TestMethod]
@@ -104,8 +104,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.InvalidTarget,
-                ReportConstants.MessageKey.InvalidTarget);
+                ReportConstants.FaultCode.INVALID_TARGET,
+                ReportConstants.MessageKey.INVALID_TARGET);
         }
 
         [TestMethod]
@@ -118,8 +118,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.SelfReport,
-                ReportConstants.MessageKey.SelfReport);
+                ReportConstants.FaultCode.SELFREPORT,
+                ReportConstants.MessageKey.SELF_REPORT);
         }
 
         [TestMethod]
@@ -139,7 +139,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
                 ReportedAccountId = VALID_REPORTED_ID,
                 LobbyId = null,
                 ReasonCode = ReportReasonCode.Other,
-                Comment = new string('a', ReportConstants.Sql.CommentMaxLength)
+                Comment = new string('a', ReportConstants.Sql.COMMENT_MAX_LENGTH)
             };
 
             validator.ValidateSubmitPlayerReportRequest(request);
@@ -203,8 +203,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Reports
 
             FaultAssert.AssertFault(
                 fault,
-                ReportConstants.FaultCode.InvalidTarget,
-                ReportConstants.MessageKey.InvalidTarget);
+                ReportConstants.FaultCode.INVALID_TARGET,
+                ReportConstants.MessageKey.INVALID_TARGET);
         }
 
         [TestMethod]

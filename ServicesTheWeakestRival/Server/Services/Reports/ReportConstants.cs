@@ -4,69 +4,69 @@
     {
         internal static class Context
         {
-            public const string SubmitPlayerReport = "ReportCoordinator.SubmitPlayerReport";
-            public const string SqlSubmitPlayerReport = "ReportRepository.SubmitPlayerReport";
-            public const string TokenAuth = "ReportTokenAuthenticator.AuthenticateOrThrow";
-            public const string UnexpectedSubmit = "ReportCoordinator.SubmitPlayerReport.Unexpected";
-            public const string TimeoutSubmit = "ReportCoordinator.SubmitPlayerReport.Timeout";
-            public const string CommunicationSubmit = "ReportCoordinator.SubmitPlayerReport.Communication";
-            public const string ConfigurationSubmit = "ReportCoordinator.SubmitPlayerReport.Configuration";
+            public const string SUBMIT_PLAYER_REPORT = "ReportCoordinator.SubmitPlayerReport";
+            public const string SQL_SUBMIT_PLAYER_REPORT = "ReportRepository.SubmitPlayerReport";
+            public const string TOKEN_AUTH = "ReportTokenAuthenticator.AuthenticateOrThrow";
+            public const string UNEXPECTED_SUBMIT = "ReportCoordinator.SubmitPlayerReport.Unexpected";
+            public const string TIMEOUT_SUBMIT = "ReportCoordinator.SubmitPlayerReport.Timeout";
+            public const string COMMUNICATION_SUBMIT = "ReportCoordinator.SubmitPlayerReport.Communication";
+            public const string CONFIGURATION_SUBMIT = "ReportCoordinator.SubmitPlayerReport.Configuration";
         }
 
         public static class OperationKeyPrefix
         {
-            public const string SubmitPlayerReport = "Report.SubmitPlayerReport";
+            public const string SUBMIT_PLAYER_REPORT = "Report.SubmitPlayerReport";
         }
 
         public static class FaultCode
         {
-            public const string RequestNull = "Solicitud nula";
-            public const string TokenInvalid = "Token inválido";
-            public const string InvalidTarget = "Objetivo inválido";
-            public const string SelfReport = "Auto-reporte no permitido";
-            public const string InvalidReason = "Motivo inválido";
-            public const string CommentTooLong = "Comentario demasiado largo";
+            public const string REQUEST_NULL = "Solicitud nula";
+            public const string TOKEN_INVALID = "Token inválido";
+            public const string INVALID_TARGET = "Objetivo inválido";
+            public const string SELFREPORT = "Auto-reporte no permitido";
+            public const string INVALID_REASON = "Motivo inválido";
+            public const string COMMENT_TOO_LONG = "Comentario demasiado largo";
 
-            public const string DbError = "Error de base de datos";
-            public const string Timeout = "Tiempo de espera agotado";
-            public const string Communication = "Error de comunicación";
-            public const string Configuration = "Error de configuración";
-            public const string Unexpected = "Error inesperado";
+            public const string DB_ERROR = "Error de base de datos";
+            public const string TIMEOUT = "Tiempo de espera agotado";
+            public const string COMMUNICATION = "Error de comunicación";
+            public const string CONFIGURATION = "Error de configuración";
+            public const string UNEXPECTED = "Error inesperado";
         }
 
         public static class MessageKey
         {
-            public const string RequestNull = "Report.SubmitPlayerReport.Validation.RequestNull";
-            public const string TokenInvalid = "Report.SubmitPlayerReport.Validation.TokenInvalid";
-            public const string InvalidTarget = "Report.SubmitPlayerReport.Validation.InvalidTarget";
-            public const string SelfReport = "Report.SubmitPlayerReport.Validation.SelfReport";
-            public const string InvalidReason = "Report.SubmitPlayerReport.Validation.InvalidReason";
-            public const string CommentTooLong = "Report.SubmitPlayerReport.Validation.CommentTooLong";
+            public const string REQUEST_NULL = "Report.SubmitPlayerReport.Validation.RequestNull";
+            public const string TOKEN_INVALID = "Report.SubmitPlayerReport.Validation.TokenInvalid";
+            public const string INVALID_TARGET = "Report.SubmitPlayerReport.Validation.InvalidTarget";
+            public const string SELF_REPORT = "Report.SubmitPlayerReport.Validation.SelfReport";
+            public const string INVALID_REASON = "Report.SubmitPlayerReport.Validation.InvalidReason";
+            public const string COMMENT_TOO_LONG = "Report.SubmitPlayerReport.Validation.CommentTooLong";
 
-            public const string Timeout = "Report.SubmitPlayerReport.Timeout";
-            public const string Communication = "Report.SubmitPlayerReport.Communication";
-            public const string Configuration = "Report.SubmitPlayerReport.Configuration";
-            public const string Unexpected = "Report.SubmitPlayerReport.Unexpected";
+            public const string TIMEOUT = "Report.SubmitPlayerReport.Timeout";
+            public const string COMMUNICATION = "Report.SubmitPlayerReport.Communication";
+            public const string CONFIGURATION = "Report.SubmitPlayerReport.Configuration";
+            public const string UNEXPECTED = "Report.SubmitPlayerReport.Unexpected";
         }
 
         public static class Sql
         {
-            public const string MainConnectionStringName = "TheWeakestRivalDb";
+            public const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-            public const string SpSubmitPlayerReport = "dbo.sp_submit_player_report";
+            public const string SP_SUBMIT_PLAYER_REPORT = "dbo.sp_submit_player_report";
 
-            public const string ParamReporterAccountId = "@reporter_account_id";
-            public const string ParamReportedAccountId = "@reported_account_id";
-            public const string ParamLobbyId = "@lobby_id";
-            public const string ParamReasonCode = "@reason_code";
-            public const string ParamComment = "@comment";
+            public const string PARAM_REPORTER_ACCOUNT_ID = "@reporter_account_id";
+            public const string PARAM_REPORTED_ACCOUNT_ID = "@reported_account_id";
+            public const string PARAM_LOBBY_ID = "@lobby_id";
+            public const string PARAM_REASON_CODE = "@reason_code";
+            public const string PARAM_COMMENT = "@comment";
 
-            public const string OutReportId = "@report_id";
-            public const string OutSanctionApplied = "@sanction_applied";
-            public const string OutSanctionType = "@sanction_type";
-            public const string OutSanctionEndAtUtc = "@sanction_end_at_utc";
+            public const string OUT_REPORT_ID = "@report_id";
+            public const string OUT_SANCTION_APPLIED = "@sanction_applied";
+            public const string OUT_SANCTION_TYPE = "@sanction_type";
+            public const string OUT_SANCTION_END_AT_UTC = "@sanction_end_at_utc";
 
-            public const int CommentMaxLength = 500;
+            public const int COMMENT_MAX_LENGTH = 500;
         }
     }
 }

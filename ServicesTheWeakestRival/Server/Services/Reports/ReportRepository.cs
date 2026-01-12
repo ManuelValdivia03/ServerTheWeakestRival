@@ -11,38 +11,38 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
         public SubmitPlayerReportResponse SubmitPlayerReport(int reporterAccountId, SubmitPlayerReportRequest request)
         {
             string connectionString =
-                ConfigurationManager.ConnectionStrings[ReportConstants.Sql.MainConnectionStringName].ConnectionString;
+                ConfigurationManager.ConnectionStrings[ReportConstants.Sql.MAIN_CONNECTION_STRING_NAME].ConnectionString;
 
             using (var connection = new SqlConnection(connectionString))
-            using (var command = new SqlCommand(ReportConstants.Sql.SpSubmitPlayerReport, connection))
+            using (var command = new SqlCommand(ReportConstants.Sql.SP_SUBMIT_PLAYER_REPORT, connection))
             {
                 command.CommandType = CommandType.StoredProcedure;
 
-                command.Parameters.Add(ReportConstants.Sql.ParamReporterAccountId, SqlDbType.Int).Value = reporterAccountId;
-                command.Parameters.Add(ReportConstants.Sql.ParamReportedAccountId, SqlDbType.Int).Value = request.ReportedAccountId;
+                command.Parameters.Add(ReportConstants.Sql.PARAM_REPORTER_ACCOUNT_ID, SqlDbType.Int).Value = reporterAccountId;
+                command.Parameters.Add(ReportConstants.Sql.PARAM_REPORTED_ACCOUNT_ID, SqlDbType.Int).Value = request.ReportedAccountId;
 
-                var lobbyIdParam = command.Parameters.Add(ReportConstants.Sql.ParamLobbyId, SqlDbType.UniqueIdentifier);
+                var lobbyIdParam = command.Parameters.Add(ReportConstants.Sql.PARAM_LOBBY_ID, SqlDbType.UniqueIdentifier);
                 lobbyIdParam.Value = request.LobbyId.HasValue ? (object)request.LobbyId.Value : DBNull.Value;
 
-                command.Parameters.Add(ReportConstants.Sql.ParamReasonCode, SqlDbType.TinyInt).Value = (byte)request.ReasonCode;
+                command.Parameters.Add(ReportConstants.Sql.PARAM_REASON_CODE, SqlDbType.TinyInt).Value = (byte)request.ReasonCode;
 
                 var commentParam = command.Parameters.Add(
-                    ReportConstants.Sql.ParamComment,
+                    ReportConstants.Sql.PARAM_COMMENT,
                     SqlDbType.NVarChar,
-                    ReportConstants.Sql.CommentMaxLength);
+                    ReportConstants.Sql.COMMENT_MAX_LENGTH);
 
                 commentParam.Value = string.IsNullOrWhiteSpace(request.Comment) ? (object)DBNull.Value : request.Comment;
 
-                var outReportId = command.Parameters.Add(ReportConstants.Sql.OutReportId, SqlDbType.BigInt);
+                var outReportId = command.Parameters.Add(ReportConstants.Sql.OUT_REPORT_ID, SqlDbType.BigInt);
                 outReportId.Direction = ParameterDirection.Output;
 
-                var outSanctionApplied = command.Parameters.Add(ReportConstants.Sql.OutSanctionApplied, SqlDbType.Bit);
+                var outSanctionApplied = command.Parameters.Add(ReportConstants.Sql.OUT_SANCTION_APPLIED, SqlDbType.Bit);
                 outSanctionApplied.Direction = ParameterDirection.Output;
 
-                var outSanctionType = command.Parameters.Add(ReportConstants.Sql.OutSanctionType, SqlDbType.TinyInt);
+                var outSanctionType = command.Parameters.Add(ReportConstants.Sql.OUT_SANCTION_TYPE, SqlDbType.TinyInt);
                 outSanctionType.Direction = ParameterDirection.Output;
 
-                var outSanctionEndAtUtc = command.Parameters.Add(ReportConstants.Sql.OutSanctionEndAtUtc, SqlDbType.DateTime2);
+                var outSanctionEndAtUtc = command.Parameters.Add(ReportConstants.Sql.OUT_SANCTION_END_AT_UTC, SqlDbType.DateTime2);
                 outSanctionEndAtUtc.Direction = ParameterDirection.Output;
 
                 connection.Open();
