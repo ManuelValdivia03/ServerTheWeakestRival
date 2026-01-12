@@ -14,14 +14,14 @@
 
         public const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        public const string ERROR_NOT_FOUND = "NOT_FOUND";
-        public const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
-        public const string ERROR_VALIDATION_ERROR = "VALIDATION_ERROR";
-        public const string ERROR_UNAUTHORIZED = "UNAUTHORIZED";
-        public const string ERROR_EMAIL_TAKEN = "EMAIL_TAKEN";
+        public const string ERROR_NOT_FOUND = "Error";
+        public const string ERROR_INVALID_REQUEST = "Error";
+        public const string ERROR_VALIDATION_ERROR = "Error";
+        public const string ERROR_UNAUTHORIZED = "Error";
+        public const string ERROR_EMAIL_TAKEN = "Error";
 
-        public const string ERROR_DB = "DB_ERROR";
-        public const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
+        public const string ERROR_DB = "Error";
+        public const string ERROR_UNEXPECTED = "Error";
 
         public const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
@@ -62,5 +62,7 @@
         public const string CTX_JOIN_BY_CODE = "LobbyService.JoinByCode";
         public const string CTX_START_LOBBY_MATCH = "LobbyService.StartLobbyMatch";
         public const string CTX_UPDATE_AVATAR = "LobbyService.UpdateAvatar";
+        internal const string CTX_SEND_CHAT_MESSAGE = "LobbyService.SendChatMessage";
+
     }
 }

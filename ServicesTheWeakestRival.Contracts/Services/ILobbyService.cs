@@ -28,8 +28,9 @@ namespace ServicesTheWeakestRival.Contracts.Services
         [FaultContract(typeof(ServiceFault))]
         ListLobbiesResponse ListLobbies(ListLobbiesRequest request);
 
-        [OperationContract(IsOneWay = true)]
-        void SendChatMessage(SendLobbyMessageRequest request);
+        [OperationContract]
+        [FaultContract(typeof(ServiceFault))]
+        BasicResponse SendChatMessage(SendLobbyMessageRequest request);
 
         [OperationContract]
         [FaultContract(typeof(ServiceFault))]

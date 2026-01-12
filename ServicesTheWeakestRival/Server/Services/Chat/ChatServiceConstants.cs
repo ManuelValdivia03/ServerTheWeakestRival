@@ -26,15 +26,15 @@
 
         public const string DEFAULT_USER_PREFIX = "User";
 
-        public const string ERROR_CONFIG = "CONFIG_ERROR";
-        public const string ERROR_UNAUTHORIZED = "UNAUTHORIZED";
-        public const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
-        public const string ERROR_VALIDATION = "VALIDATION_ERROR";
-        public const string ERROR_DB = "DB_ERROR";
-        public const string ERROR_TIMEOUT = "TIMEOUT";
-        public const string ERROR_CANCELLED = "CANCELLED";
-        public const string ERROR_INVALID_OPERATION = "INVALID_OPERATION";
-        public const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
+        public const string ERROR_CONFIG = "Error";
+        public const string ERROR_UNAUTHORIZED = "Error";
+        public const string ERROR_INVALID_REQUEST = "Error";
+        public const string ERROR_VALIDATION = "Error";
+        public const string ERROR_DB = "Error";
+        public const string ERROR_TIMEOUT = "Error";
+        public const string ERROR_CANCELLED = "Error";
+        public const string ERROR_INVALID_OPERATION = "Error";
+        public const string ERROR_UNEXPECTED = "Error";
 
         public const string MESSAGE_CONFIG_MISSING = "Missing connection string 'TheWeakestRivalDb'.";
         public const string MESSAGE_TOKEN_REQUIRED = "Auth token is required.";

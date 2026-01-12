@@ -139,44 +139,71 @@ namespace ServicesTheWeakestRival.Server.Services
             };
         }
 
-        public void SendChatMessage(SendLobbyMessageRequest request)
+        public BasicResponse SendChatMessage(SendLobbyMessageRequest request)
         {
             if (request == null
                 || request.LobbyId == Guid.Empty
                 || string.IsNullOrWhiteSpace(request.Token))
             {
                 Logger.Debug("SendChatMessage: invalid request (null, empty LobbyId or token).");
-                return;
+                return new BasicResponse
+                {
+                    IsSuccess = false
+                };
             }
 
             if (!TokenStore.TryGetUserId(request.Token, out int userId))
             {
                 Logger.WarnFormat("SendChatMessage: invalid token. LobbyId={0}", request.LobbyId);
-                return;
+                return new BasicResponse
+                {
+                    IsSuccess = false
+                };
             }
 
-            EnsureInitialized();
-
-            callbackHub.TryRefreshLobbyCallbackRegistry(userId);
-
-            string senderName = lobbyRepository.GetUserDisplayName(userId);
-
-            var chatMessage = new ChatMessage
+            try
             {
-                FromPlayerId = Guid.Empty,
-                FromPlayerName = senderName,
-                Message = request.Message ?? string.Empty,
-                SentAtUtc = DateTime.UtcNow
-            };
+                EnsureInitialized();
 
-            Logger.InfoFormat(
-                "SendChatMessage: LobbyId={0}, UserId={1}, SenderName={2}",
-                request.LobbyId,
-                userId,
-                senderName);
+                callbackHub.TryRefreshLobbyCallbackRegistry(userId);
 
-            callbackHub.Broadcast(request.LobbyId, cb => cb.OnChatMessageReceived(chatMessage));
+                string senderName = lobbyRepository.GetUserDisplayName(userId);
+
+                var chatMessage = new ChatMessage
+                {
+                    FromPlayerId = Guid.Empty,
+                    FromPlayerName = senderName,
+                    Message = request.Message ?? string.Empty,
+                    SentAtUtc = DateTime.UtcNow
+                };
+
+                Logger.InfoFormat(
+                    "SendChatMessage: LobbyId={0}, UserId={1}, SenderName={2}",
+                    request.LobbyId,
+                    userId,
+                    senderName);
+
+                callbackHub.Broadcast(request.LobbyId, cb => cb.OnChatMessageReceived(chatMessage));
+
+                return new BasicResponse
+                {
+                    IsSuccess = true
+                };
+            }
+            catch (FaultException<ServiceFault>)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw LobbyServiceContext.ThrowTechnicalFault(
+                    LobbyServiceConstants.ERROR_UNEXPECTED,
+                    LobbyServiceConstants.MESSAGE_UNEXPECTED_ERROR,
+                    LobbyServiceConstants.CTX_SEND_CHAT_MESSAGE,
+                    ex);
+            }
         }
+
 
         public UpdateAccountResponse GetMyProfile(string token)
         {

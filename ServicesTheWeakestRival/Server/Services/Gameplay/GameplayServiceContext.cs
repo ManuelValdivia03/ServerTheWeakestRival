@@ -18,16 +18,16 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
         internal const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        internal const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
-        internal const string ERROR_DB = "DB_ERROR";
-        internal const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
-        internal const string ERROR_MATCH_NOT_FOUND = "MATCH_NOT_FOUND";
-        internal const string ERROR_NOT_PLAYER_TURN = "NOT_PLAYER_TURN";
-        internal const string ERROR_DUEL_NOT_ACTIVE = "DUEL_NOT_ACTIVE";
-        internal const string ERROR_NOT_WEAKEST_RIVAL = "NOT_WEAKEST_RIVAL";
-        internal const string ERROR_INVALID_DUEL_TARGET = "INVALID_DUEL_TARGET";
-        internal const string ERROR_MATCH_ALREADY_STARTED = "MATCH_ALREADY_STARTED";
-        internal const string ERROR_NO_QUESTIONS = "NO_QUESTIONS";
+        internal const string ERROR_INVALID_REQUEST = "Error";
+        internal const string ERROR_DB = "Error";
+        internal const string ERROR_UNEXPECTED = "Error";
+        internal const string ERROR_MATCH_NOT_FOUND = "Error";
+        internal const string ERROR_NOT_PLAYER_TURN = "Error";
+        internal const string ERROR_DUEL_NOT_ACTIVE = "Error";
+        internal const string ERROR_NOT_WEAKEST_RIVAL = "Error";
+        internal const string ERROR_INVALID_DUEL_TARGET = "Error";
+        internal const string ERROR_MATCH_ALREADY_STARTED = "Error";
+        internal const string ERROR_NO_QUESTIONS = "Error";
 
         internal const string FALLBACK_LOCALE_EN_US = "en-US";
 

@@ -29,17 +29,17 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
         private const int EXECUTE_DB_ACTION_RESULT = 0;
 
-        internal const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
-        internal const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
-        internal const string ERROR_RACE = "FR_RACE";
-        internal const string ERROR_DB = "DB_ERROR";
-        internal const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
-        internal const string ERROR_FR_SELF = "FR_SELF";
-        internal const string ERROR_FR_ALREADY = "FR_ALREADY";
-        internal const string ERROR_FR_NOT_FOUND = "FR_NOT_FOUND";
-        internal const string ERROR_FR_NOT_PENDING = "FR_NOT_PENDING";
-        internal const string ERROR_FR_FORBIDDEN = "FR_FORBIDDEN";
-        internal const string ERROR_FORBIDDEN = "FORBIDDEN";
+        internal const string ERROR_INVALID_REQUEST = "Error";
+        internal const string ERROR_INVALID_REQUEST_MESSAGE = "Error";
+        internal const string ERROR_RACE = "Error";
+        internal const string ERROR_DB = "Error";
+        internal const string ERROR_UNEXPECTED = "Error";
+        internal const string ERROR_FR_SELF = "Error";
+        internal const string ERROR_FR_ALREADY = "Error";
+        internal const string ERROR_FR_NOT_FOUND = "Error";
+        internal const string ERROR_FR_NOT_PENDING = "Error";
+        internal const string ERROR_FR_FORBIDDEN = "Error";
+        internal const string ERROR_FORBIDDEN = "Error";
 
         internal const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";

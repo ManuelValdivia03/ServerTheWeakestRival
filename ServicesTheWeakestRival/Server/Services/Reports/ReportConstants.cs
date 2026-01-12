@@ -20,18 +20,18 @@
 
         public static class FaultCode
         {
-            public const string RequestNull = "REPORT_REQUEST_NULL";
-            public const string TokenInvalid = "REPORT_TOKEN_INVALID";
-            public const string InvalidTarget = "REPORT_INVALID_TARGET";
-            public const string SelfReport = "REPORT_SELF";
-            public const string InvalidReason = "REPORT_INVALID_REASON";
-            public const string CommentTooLong = "REPORT_COMMENT_TOO_LONG";
+            public const string RequestNull = "Error";
+            public const string TokenInvalid = "Error";
+            public const string InvalidTarget = "Error";
+            public const string SelfReport = "Error";
+            public const string InvalidReason = "Error";
+            public const string CommentTooLong = "Error";
 
-            public const string DbError = "REPORT_DB_ERROR";
-            public const string Timeout = "REPORT_TIMEOUT";
-            public const string Communication = "REPORT_COMMUNICATION_ERROR";
-            public const string Configuration = "REPORT_CONFIGURATION_ERROR";
-            public const string Unexpected = "REPORT_UNEXPECTED";
+            public const string DbError = "Error";
+            public const string Timeout = "Error";
+            public const string Communication = "Error";
+            public const string Configuration = "Error";
+            public const string Unexpected = "Error";
         }
 
         public static class MessageKey

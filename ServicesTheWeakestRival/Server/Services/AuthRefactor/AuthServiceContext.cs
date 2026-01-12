@@ -5,6 +5,7 @@ using ServicesTheWeakestRival.Server.Services;
 using System;
 using System.Configuration;
 using System.ServiceModel;
+using System.Data.SqlClient;
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
@@ -167,7 +168,44 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             string context,
             System.Data.SqlClient.SqlException ex)
         {
-            return ThrowTechnicalFault(technicalErrorCode, messageKey, context, ex);
+            // Provide a user-friendly message while keeping SQL diagnostics in Details
+            string userMessage = "No se pudo conectar con la base de datos. Intenta de nuevo más tarde.";
+
+            string safeContext = context ?? string.Empty;
+
+            Logger.Error(safeContext, ex);
+
+            var fault = new ServiceFault
+            {
+                Code = technicalErrorCode ?? string.Empty,
+                Message = userMessage,
+                Details = BuildSqlDetails(safeContext, messageKey, ex)
+            };
+
+            return new FaultException<ServiceFault>(fault, new FaultReason(fault.Message));
+        }
+
+        private static string BuildSqlDetails(string context, string messageKey, SqlException ex)
+        {
+            try
+            {
+                var details = string.IsNullOrWhiteSpace(context) ? string.Empty : context + " | ";
+
+                details += "MessageKey=" + (messageKey ?? string.Empty) + "; ";
+                details += "SqlNumber=" + ex.Number + "; ";
+                details += "State=" + ex.State + "; ";
+                details += "Class=" + ex.Class + "; ";
+                details += "Procedure=" + (ex.Procedure ?? string.Empty) + "; ";
+                details += "Line=" + ex.LineNumber + "; ";
+                details += "SqlMessage=" + (ex.Message ?? string.Empty);
+
+                return details;
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("BuildSqlDetails failed.", e);
+                return context ?? string.Empty;
+            }
         }
 
         private static AuthToken CreateNewToken(int userId)
