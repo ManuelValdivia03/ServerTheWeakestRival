@@ -121,6 +121,7 @@
     <Compile Include="Infrastructure\DbTestCleaner.cs" />
     <Compile Include="Infrastructure\DbTestConfig.cs" />
     <Compile Include="Infrastructure\FaultAssert.cs" />
+    <Compile Include="Infrastructure\OnlineUserRegistryTestCleaner.cs" />
     <Compile Include="Infrastructure\SqlExceptionFaultGuardTests.cs" />
     <Compile Include="Infrastructure\SqlExceptionFaultMapperTests.cs" />
     <Compile Include="Infrastructure\TestAccountFactory.cs" />

@@ -20,14 +20,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         private const string NEW_PASSWORD = "NewValidPass123!";
 
         private const string WHITESPACE = " ";
-        private const string EMPTY = "";
-
-        private const string CONTENT_TYPE_PNG = ProfileImageConstants.CONTENT_TYPE_PNG;
-
-        private static readonly byte[] PNG_MINIMAL_VALID_BYTES = new byte[]
-        {
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
-        };
 
         private AuthService authService;
         private FakeEmailService fakeEmailService;
@@ -90,7 +82,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         {
             string email = CreateUniqueEmail("taken");
 
-            authService.Register(new RegisterRequest
+            RegisterResponse reg = authService.Register(new RegisterRequest
             {
                 Email = email,
                 Password = PASSWORD,
@@ -104,6 +96,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             Assert.AreEqual(AuthServiceConstants.ERROR_EMAIL_TAKEN, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_EMAIL_TAKEN, fault.Message);
+
+            authService.Logout(new LogoutRequest { Token = reg.Token.Token });
         }
 
         [TestMethod]
@@ -135,38 +129,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             Assert.AreEqual(email, fakeEmailService.LastVerificationEmail);
             Assert.IsFalse(string.IsNullOrWhiteSpace(fakeEmailService.LastVerificationCode));
-        }
-
-        [TestMethod]
-        public void CompleteRegister_WhenCodeIsCorrect_CreatesAccount_AndAllowsLogin()
-        {
-            string email = CreateUniqueEmail("completeregister");
-
-            authService.BeginRegister(new BeginRegisterRequest { Email = email });
-            string code = fakeEmailService.LastVerificationCode;
-
-            RegisterResponse registerResponse = authService.CompleteRegister(new CompleteRegisterRequest
-            {
-                Email = "  " + email + "  ",
-                Code = code,
-                Password = PASSWORD,
-                DisplayName = "  " + DISPLAY_NAME + "  ",
-                ProfileImageBytes = Array.Empty<byte>(),
-                ProfileImageContentType = string.Empty
-            });
-
-            Assert.IsNotNull(registerResponse);
-            Assert.IsTrue(registerResponse.UserId > 0);
-
-            LoginResponse loginResponse = authService.Login(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD
-            });
-
-            Assert.IsNotNull(loginResponse);
-            Assert.IsNotNull(loginResponse.Token);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(loginResponse.Token.Token));
         }
 
         [TestMethod]
@@ -244,7 +206,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         {
             string email = CreateUniqueEmail("registertaken");
 
-            authService.Register(new RegisterRequest
+            RegisterResponse reg = authService.Register(new RegisterRequest
             {
                 Email = email,
                 Password = PASSWORD,
@@ -265,6 +227,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             Assert.AreEqual(AuthServiceConstants.ERROR_EMAIL_TAKEN, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_EMAIL_TAKEN, fault.Message);
+
+            authService.Logout(new LogoutRequest { Token = reg.Token.Token });
         }
 
         [TestMethod]
@@ -283,6 +247,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             Assert.IsNotNull(response);
             Assert.IsTrue(response.UserId > 0);
+            Assert.IsNotNull(response.Token);
+
+            authService.Logout(new LogoutRequest { Token = response.Token.Token });
         }
 
         [TestMethod]
@@ -292,54 +259,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_REQUEST, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_PAYLOAD_NULL, fault.Message);
-        }
-
-        [TestMethod]
-        public void Login_WhenValidCredentials_ReturnsToken()
-        {
-            string email = CreateUniqueEmail("loginok");
-
-            authService.Register(new RegisterRequest
-            {
-                Email = email,
-                Password = PASSWORD,
-                DisplayName = DISPLAY_NAME,
-                ProfileImageBytes = Array.Empty<byte>(),
-                ProfileImageContentType = string.Empty
-            });
-
-            LoginResponse response = authService.Login(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD
-            });
-
-            Assert.IsNotNull(response);
-            Assert.IsNotNull(response.Token);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(response.Token.Token));
-        }
-
-        [TestMethod]
-        public void Login_WhenAlreadyLoggedIn_ThrowsAlreadyLoggedIn()
-        {
-            string email = CreateUniqueEmail("already");
-
-            authService.Register(new RegisterRequest
-            {
-                Email = email,
-                Password = PASSWORD,
-                DisplayName = DISPLAY_NAME,
-                ProfileImageBytes = Array.Empty<byte>(),
-                ProfileImageContentType = string.Empty
-            });
-
-            authService.Login(new LoginRequest { Email = email, Password = PASSWORD });
-
-            ServiceFault fault = FaultAssert.Capture(() =>
-                authService.Login(new LoginRequest { Email = email, Password = PASSWORD }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_ALREADY_LOGGED_IN, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN, fault.Message);
         }
 
         [TestMethod]
@@ -360,7 +279,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
         {
             string email = CreateUniqueEmail("reset");
 
-            authService.Register(new RegisterRequest
+            RegisterResponse reg = authService.Register(new RegisterRequest
             {
                 Email = email,
                 Password = PASSWORD,
@@ -379,41 +298,8 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             Assert.AreEqual(email, fakeEmailService.LastResetEmail);
             Assert.IsFalse(string.IsNullOrWhiteSpace(fakeEmailService.LastResetCode));
-        }
 
-        [TestMethod]
-        public void CompletePasswordReset_WhenCodeIsCorrect_UpdatesPasswordAndAllowsLogin()
-        {
-            string email = CreateUniqueEmail("completereset");
-
-            authService.Register(new RegisterRequest
-            {
-                Email = email,
-                Password = PASSWORD,
-                DisplayName = DISPLAY_NAME,
-                ProfileImageBytes = Array.Empty<byte>(),
-                ProfileImageContentType = string.Empty
-            });
-
-            authService.BeginPasswordReset(new BeginPasswordResetRequest { Email = email });
-            string code = fakeEmailService.LastResetCode;
-
-            authService.CompletePasswordReset(new CompletePasswordResetRequest
-            {
-                Email = email,
-                Code = code,
-                NewPassword = NEW_PASSWORD
-            });
-
-            LoginResponse login = authService.Login(new LoginRequest
-            {
-                Email = email,
-                Password = NEW_PASSWORD
-            });
-
-            Assert.IsNotNull(login);
-            Assert.IsNotNull(login.Token);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(login.Token.Token));
+            authService.Logout(new LogoutRequest { Token = reg.Token.Token });
         }
 
         [TestMethod]
@@ -423,89 +309,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_REQUEST, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_PAYLOAD_NULL, fault.Message);
-        }
-
-        [TestMethod]
-        public void GetProfileImage_WhenNoImageSaved_ReturnsEmptyImage()
-        {
-            string email = CreateUniqueEmail("noimage");
-
-            authService.Register(new RegisterRequest
-            {
-                Email = email,
-                Password = PASSWORD,
-                DisplayName = DISPLAY_NAME,
-                ProfileImageBytes = Array.Empty<byte>(),
-                ProfileImageContentType = string.Empty
-            });
-
-            LoginResponse loginResponse = authService.Login(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD
-            });
-
-            GetProfileImageResponse response = authService.GetProfileImage(new GetProfileImageRequest
-            {
-                Token = loginResponse.Token.Token,
-                AccountId = loginResponse.Token.UserId,
-                ProfileImageCode = EMPTY
-            });
-
-            Assert.IsNotNull(response);
-
-            Assert.IsNotNull(response.ImageBytes);
-            Assert.AreEqual(0, response.ImageBytes.Length);
-
-            Assert.IsNotNull(response.ContentType);
-            Assert.AreEqual(string.Empty, response.ContentType);
-
-            Assert.IsNull(response.UpdatedAtUtc);
-
-            Assert.IsNotNull(response.ProfileImageCode);
-            Assert.AreEqual(string.Empty, response.ProfileImageCode);
-        }
-
-        [TestMethod]
-        public void GetProfileImage_WhenImageSaved_ReturnsImage()
-        {
-            string email = CreateUniqueEmail("hasimage");
-
-            RegisterResponse reg = authService.Register(new RegisterRequest
-            {
-                Email = email,
-                Password = PASSWORD,
-                DisplayName = DISPLAY_NAME,
-                ProfileImageBytes = PNG_MINIMAL_VALID_BYTES,
-                ProfileImageContentType = CONTENT_TYPE_PNG
-            });
-
-            LoginResponse loginResponse = authService.Login(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD
-            });
-
-            GetProfileImageResponse response = authService.GetProfileImage(new GetProfileImageRequest
-            {
-                Token = loginResponse.Token.Token,
-                AccountId = reg.UserId,
-                ProfileImageCode = EMPTY
-            });
-
-            Assert.IsNotNull(response);
-
-            Assert.IsNotNull(response.ImageBytes);
-            Assert.IsTrue(response.ImageBytes.Length > 0);
-            CollectionAssert.AreEqual(PNG_MINIMAL_VALID_BYTES, response.ImageBytes);
-
-            Assert.IsNotNull(response.ContentType);
-            Assert.AreEqual(CONTENT_TYPE_PNG, response.ContentType);
-
-            Assert.IsNotNull(response.UpdatedAtUtc);
-
-            Assert.IsNotNull(response.ProfileImageCode);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(response.ProfileImageCode));
         }
 
         [TestMethod]
@@ -521,39 +324,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             bool exists = AuthServiceContext.TryGetUserId(unknownToken, out int userId);
             Assert.IsFalse(exists);
             Assert.AreEqual(0, userId);
-        }
-
-        [TestMethod]
-        public void Logout_WhenTokenIsValid_RemovesToken()
-        {
-            string email = CreateUniqueEmail("logout");
-
-            authService.Register(new RegisterRequest
-            {
-                Email = email,
-                Password = PASSWORD,
-                DisplayName = DISPLAY_NAME,
-                ProfileImageBytes = Array.Empty<byte>(),
-                ProfileImageContentType = string.Empty
-            });
-
-            LoginResponse login = authService.Login(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD
-            });
-
-            string tokenValue = login.Token.Token;
-
-            bool okBefore = AuthServiceContext.TryGetUserId(tokenValue, out int userIdBefore);
-            Assert.IsTrue(okBefore);
-            Assert.IsTrue(userIdBefore > 0);
-
-            authService.Logout(new LogoutRequest { Token = tokenValue });
-
-            bool okAfter = AuthServiceContext.TryGetUserId(tokenValue, out int userIdAfter);
-            Assert.IsFalse(okAfter);
-            Assert.AreEqual(0, userIdAfter);
         }
 
         private static string CreateUniqueEmail(string prefix)

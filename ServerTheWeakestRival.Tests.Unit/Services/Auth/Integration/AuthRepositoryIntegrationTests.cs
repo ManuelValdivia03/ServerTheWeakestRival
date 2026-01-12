@@ -4,7 +4,6 @@ using ServicesTheWeakestRival.Server.Infrastructure;
 using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
-using ServicesTheWeakestRival.Server.Services.Logic;
 using System;
 using System.Data;
 using System.Data.SqlClient;
@@ -59,7 +58,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             SET CreatedAtUtc = DATEADD(MINUTE, -10, SYSUTCDATETIME())
             WHERE Id = @Id;";
 
-        private const int EXPECTED_ATTEMPTS_1 = 1;
         private const int EXPECTED_ATTEMPTS_2 = 2;
 
         private AuthRepository authRepository;

@@ -1,10 +1,13 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using ServerTheWeakestRival.Tests.Unit.Infrastructure;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Services.Auth;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
 using ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows;
 using System;
+
+using ServerTokenStore = ServicesTheWeakestRival.Server.Services.TokenStore;
 
 namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 {
@@ -19,13 +22,27 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         private const string EMPTY = "";
         private const string WHITESPACE = " ";
 
+        private const int TOKEN_TTL_MINUTES = 10;
+
+        [TestInitialize]
+        public void SetUp()
+        {
+            TokenStoreTestCleaner.ClearAllTokens();
+        }
+
+        [TestCleanup]
+        public void TearDown()
+        {
+            TokenStoreTestCleaner.ClearAllTokens();
+        }
+
         [TestMethod]
         public void Execute_WhenRequestIsNull_DoesNothing()
         {
             string email = BuildEmail("nullrequest");
             int userId = CreateAccount(email);
 
-            string token = LoginAndGetToken(email);
+            string token = SeedTokenForUser(userId);
 
             bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
             Assert.IsTrue(before);
@@ -46,7 +63,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             string email = BuildEmail("nulltoken");
             int userId = CreateAccount(email);
 
-            string token = LoginAndGetToken(email);
+            string token = SeedTokenForUser(userId);
 
             bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
             Assert.IsTrue(before);
@@ -67,7 +84,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             string email = BuildEmail("emptytoken");
             int userId = CreateAccount(email);
 
-            string token = LoginAndGetToken(email);
+            string token = SeedTokenForUser(userId);
 
             bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
             Assert.IsTrue(before);
@@ -94,7 +111,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             string email = BuildEmail("notfound");
             int userId = CreateAccount(email);
 
-            string token = LoginAndGetToken(email);
+            string token = SeedTokenForUser(userId);
 
             bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
             Assert.IsTrue(before);
@@ -115,22 +132,17 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             string email = BuildEmail("success");
             int userId = CreateAccount(email);
 
-            var loginWorkflow = new LoginWorkflow(authRepository, passwordPolicy);
-            LoginResponse login = loginWorkflow.Execute(new LoginRequest { Email = email, Password = PASSWORD });
+            string token = SeedTokenForUser(userId);
 
-            Assert.IsNotNull(login);
-            Assert.IsNotNull(login.Token);
-            Assert.AreEqual(userId, login.Token.UserId);
-
-            bool before = AuthServiceContext.TryGetUserId(login.Token.Token, out int resolvedBefore);
+            bool before = AuthServiceContext.TryGetUserId(token, out int resolvedBefore);
             Assert.IsTrue(before);
             Assert.AreEqual(userId, resolvedBefore);
 
             var workflow = new LogoutWorkflow(authRepository);
 
-            workflow.Execute(new LogoutRequest { Token = login.Token.Token });
+            workflow.Execute(new LogoutRequest { Token = token });
 
-            bool after = AuthServiceContext.TryGetUserId(login.Token.Token, out int resolvedAfter);
+            bool after = AuthServiceContext.TryGetUserId(token, out int resolvedAfter);
             Assert.IsFalse(after);
             Assert.AreEqual(0, resolvedAfter);
         }
@@ -139,9 +151,9 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         public void Execute_WhenCalledTwice_IsIdempotent()
         {
             string email = BuildEmail("idempotent");
-            CreateAccount(email);
+            int userId = CreateAccount(email);
 
-            string token = LoginAndGetToken(email);
+            string token = SeedTokenForUser(userId);
 
             var workflow = new LogoutWorkflow(authRepository);
 
@@ -159,18 +171,20 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             string email = BuildEmail("relogin");
             int userId = CreateAccount(email);
 
-            string token = LoginAndGetToken(email);
+            string token = SeedTokenForUser(userId);
 
             var workflow = new LogoutWorkflow(authRepository);
             workflow.Execute(new LogoutRequest { Token = token });
 
-            var loginWorkflow = new LoginWorkflow(authRepository, passwordPolicy);
-            LoginResponse second = loginWorkflow.Execute(new LoginRequest { Email = email, Password = PASSWORD });
+            bool removedOk = AuthServiceContext.TryGetUserId(token, out int removedUserId);
+            Assert.IsFalse(removedOk);
+            Assert.AreEqual(0, removedUserId);
 
-            Assert.IsNotNull(second);
-            Assert.IsNotNull(second.Token);
-            Assert.AreEqual(userId, second.Token.UserId);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(second.Token.Token));
+            string token2 = SeedTokenForUser(userId);
+
+            bool ok2 = AuthServiceContext.TryGetUserId(token2, out int resolved2);
+            Assert.IsTrue(ok2);
+            Assert.AreEqual(userId, resolved2);
         }
 
         private static string BuildEmail(string prefix)
@@ -196,21 +210,26 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             return authRepository.CreateAccountAndUser(data);
         }
 
-        private string LoginAndGetToken(string email)
+        private static string SeedTokenForUser(int userId)
         {
-            var loginWorkflow = new LoginWorkflow(authRepository, passwordPolicy);
-
-            LoginResponse login = loginWorkflow.Execute(new LoginRequest
+            if (userId <= 0)
             {
-                Email = email,
-                Password = PASSWORD
-            });
+                Assert.Fail("UserId is required to seed a token.");
+                return string.Empty;
+            }
 
-            Assert.IsNotNull(login);
-            Assert.IsNotNull(login.Token);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(login.Token.Token));
+            string tokenValue = Guid.NewGuid().ToString("N");
 
-            return login.Token.Token;
+            var token = new AuthToken
+            {
+                UserId = userId,
+                Token = tokenValue,
+                ExpiresAtUtc = DateTime.UtcNow.AddMinutes(TOKEN_TTL_MINUTES)
+            };
+
+            ServerTokenStore.StoreToken(token);
+
+            return tokenValue;
         }
     }
 }

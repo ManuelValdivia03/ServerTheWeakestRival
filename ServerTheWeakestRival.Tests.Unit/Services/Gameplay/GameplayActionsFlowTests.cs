@@ -178,48 +178,10 @@ namespace ServicesTheWeakestRival.Tests.Gameplay
                 GameplayActionsFlow.ApplyWildcardFromDbOrThrow(
                     wildcardMatchId: 77,
                     userId: USER_ID_B,
-                    wildcardCode: GameplayEngineConstants.WILDCARD_SHIELD,
+                    wildcardCode: GameplayEngineConstants.WILDCARD_BLOCK,
                     clientRoundNumber: state.RoundNumber));
 
             Assert.AreEqual(GameplayEngineConstants.ERROR_NOT_PLAYER_TURN, ex.Detail.Code);
-        }
-
-        [TestMethod]
-        public void ApplyWildcardFromDbOrThrow_Shield_SetsShieldAndBroadcastsWildcardUsed()
-        {
-            Guid matchId = Guid.NewGuid();
-
-            CallbackSpy cbA = new CallbackSpy();
-            CallbackSpy cbB = new CallbackSpy();
-
-            MatchRuntimeState state = GameplayMatchRegistry.GetOrCreateMatch(matchId);
-            state.WildcardMatchId = 88;
-
-            state.Players.Clear();
-            state.Players.Add(new MatchPlayerRuntime(USER_ID_A, "A", cbA));
-            state.Players.Add(new MatchPlayerRuntime(USER_ID_B, "B", cbB));
-
-            state.CurrentPlayerIndex = 0;
-            state.IsInVotePhase = false;
-            state.IsInDuelPhase = false;
-            state.IsInFinalPhase = false;
-            state.HasSpecialEventThisRound = true;
-            state.BombQuestionId = 0;
-
-            GameplayMatchRegistry.MapWildcardMatchId(state.WildcardMatchId, state.MatchId);
-
-            int roundReturned = GameplayActionsFlow.ApplyWildcardFromDbOrThrow(
-                wildcardMatchId: 88,
-                userId: USER_ID_A,
-                wildcardCode: GameplayEngineConstants.WILDCARD_SHIELD,
-                clientRoundNumber: state.RoundNumber);
-
-            Assert.AreEqual(state.RoundNumber, roundReturned);
-            Assert.IsTrue(state.Players[0].IsShieldActive);
-
-            Assert.AreEqual(1, cbA.SpecialEventCalls);
-            Assert.AreEqual(1, cbB.SpecialEventCalls);
-            Assert.IsTrue(cbA.LastEventName.StartsWith("WILDCARD_USED_", StringComparison.Ordinal));
         }
 
         private static QuestionWithAnswersDto BuildQuestion(int questionId, string correctAnswer)

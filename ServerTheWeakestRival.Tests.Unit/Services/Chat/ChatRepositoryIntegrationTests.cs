@@ -10,8 +10,6 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Chat
     [TestClass]
     public sealed class ChatRepositoryIntegrationTests
     {
-        private const int INVALID_ID = 0;
-
         private const int USER_ID_ZERO = 0;
         private const int NON_EXISTING_USER_ID = 999999;
 
@@ -20,9 +18,6 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Chat
 
         private const int MAX_COUNT_ONE = 1;
         private const int MAX_COUNT_TEN = 10;
-
-        private const string DEFAULT_DISPLAY_NAME = "  Repo User  ";
-
         private const string SQL_DELETE_CHAT_MESSAGES = @"DELETE FROM dbo.ChatMessages;";
         private const string SQL_DELETE_USERS = @"DELETE FROM dbo.Users;";
         private const string SQL_DELETE_ACCOUNTS = @"DELETE FROM dbo.Accounts;";

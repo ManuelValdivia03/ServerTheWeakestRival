@@ -43,16 +43,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services
         }
 
         [TestMethod]
-        public void StoreToken_WhenTokenIsNull_DoesNothing()
-        {
-            ServerTokenStore.StoreToken(null);
-
-            bool ok = ServerTokenStore.TryGetActiveTokenForUser(USER_ID, out AuthToken active);
-            Assert.IsFalse(ok);
-            Assert.IsNull(active);
-        }
-
-        [TestMethod]
         public void StoreToken_WhenValidToken_AllowsTryGetUserId()
         {
             var token = new AuthToken

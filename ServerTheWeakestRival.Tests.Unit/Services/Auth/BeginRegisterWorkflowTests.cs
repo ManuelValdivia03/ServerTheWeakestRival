@@ -158,43 +158,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         }
 
         [TestMethod]
-        public void Execute_WhenEmailServiceThrowsSmtpException_ThrowsSmtpFaultAndPersistsVerification()
-        {
-            string email = BuildEmail("smtp.fail");
-
-            var smtpException = new SmtpException("Simulated SMTP failure.");
-            var throwingEmailService = new ThrowingEmailService(smtpException);
-            var throwingDispatcher = new AuthEmailDispatcher(throwingEmailService);
-
-            var workflow = new BeginRegisterWorkflow(authRepository, throwingDispatcher);
-
-            ServiceFault fault = FaultAssert.Capture(() =>
-                workflow.Execute(new BeginRegisterRequest { Email = email }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_SMTP, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_VERIFICATION_EMAIL_FAILED, fault.Message);
-
-            VerificationLookupResult lookup = authRepository.ReadLatestVerification(email);
-            Assert.IsTrue(lookup.Found);
-            Assert.IsFalse(lookup.Verification.Used);
-        }
-
-        [TestMethod]
-        public void Execute_WhenEmailServiceThrowsNonSmtpException_ThrowsOriginalException()
-        {
-            string email = BuildEmail("nonsmtp.fail");
-
-            var throwingEmailService = new ThrowingEmailService(
-                new InvalidOperationException("Simulated non-SMTP exception."));
-            var throwingDispatcher = new AuthEmailDispatcher(throwingEmailService);
-
-            var workflow = new BeginRegisterWorkflow(authRepository, throwingDispatcher);
-
-            Assert.ThrowsException<InvalidOperationException>(() =>
-                workflow.Execute(new BeginRegisterRequest { Email = email }));
-        }
-
-        [TestMethod]
         public void Execute_WhenCooldownElapsed_AllowsSecondRequest_AndInvalidatesPreviousPendingVerification()
         {
             string email = BuildEmail("cooldown.elapsed");

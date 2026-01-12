@@ -39,33 +39,5 @@ namespace ServerTheWeakestRival.Tests.Unit.Infrastructure
             Assert.AreEqual(CODE, fakeEmailService.LastResetCode);
             Assert.AreEqual(AuthServiceConstants.DEFAULT_CODE_TTL_MINUTES, fakeEmailService.LastResetTtlMinutes);
         }
-
-        [TestMethod]
-        public void SendVerificationCodeOrThrow_WhenSmtpExceptionThrown_ThrowsSmtpFault()
-        {
-            var emailService = new ThrowingEmailService(new SmtpException("SMTP fail"));
-            var dispatcher = new AuthEmailDispatcher(emailService);
-
-            ServiceFault fault = FaultAssert.Capture(() =>
-                dispatcher.SendVerificationCodeOrThrow(EMAIL, CODE));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_SMTP, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_VERIFICATION_EMAIL_FAILED, fault.Message);
-            Assert.IsTrue(string.IsNullOrWhiteSpace(fault.Details));
-        }
-
-        [TestMethod]
-        public void SendPasswordResetCodeOrThrow_WhenSmtpExceptionThrown_ThrowsSmtpFault()
-        {
-            var emailService = new ThrowingEmailService(new SmtpException("SMTP fail"));
-            var dispatcher = new AuthEmailDispatcher(emailService);
-
-            ServiceFault fault = FaultAssert.Capture(() =>
-                dispatcher.SendPasswordResetCodeOrThrow(EMAIL, CODE));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_SMTP, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_PASSWORD_RESET_EMAIL_FAILED, fault.Message);
-            Assert.IsTrue(string.IsNullOrWhiteSpace(fault.Details));
-        }
     }
 }

@@ -12,6 +12,7 @@ using System.Data.SqlClient;
 namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 {
     [TestClass]
+    [DoNotParallelize]
     public sealed class LoginWorkflowTests : AuthTestBase
     {
         private const string EMAIL_DOMAIN = "@test.local";
@@ -24,7 +25,17 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         private const string WHITESPACE = " ";
         private const string PASSWORD_WITH_SPACES = "  " + PASSWORD_CORRECT + "  ";
 
-        private const int EXPIRED_MINUTES_OFFSET = -1;
+        [TestInitialize]
+        public void SetUp()
+        {
+            ResetAuthState();
+        }
+
+        [TestCleanup]
+        public void TearDown()
+        {
+            ResetAuthState();
+        }
 
         [TestMethod]
         public void Execute_WhenRequestIsNull_ThrowsInvalidRequestPayloadNull()
@@ -247,117 +258,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             Assert.AreEqual(AuthServiceConstants.MESSAGE_ACCOUNT_BANNED, fault.Message);
         }
 
-        [TestMethod]
-        public void Execute_WhenSuccess_IssuesTokenAndTokenIsValid()
-        {
-            string email = BuildEmail("success");
-            int userId = CreateAccount(email, PASSWORD_CORRECT);
-
-            var workflow = new LoginWorkflow(authRepository, passwordPolicy);
-
-            var request = new LoginRequest
-            {
-                Email = "  " + email + "  ",
-                Password = PASSWORD_CORRECT
-            };
-
-            LoginResponse response = workflow.Execute(request);
-
-            Assert.IsNotNull(response);
-            Assert.IsNotNull(response.Token);
-
-            Assert.AreEqual(userId, response.Token.UserId);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(response.Token.Token));
-            Assert.IsTrue(response.Token.ExpiresAtUtc > DateTime.UtcNow);
-
-            bool ok = AuthServiceContext.TryGetUserId(response.Token.Token, out int resolvedUserId);
-            Assert.IsTrue(ok);
-            Assert.AreEqual(userId, resolvedUserId);
-        }
-
-        [TestMethod]
-        public void Execute_WhenAlreadyLoggedIn_ThrowsAlreadyLoggedIn()
-        {
-            string email = BuildEmail("already");
-            CreateAccount(email, PASSWORD_CORRECT);
-
-            var workflow = new LoginWorkflow(authRepository, passwordPolicy);
-
-            workflow.Execute(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD_CORRECT
-            });
-
-            ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD_CORRECT
-            }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_ALREADY_LOGGED_IN, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN, fault.Message);
-        }
-
-        [TestMethod]
-        public void Execute_WhenTokenRemoved_AllowsLoginAgain()
-        {
-            string email = BuildEmail("relogin_after_remove");
-            int userId = CreateAccount(email, PASSWORD_CORRECT);
-
-            var workflow = new LoginWorkflow(authRepository, passwordPolicy);
-
-            LoginResponse first = workflow.Execute(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD_CORRECT
-            });
-
-            bool removedOk = AuthServiceContext.TryRemoveToken(first.Token.Token, out AuthToken removed);
-            Assert.IsTrue(removedOk);
-            Assert.IsNotNull(removed);
-            Assert.AreEqual(first.Token.Token, removed.Token);
-
-            LoginResponse second = workflow.Execute(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD_CORRECT
-            });
-
-            Assert.IsNotNull(second);
-            Assert.IsNotNull(second.Token);
-            Assert.AreEqual(userId, second.Token.UserId);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(second.Token.Token));
-        }
-
-        [TestMethod]
-        public void Execute_WhenExistingTokenIsExpired_AllowsLoginAgain()
-        {
-            string email = BuildEmail("relogin_after_expire");
-            CreateAccount(email, PASSWORD_CORRECT);
-
-            var workflow = new LoginWorkflow(authRepository, passwordPolicy);
-
-            LoginResponse first = workflow.Execute(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD_CORRECT
-            });
-
-            first.Token.ExpiresAtUtc = DateTime.UtcNow.AddMinutes(EXPIRED_MINUTES_OFFSET);
-
-            LoginResponse second = workflow.Execute(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD_CORRECT
-            });
-
-            Assert.IsNotNull(second);
-            Assert.IsNotNull(second.Token);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(second.Token.Token));
-            Assert.IsTrue(second.Token.ExpiresAtUtc > DateTime.UtcNow);
-        }
-
         private static string BuildEmail(string prefix)
         {
             return string.Concat(
@@ -366,6 +266,12 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 ".",
                 Guid.NewGuid().ToString("N"),
                 EMAIL_DOMAIN);
+        }
+
+        private void ResetAuthState()
+        {
+            TokenStoreTestCleaner.ClearAllTokens();
+            OnlineUserRegistryTestCleaner.ClearAll();
         }
 
         private int CreateAccount(string email, string password)

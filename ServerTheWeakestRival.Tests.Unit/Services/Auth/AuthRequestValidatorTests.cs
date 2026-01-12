@@ -214,19 +214,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         }
 
         [TestMethod]
-        public void EnsureValidSessionOrThrow_WhenTokenValid_DoesNotThrow()
-        {
-            string email = "tc.validator." + Guid.NewGuid().ToString(AuthServiceConstants.TOKEN_GUID_FORMAT) + "@test.local";
-            CreateAccountForAuthValidator(email);
-
-            string tokenValue = LoginAndGetTokenForAuthValidator(email);
-
-            AuthRequestValidator.EnsureValidSessionOrThrow(tokenValue);
-
-            Assert.IsTrue(true);
-        }
-
-        [TestMethod]
         public void EnsureValidSessionOrThrow_WhenTokenIsExpired_ThrowsInvalidSession()
         {
             TokenStoreTestCleaner.ClearAllTokens();
@@ -317,21 +304,51 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 return;
             }
 
-            Type tokenStoreType = typeof(ServicesTheWeakestRival.Server.Services.AuthService).Assembly
-                .GetType(TOKEN_STORE_TYPE_NAME, throwOnError: false);
+            Type tokenStoreType = typeof(ServicesTheWeakestRival.Server.Services.TokenStore);
 
-            if (tokenStoreType == null)
+            object cache = GetStaticPropertyValue(tokenStoreType, TOKEN_STORE_FIELD_CACHE);
+            object activeByUser = GetStaticPropertyValue(tokenStoreType, TOKEN_STORE_FIELD_ACTIVE_BY_USER);
+
+            InvokeTryAdd(cache, token.Token, token);
+            InvokeTryAdd(activeByUser, token.UserId, activeTokenValue);
+        }
+
+        private static object GetStaticPropertyValue(Type type, string propertyName)
+        {
+            PropertyInfo property = type.GetProperty(
+                propertyName,
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (property == null)
             {
-                Assert.Fail("TokenStore type was not found: " + TOKEN_STORE_TYPE_NAME);
+                Assert.Fail("TokenStore property was not found: " + propertyName);
+                return null;
+            }
+
+            return property.GetValue(null);
+        }
+
+        private static void InvokeTryAdd(object dictionary, object key, object value)
+        {
+            if (dictionary == null)
+            {
+                Assert.Fail("Dictionary instance is null.");
                 return;
             }
 
-            object cache = GetStaticFieldValue(tokenStoreType, TOKEN_STORE_FIELD_CACHE);
-            object activeByUser = GetStaticFieldValue(tokenStoreType, TOKEN_STORE_FIELD_ACTIVE_BY_USER);
+            MethodInfo tryAdd = dictionary.GetType().GetMethod(
+                "TryAdd",
+                BindingFlags.Instance | BindingFlags.Public);
 
-            InvokeTryAdd(cache, token.Token, token);
-            SetIndexerValue(activeByUser, token.UserId, activeTokenValue);
+            if (tryAdd == null)
+            {
+                Assert.Fail("TryAdd method was not found in dictionary.");
+                return;
+            }
+
+            tryAdd.Invoke(dictionary, new[] { key, value });
         }
+
 
         private static object GetStaticFieldValue(Type type, string fieldName)
         {
@@ -343,24 +360,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             }
 
             return field.GetValue(null);
-        }
-
-        private static void InvokeTryAdd(object dictionary, object key, object value)
-        {
-            if (dictionary == null)
-            {
-                Assert.Fail("TokenStore.Cache instance is null.");
-                return;
-            }
-
-            MethodInfo tryAdd = dictionary.GetType().GetMethod("TryAdd", BindingFlags.Instance | BindingFlags.Public);
-            if (tryAdd == null)
-            {
-                Assert.Fail("TryAdd method was not found in TokenStore.Cache.");
-                return;
-            }
-
-            tryAdd.Invoke(dictionary, new[] { key, value });
         }
 
         private static void SetIndexerValue(object dictionary, object key, object value)

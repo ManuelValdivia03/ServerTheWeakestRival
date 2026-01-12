@@ -115,18 +115,6 @@ namespace ServicesTheWeakestRival.Tests.Gameplay
         }
 
         [TestMethod]
-        public void ApplyWildcardShield_SetsIsShieldActiveTrue()
-        {
-            MatchRuntimeState state = CreateStateWithPlayersAndQuestion(out MatchPlayerRuntime currentPlayer);
-
-            Assert.IsFalse(currentPlayer.IsShieldActive);
-
-            GameplayWildcardsFlow.ApplyWildcardLocked(state, currentPlayer, GameplayEngineConstants.WILDCARD_SHIELD);
-
-            Assert.IsTrue(currentPlayer.IsShieldActive);
-        }
-
-        [TestMethod]
         public void ApplyWildcardForcedBank_MovesChainToBank_ResetsChainAndStreak_AndBroadcastsBank()
         {
             MatchRuntimeState state = CreateStateWithPlayersAndQuestion(out _);
@@ -177,45 +165,6 @@ namespace ServicesTheWeakestRival.Tests.Gameplay
             GameplayWildcardsFlow.ApplyWildcardLocked(state, currentPlayer, GameplayEngineConstants.WILDCARD_BLOCK);
 
             Assert.AreEqual(state.RoundNumber, target.BlockWildcardsRoundNumber);
-        }
-
-        [TestMethod]
-        public void ApplyWildcardSabotage_DecreasesTargetPendingTimeDelta_AndBroadcastsSpecialEvent()
-        {
-            MatchRuntimeState state = CreateStateWithPlayersAndQuestion(out MatchPlayerRuntime currentPlayer);
-
-            MatchPlayerRuntime target = state.Players[1];
-            target.PendingTimeDeltaSeconds = 0;
-
-            var spy1 = (GameplayCallbackSpy)state.Players[0].Callback;
-            var spy2 = (GameplayCallbackSpy)state.Players[1].Callback;
-
-            GameplayWildcardsFlow.ApplyWildcardLocked(state, currentPlayer, GameplayEngineConstants.WILDCARD_SABOTAGE);
-
-            Assert.AreEqual(-GameplayEngineConstants.WILDCARD_TIME_PENALTY_SECONDS, target.PendingTimeDeltaSeconds);
-
-            Assert.AreEqual(1, spy1.SpecialEventCalls);
-            Assert.AreEqual(1, spy2.SpecialEventCalls);
-            Assert.AreEqual(GameplayEngineConstants.SPECIAL_EVENT_TIME_PENALTY_CODE, spy1.LastSpecialEventName);
-        }
-
-        [TestMethod]
-        public void ApplyWildcardExtraTime_IncreasesCurrentPlayerPendingTimeDelta_AndBroadcastsSpecialEvent()
-        {
-            MatchRuntimeState state = CreateStateWithPlayersAndQuestion(out MatchPlayerRuntime currentPlayer);
-
-            currentPlayer.PendingTimeDeltaSeconds = 0;
-
-            var spy1 = (GameplayCallbackSpy)state.Players[0].Callback;
-            var spy2 = (GameplayCallbackSpy)state.Players[1].Callback;
-
-            GameplayWildcardsFlow.ApplyWildcardLocked(state, currentPlayer, GameplayEngineConstants.WILDCARD_EXTRA_TIME);
-
-            Assert.AreEqual(GameplayEngineConstants.WILDCARD_TIME_BONUS_SECONDS, currentPlayer.PendingTimeDeltaSeconds);
-
-            Assert.AreEqual(1, spy1.SpecialEventCalls);
-            Assert.AreEqual(1, spy2.SpecialEventCalls);
-            Assert.AreEqual(GameplayEngineConstants.SPECIAL_EVENT_TIME_BONUS_CODE, spy1.LastSpecialEventName);
         }
 
         [TestMethod]

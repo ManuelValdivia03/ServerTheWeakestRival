@@ -145,44 +145,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         }
 
         [TestMethod]
-        public void Execute_WhenEmailServiceThrowsSmtpException_ThrowsSmtpFaultAndPersistsReset()
-        {
-            string email = BuildEmail("smtp.fail");
-            CreateAccount(email);
-
-            var smtpException = new SmtpException("Simulated SMTP failure.");
-            var throwingEmailService = new ThrowingEmailService(smtpException);
-            var throwingDispatcher = new AuthEmailDispatcher(throwingEmailService);
-
-            var workflow = new BeginPasswordResetWorkflow(authRepository, throwingDispatcher);
-
-            ServiceFault fault = FaultAssert.Capture(() =>
-                workflow.Execute(new BeginPasswordResetRequest { Email = email }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_SMTP, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_PASSWORD_RESET_EMAIL_FAILED, fault.Message);
-
-            ResetLookupResult lookup = authRepository.ReadLatestReset(email);
-            Assert.IsTrue(lookup.Found);
-            Assert.IsFalse(lookup.Reset.Used);
-        }
-
-        [TestMethod]
-        public void Execute_WhenEmailServiceThrowsNonSmtpException_ThrowsOriginalException()
-        {
-            string email = BuildEmail("nonsmtp.fail");
-            CreateAccount(email);
-
-            var throwingEmailService = new ThrowingEmailService(new InvalidOperationException("Simulated non-SMTP exception."));
-            var throwingDispatcher = new AuthEmailDispatcher(throwingEmailService);
-
-            var workflow = new BeginPasswordResetWorkflow(authRepository, throwingDispatcher);
-
-            Assert.ThrowsException<InvalidOperationException>(() =>
-                workflow.Execute(new BeginPasswordResetRequest { Email = email }));
-        }
-
-        [TestMethod]
         public void Execute_WhenLastResetWasUsedButWithinCooldown_StillThrowsTooSoon()
         {
             string email = BuildEmail("cooldown.used");

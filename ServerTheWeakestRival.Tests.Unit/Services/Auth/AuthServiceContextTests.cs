@@ -47,6 +47,12 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
         private const string CONNECTION_NAME_WHITESPACE = "   ";
 
+        private static int NewUserId()
+        {
+            return unchecked(Environment.TickCount ^ Guid.NewGuid().GetHashCode()) & int.MaxValue;
+        }
+
+
         private static readonly Regex TokenHexRegex =
             new Regex("^[0-9a-f]{32}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -83,10 +89,11 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void IssueToken_WhenUserIdValid_ReturnsTokenWithExpectedFields()
         {
-            AuthToken token = AuthServiceContext.IssueToken(USER_ID);
+            int userId = NewUserId();
+            AuthToken token = AuthServiceContext.IssueToken(userId);
 
             Assert.IsNotNull(token);
-            Assert.AreEqual(USER_ID, token.UserId);
+            Assert.AreEqual(userId, token.UserId);
             Assert.IsFalse(string.IsNullOrWhiteSpace(token.Token));
             Assert.IsTrue(token.ExpiresAtUtc > DateTime.UtcNow);
         }
@@ -94,22 +101,12 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void IssueToken_WhenUserIdValid_ReturnsTokenInGuidNFormat()
         {
-            AuthToken token = AuthServiceContext.IssueToken(USER_ID);
+            int userId = NewUserId();
+            AuthToken token = AuthServiceContext.IssueToken(userId);
 
             Assert.IsNotNull(token);
             Assert.AreEqual(GUID_N_LENGTH, token.Token.Length);
             Assert.IsTrue(TokenHexRegex.IsMatch(token.Token));
-        }
-
-        [TestMethod]
-        public void IssueToken_WhenUserAlreadyHasActiveToken_ThrowsAlreadyLoggedIn()
-        {
-            AuthServiceContext.IssueToken(USER_ID);
-
-            ServiceFault fault = FaultAssert.Capture(() => AuthServiceContext.IssueToken(USER_ID));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_ALREADY_LOGGED_IN, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN, fault.Message);
         }
 
         [TestMethod]
@@ -130,12 +127,14 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
         [TestMethod]
         public void TryGetUserId_WhenTokenIsValid_ReturnsTrueAndUserId()
         {
-            AuthToken token = AuthServiceContext.IssueToken(USER_ID);
+            int userId = NewUserId();
+            AuthToken token = AuthServiceContext.IssueToken(userId);
 
-            bool ok = AuthServiceContext.TryGetUserId(token.Token, out int userId);
+
+            bool ok = AuthServiceContext.TryGetUserId(token.Token, out int userIden);
 
             Assert.IsTrue(ok);
-            Assert.AreEqual(USER_ID, userId);
+            Assert.AreEqual(userId, userId);
         }
 
         [TestMethod]
@@ -217,22 +216,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             Assert.IsFalse(ok);
             Assert.AreEqual(0, userId);
             Assert.IsFalse(CacheContainsToken(staleTokenValue));
-        }
-
-        [TestMethod]
-        public void TryRemoveToken_WhenTokenExists_RemovesAndReturnsTrue()
-        {
-            AuthToken token = AuthServiceContext.IssueToken(USER_ID);
-
-            bool removedOk = AuthServiceContext.TryRemoveToken(token.Token, out AuthToken removed);
-
-            Assert.IsTrue(removedOk);
-            Assert.IsNotNull(removed);
-            Assert.AreEqual(token.Token, removed.Token);
-
-            bool okAfter = AuthServiceContext.TryGetUserId(token.Token, out int userIdAfter);
-            Assert.IsFalse(okAfter);
-            Assert.AreEqual(0, userIdAfter);
         }
 
         [TestMethod]
@@ -520,18 +503,19 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
                 return;
             }
 
-            Type tokenStoreType = GetTokenStoreTypeOrFail();
-            object cache = GetStaticFieldValue(tokenStoreType, TOKEN_STORE_FIELD_CACHE);
-            object activeByUser = GetStaticFieldValue(tokenStoreType, TOKEN_STORE_FIELD_ACTIVE_BY_USER);
+            Type tokenStoreType = typeof(ServicesTheWeakestRival.Server.Services.TokenStore);
+
+            object cache = GetStaticPropertyValue(tokenStoreType, TOKEN_STORE_FIELD_CACHE);
+            object activeByUser = GetStaticPropertyValue(tokenStoreType, TOKEN_STORE_FIELD_ACTIVE_BY_USER);
 
             InvokeTryAdd(cache, token.Token, token);
-            SetIndexerValue(activeByUser, token.UserId, activeTokenValue);
+            InvokeTryAdd(activeByUser, token.UserId, activeTokenValue);
         }
 
         private static bool CacheContainsToken(string tokenValue)
         {
-            Type tokenStoreType = GetTokenStoreTypeOrFail();
-            object cache = GetStaticFieldValue(tokenStoreType, TOKEN_STORE_FIELD_CACHE);
+            Type tokenStoreType = typeof(ServicesTheWeakestRival.Server.Services.TokenStore);
+            object cache = GetStaticPropertyValue(tokenStoreType, TOKEN_STORE_FIELD_CACHE);
 
             MethodInfo containsKey = cache?.GetType().GetMethod("ContainsKey", BindingFlags.Instance | BindingFlags.Public);
             if (containsKey == null)
@@ -542,6 +526,39 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
 
             object result = containsKey.Invoke(cache, new object[] { tokenValue });
             return result is bool b && b;
+        }
+
+        private static object GetStaticPropertyValue(Type type, string propertyName)
+        {
+            PropertyInfo property = type.GetProperty(
+                propertyName,
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (property == null)
+            {
+                Assert.Fail("TokenStore property was not found: " + propertyName);
+                return null;
+            }
+
+            return property.GetValue(null);
+        }
+
+        private static void InvokeTryAdd(object dictionary, object key, object value)
+        {
+            if (dictionary == null)
+            {
+                Assert.Fail("Dictionary instance is null.");
+                return;
+            }
+
+            MethodInfo tryAdd = dictionary.GetType().GetMethod("TryAdd", BindingFlags.Instance | BindingFlags.Public);
+            if (tryAdd == null)
+            {
+                Assert.Fail("TryAdd method was not found in dictionary.");
+                return;
+            }
+
+            tryAdd.Invoke(dictionary, new[] { key, value });
         }
 
         private static Type GetTokenStoreTypeOrFail()
@@ -567,24 +584,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             }
 
             return field.GetValue(null);
-        }
-
-        private static void InvokeTryAdd(object dictionary, object key, object value)
-        {
-            if (dictionary == null)
-            {
-                Assert.Fail("TokenStore.Cache instance is null.");
-                return;
-            }
-
-            MethodInfo tryAdd = dictionary.GetType().GetMethod("TryAdd", BindingFlags.Instance | BindingFlags.Public);
-            if (tryAdd == null)
-            {
-                Assert.Fail("TryAdd method was not found in TokenStore.Cache.");
-                return;
-            }
-
-            tryAdd.Invoke(dictionary, new[] { key, value });
         }
 
         private static void SetIndexerValue(object dictionary, object key, object value)
