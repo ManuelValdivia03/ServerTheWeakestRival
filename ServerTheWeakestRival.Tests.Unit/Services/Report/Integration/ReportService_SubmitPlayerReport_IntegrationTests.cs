@@ -889,10 +889,6 @@ WHERE report_id = @ReportId;";
                 return string.Empty;
             }
 
-            // Busca una tabla dbo.* que tenga:
-            // - idColumnName (applied_sanction_id o sanction_id)
-            // - alguna columna "end_at_*"
-            // Esto evita caer por error en dbo.player_report (normalmente no tiene end_at_utc).
             string sql = @"
 SELECT TOP (1) t.name
 FROM sys.tables t
@@ -936,7 +932,6 @@ ORDER BY t.name;";
 
         private static string BuildInList(int count)
         {
-            // @End0,@End1,@End2...
             if (count <= 0)
             {
                 return "@End0";

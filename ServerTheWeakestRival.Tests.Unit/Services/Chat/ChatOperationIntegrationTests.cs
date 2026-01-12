@@ -30,7 +30,7 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Chat
         private const int INVALID_USER_ID = 0;
 
         private const int SINCE_ID_NEGATIVE = -5;
-        private const int MAXCOUNT_NULL = 0; // solo para claridad (no se usa literal)
+        private const int MAXCOUNT_NULL = 0; 
         private const int MAXCOUNT_ZERO = 0;
         private const int MAXCOUNT_NEGATIVE = -10;
 

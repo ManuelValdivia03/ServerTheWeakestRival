@@ -20,10 +20,6 @@ namespace ServicesTheWeakestRival.Server.Services
                     ApplyWildcardPassQuestion(state, currentPlayer);
                     return;
 
-                case GameplayEngineConstants.WILDCARD_SHIELD:
-                    ApplyWildcardShield(currentPlayer);
-                    return;
-
                 case GameplayEngineConstants.WILDCARD_FORCED_BANK:
                     ApplyWildcardForcedBank(state);
                     return;
@@ -34,14 +30,6 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 case GameplayEngineConstants.WILDCARD_BLOCK:
                     ApplyWildcardBlock(state, currentPlayer);
-                    return;
-
-                case GameplayEngineConstants.WILDCARD_SABOTAGE:
-                    ApplyWildcardSabotage(state, currentPlayer);
-                    return;
-
-                case GameplayEngineConstants.WILDCARD_EXTRA_TIME:
-                    ApplyWildcardExtraTime(state, currentPlayer);
                     return;
 
                 default:

@@ -105,6 +105,12 @@
                 INSERT INTO dbo.PlayerWildcards
                         (match_id, user_id, wildcard_type_id, granted_at)
                 VALUES  (@MatchId, @UserId, @WildcardTypeId, SYSUTCDATETIME());";
+
+            public const string HAS_ANY_PLAYER_WILDCARDS = @"
+                SELECT TOP (1) 1
+                FROM dbo.PlayerWildcards pw
+                WHERE pw.match_id = @MatchId
+                  AND pw.user_id = @UserId;";
         }
     }
 }

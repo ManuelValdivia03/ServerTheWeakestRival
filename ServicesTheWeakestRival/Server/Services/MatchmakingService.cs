@@ -110,12 +110,14 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
+
             var hostUserId = Authenticate(request.Token);
 
             try
             {
                 var manager = new MatchManager(GetConnectionString());
                 var response = manager.CreateMatch(hostUserId, request);
+
                 var cb = OperationContext.Current.GetCallbackChannel<IMatchmakingClientCallback>();
 
                 var match = response.Match;
@@ -127,7 +129,6 @@ namespace ServicesTheWeakestRival.Server.Services
                         "MatchmakingService.CreateMatch.NullMatch",
                         new InvalidOperationException("MatchManager returned null Match."));
                 }
-                match.MatchId = Guid.NewGuid();
 
                 Cbs[match.MatchId] = cb;
 
@@ -138,18 +139,13 @@ namespace ServicesTheWeakestRival.Server.Services
                 catch (Exception ex)
                 {
                     Logger.Warn("Error calling OnMatchCreated callback.", ex);
-                    
                 }
 
                 return response;
             }
             catch (SqlException ex)
             {
-                throw ThrowTechnicalFault(
-                    ERROR_DB,
-                    MESSAGE_DB_ERROR,
-                    "MatchmakingService.CreateMatch",
-                    ex);
+                throw ThrowTechnicalFault(ERROR_DB, MESSAGE_DB_ERROR, "MatchmakingService.CreateMatch", ex);
             }
             catch (FaultException<ServiceFault>)
             {
@@ -157,11 +153,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                throw ThrowTechnicalFault(
-                    ERROR_UNEXPECTED,
-                    MESSAGE_UNEXPECTED_ERROR,
-                    "MatchmakingService.CreateMatch",
-                    ex);
+                throw ThrowTechnicalFault(ERROR_UNEXPECTED, MESSAGE_UNEXPECTED_ERROR, "MatchmakingService.CreateMatch", ex);
             }
         }
 
@@ -172,18 +164,34 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
             }
 
-            Authenticate(request.Token);
+            int userId = Authenticate(request.Token);
 
-            var match = new MatchInfo
+            if (string.IsNullOrWhiteSpace(request.MatchCode))
             {
-                MatchId = Guid.NewGuid(),
-                MatchCode = request.MatchCode,
-                Players = new List<PlayerSummary>(),
-                State = "Waiting"
-            };
+                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchCode is required.");
+            }
 
-            return new JoinMatchResponse { Match = match };
+            try
+            {
+                var manager = new MatchManager(GetConnectionString());
+                MatchInfo match = manager.JoinMatchByCode(userId, request.MatchCode);
+
+                return new JoinMatchResponse { Match = match };
+            }
+            catch (SqlException ex)
+            {
+                throw ThrowTechnicalFault(ERROR_DB, MESSAGE_DB_ERROR, "MatchmakingService.JoinMatch", ex);
+            }
+            catch (FaultException<ServiceFault>)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw ThrowTechnicalFault(ERROR_UNEXPECTED, MESSAGE_UNEXPECTED_ERROR, "MatchmakingService.JoinMatch", ex);
+            }
         }
+
 
         public void LeaveMatch(LeaveMatchRequest request)
         {

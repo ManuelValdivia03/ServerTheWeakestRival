@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Data;
 using System.Data.SqlClient;
+using System.Linq;
 using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Server.Services.Logic;
@@ -11,13 +12,17 @@ namespace ServicesTheWeakestRival.Server.Services
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(MatchManager));
 
-        private readonly string _connectionString;
+        private readonly string connectionString;
 
         private const byte MATCH_STATE_WAITING = 0;
 
         private const int INITIAL_WILDCARDS_PER_PLAYER = 1;
 
         private static readonly Random RandomGenerator = new Random();
+        private static readonly object RandomSyncRoot = new object();
+
+        private const int ACCESS_CODE_MAX_LEN = 12;
+        private const int MATCH_CODE_LEN = 6;
 
         public MatchManager(string connectionString)
         {
@@ -26,7 +31,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw new ArgumentException("Connection string is required.", nameof(connectionString));
             }
 
-            _connectionString = connectionString.Trim();
+            this.connectionString = connectionString.Trim();
         }
 
         public CreateMatchResponse CreateMatch(int hostUserId, CreateMatchRequest request)
@@ -49,14 +54,14 @@ namespace ServicesTheWeakestRival.Server.Services
                     "MaxPlayers must be greater than zero.");
             }
 
-            var cfg = request.Config ?? new MatchConfigDto();
+            MatchConfigDto cfg = request.Config ?? new MatchConfigDto();
 
-            var isPrivate = request.IsPrivate;
-            var accessCode = isPrivate ? GenerateAccessCode() : null;
+            bool isPrivate = request.IsPrivate;
+            string accessCode = isPrivate ? GenerateAccessCode() : null;
 
             int matchId;
 
-            using (var connection = new SqlConnection(_connectionString))
+            using (var connection = new SqlConnection(connectionString))
             {
                 connection.Open();
 
@@ -69,8 +74,8 @@ namespace ServicesTheWeakestRival.Server.Services
                         cmd.Parameters.Add("@State", SqlDbType.TinyInt).Value = MATCH_STATE_WAITING;
                         cmd.Parameters.Add("@IsPrivate", SqlDbType.Bit).Value = isPrivate;
 
-                        var pAccessCode = cmd.Parameters.Add("@AccessCode", SqlDbType.NVarChar, 12);
-                        pAccessCode.Value = accessCode == null ? (object)DBNull.Value : (object)accessCode;
+                        var pAccessCode = cmd.Parameters.Add("@AccessCode", SqlDbType.NVarChar, ACCESS_CODE_MAX_LEN);
+                        pAccessCode.Value = accessCode == null ? (object)DBNull.Value : accessCode;
 
                         cmd.Parameters.Add("@MaxPlayers", SqlDbType.TinyInt).Value = request.MaxPlayers;
 
@@ -102,7 +107,7 @@ namespace ServicesTheWeakestRival.Server.Services
                         cmd.ExecuteNonQuery();
                     }
 
-                    GrantInitialWildcards(connection, transaction, matchId, hostUserId);
+                    GrantInitialWildcardsIfNeeded(connection, transaction, matchId, hostUserId);
 
                     transaction.Commit();
 
@@ -120,25 +125,216 @@ namespace ServicesTheWeakestRival.Server.Services
             {
                 MatchId = Guid.NewGuid(),
                 MatchDbId = matchId,
-
                 MatchCode = accessCode ?? string.Empty,
                 State = "Waiting",
                 Config = cfg,
                 Players = new System.Collections.Generic.List<PlayerSummary>()
             };
 
-
             return new CreateMatchResponse
             {
                 Match = matchInfo
             };
         }
-        private static void GrantInitialWildcards(
+
+        public MatchInfo JoinMatchByCode(int userId, string matchCode)
+        {
+            if (userId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(userId));
+            }
+
+            if (string.IsNullOrWhiteSpace(matchCode))
+            {
+                throw new ArgumentException("MatchCode is required.", nameof(matchCode));
+            }
+
+            string trimmedCode = matchCode.Trim();
+
+            int matchId;
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    matchId = TryGetMatchIdByAccessCode(connection, transaction, trimmedCode);
+                    if (matchId <= 0)
+                    {
+                        throw new InvalidOperationException("Match not found for provided code.");
+                    }
+
+                    int maxPlayers = TryGetMatchMaxPlayers(connection, transaction, matchId);
+                    int currentPlayers = CountMatchPlayers(connection, transaction, matchId);
+
+                    if (maxPlayers > 0 && currentPlayers >= maxPlayers)
+                    {
+                        throw new InvalidOperationException("Match is full.");
+                    }
+
+                    using (var cmd = new SqlCommand(MatchSql.Text.INSERT_MATCH_PLAYER_IF_NOT_EXISTS, connection, transaction))
+                    {
+                        cmd.CommandType = CommandType.Text;
+                        cmd.Parameters.Add("@MatchId", SqlDbType.Int).Value = matchId;
+                        cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                        cmd.ExecuteNonQuery();
+                    }
+
+                    GrantInitialWildcardsIfNeeded(connection, transaction, matchId, userId);
+
+                    transaction.Commit();
+                }
+            }
+
+            return new MatchInfo
+            {
+                MatchId = Guid.NewGuid(),
+                MatchDbId = matchId,
+                MatchCode = trimmedCode,
+                State = "Waiting",
+                Players = new System.Collections.Generic.List<PlayerSummary>()
+            };
+        }
+
+        internal void EnsurePlayersAndInitialWildcards(int matchId, System.Collections.Generic.IEnumerable<int> userIds)
+        {
+            if (matchId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(matchId));
+            }
+
+            if (userIds == null)
+            {
+                throw new ArgumentNullException(nameof(userIds));
+            }
+
+            int[] distinctUserIds = userIds
+                .Where(u => u > 0)
+                .Distinct()
+                .ToArray();
+
+            if (distinctUserIds.Length == 0)
+            {
+                return;
+            }
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    foreach (int userId in distinctUserIds)
+                    {
+                        using (var cmd = new SqlCommand(MatchSql.Text.INSERT_MATCH_PLAYER_IF_NOT_EXISTS, connection, transaction))
+                        {
+                            cmd.CommandType = CommandType.Text;
+                            cmd.Parameters.Add("@MatchId", SqlDbType.Int).Value = matchId;
+                            cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                            cmd.ExecuteNonQuery();
+                        }
+
+                        GrantInitialWildcardsIfNeeded(connection, transaction, matchId, userId);
+                    }
+
+                    transaction.Commit();
+                }
+            }
+
+            Logger.InfoFormat(
+                "EnsurePlayersAndInitialWildcards: MatchId={0}, PlayersEnsured={1}",
+                matchId,
+                distinctUserIds.Length);
+        }
+
+        private static int TryGetMatchIdByAccessCode(SqlConnection connection, SqlTransaction transaction, string accessCode)
+        {
+            using (var cmd = new SqlCommand(MatchSql.Text.GET_MATCH_ID_BY_ACCESS_CODE, connection, transaction))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.Parameters.Add("@AccessCode", SqlDbType.NVarChar, ACCESS_CODE_MAX_LEN).Value = accessCode;
+
+                object scalar = cmd.ExecuteScalar();
+                if (scalar == null || scalar == DBNull.Value)
+                {
+                    return 0;
+                }
+
+                return Convert.ToInt32(scalar);
+            }
+        }
+
+        private static int TryGetMatchMaxPlayers(SqlConnection connection, SqlTransaction transaction, int matchId)
+        {
+            using (var cmd = new SqlCommand(MatchSql.Text.GET_MATCH_MAX_PLAYERS, connection, transaction))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.Parameters.Add("@MatchId", SqlDbType.Int).Value = matchId;
+
+                object scalar = cmd.ExecuteScalar();
+                if (scalar == null || scalar == DBNull.Value)
+                {
+                    return 0;
+                }
+
+                return Convert.ToInt32(scalar);
+            }
+        }
+
+        private static int CountMatchPlayers(SqlConnection connection, SqlTransaction transaction, int matchId)
+        {
+            using (var cmd = new SqlCommand(MatchSql.Text.COUNT_MATCH_PLAYERS, connection, transaction))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.Parameters.Add("@MatchId", SqlDbType.Int).Value = matchId;
+
+                object scalar = cmd.ExecuteScalar();
+                if (scalar == null || scalar == DBNull.Value)
+                {
+                    return 0;
+                }
+
+                return Convert.ToInt32(scalar);
+            }
+        }
+
+        internal static void GrantInitialWildcardsIfNeeded(
             SqlConnection connection,
             SqlTransaction transaction,
             int matchId,
             int userId)
         {
+            if (connection == null)
+            {
+                throw new ArgumentNullException(nameof(connection));
+            }
+
+            if (transaction == null)
+            {
+                throw new ArgumentNullException(nameof(transaction));
+            }
+
+            if (matchId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(matchId));
+            }
+
+            if (userId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(userId));
+            }
+
+            if (INITIAL_WILDCARDS_PER_PLAYER <= 0)
+            {
+                return;
+            }
+
+            if (HasAnyPlayerWildcards(connection, transaction, matchId, userId))
+            {
+                return;
+            }
+
             var wildcardTypes = new System.Collections.Generic.List<int>();
 
             using (var cmd = new SqlCommand(WildcardSql.Text.GET_WILDCARD_TYPES, connection, transaction))
@@ -156,30 +352,50 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (wildcardTypes.Count == 0)
             {
-                Logger.Warn("GrantInitialWildcards: no wildcard types found. No wildcards granted.");
+                Logger.Warn("GrantInitialWildcardsIfNeeded: no wildcard types found. No wildcards granted.");
                 return;
             }
 
-            var index = RandomGenerator.Next(0, wildcardTypes.Count);
-            var chosenTypeId = wildcardTypes[index];
+            for (int i = 0; i < INITIAL_WILDCARDS_PER_PLAYER; i++)
+            {
+                int chosenTypeId;
 
-            using (var cmd = new SqlCommand(WildcardSql.Text.INSERT_PLAYER_WILDCARD, connection, transaction))
+                lock (RandomSyncRoot)
+                {
+                    int index = RandomGenerator.Next(0, wildcardTypes.Count);
+                    chosenTypeId = wildcardTypes[index];
+                }
+
+                using (var cmd = new SqlCommand(WildcardSql.Text.INSERT_PLAYER_WILDCARD, connection, transaction))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.Parameters.Add("@MatchId", SqlDbType.Int).Value = matchId;
+                    cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                    cmd.Parameters.Add("@WildcardTypeId", SqlDbType.Int).Value = chosenTypeId;
+
+                    cmd.ExecuteNonQuery();
+                }
+
+                Logger.InfoFormat(
+                    "GrantInitialWildcardsIfNeeded: MatchId={0}, UserId={1}, WildcardTypeId={2}",
+                    matchId,
+                    userId,
+                    chosenTypeId);
+            }
+        }
+
+        private static bool HasAnyPlayerWildcards(SqlConnection connection, SqlTransaction transaction, int matchId, int userId)
+        {
+            using (var cmd = new SqlCommand(WildcardSql.Text.HAS_ANY_PLAYER_WILDCARDS, connection, transaction))
             {
                 cmd.CommandType = CommandType.Text;
                 cmd.Parameters.Add("@MatchId", SqlDbType.Int).Value = matchId;
                 cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
-                cmd.Parameters.Add("@WildcardTypeId", SqlDbType.Int).Value = chosenTypeId;
 
-                cmd.ExecuteNonQuery();
+                object scalar = cmd.ExecuteScalar();
+                return scalar != null && scalar != DBNull.Value;
             }
-
-            Logger.InfoFormat(
-                "GrantInitialWildcards: MatchId={0}, UserId={1}, WildcardTypeId={2}",
-                matchId,
-                userId,
-                chosenTypeId);
         }
- 
 
         private static void AddDecimal(SqlCommand cmd, string name, byte precision, byte scale, decimal value)
         {
@@ -192,7 +408,7 @@ namespace ServicesTheWeakestRival.Server.Services
         private static string GenerateAccessCode()
         {
             const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-            var buffer = new char[6];
+            var buffer = new char[MATCH_CODE_LEN];
             var random = new Random();
 
             for (var i = 0; i < buffer.Length; i++)

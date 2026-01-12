@@ -1,5 +1,4 @@
-﻿// MatchRuntimeState.cs
-using ServicesTheWeakestRival.Contracts.Data;
+﻿using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Enums;
 using ServicesTheWeakestRival.Contracts.Services;
 using System;
@@ -32,6 +31,11 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
 
             IsInVotePhase = false;
             IsInDuelPhase = false;
+
+            IsInFinalPhase = false;
+            IsFinalSuddenDeath = false;
+            FinalAnsweredByUserId = new Dictionary<int, int>();
+            FinalCorrectByUserId = new Dictionary<int, int>();
 
             WeakestRivalUserId = null;
             DuelTargetUserId = null;
@@ -81,6 +85,14 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
         public bool IsInVotePhase { get; set; }
 
         public bool IsInDuelPhase { get; set; }
+
+        public bool IsInFinalPhase { get; set; }
+
+        public bool IsFinalSuddenDeath { get; set; }
+
+        public Dictionary<int, int> FinalAnsweredByUserId { get; }
+
+        public Dictionary<int, int> FinalCorrectByUserId { get; }
 
         public int? WeakestRivalUserId { get; set; }
 
@@ -191,6 +203,8 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             IsInVotePhase = false;
             IsInDuelPhase = false;
 
+            ResetFinalPhase();
+
             WeakestRivalUserId = null;
             DuelTargetUserId = null;
 
@@ -222,6 +236,14 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                 player.BlockWildcardsRoundNumber = 0;
                 player.PendingTimeDeltaSeconds = 0;
             }
+        }
+
+        public void ResetFinalPhase()
+        {
+            IsInFinalPhase = false;
+            IsFinalSuddenDeath = false;
+            FinalAnsweredByUserId.Clear();
+            FinalCorrectByUserId.Clear();
         }
 
         public MatchPlayerRuntime GetCurrentPlayer()

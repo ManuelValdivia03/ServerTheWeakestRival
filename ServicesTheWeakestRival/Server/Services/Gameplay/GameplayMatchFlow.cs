@@ -19,13 +19,9 @@ namespace ServicesTheWeakestRival.Server.Services
         private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayMatchFlow));
 
         private const string ERROR_MISSING_CALLBACK_MESSAGE = "Missing callback channel.";
-        private const string ERROR_WILDCARD_MATCH_ID_INVALID_MESSAGE = "WildcardMatchId inválido.";
 
-        private const string CTX_JOIN_MATCH_INTERNAL = "GameplayEngine.JoinMatchInternal";
         private const string CTX_START_MATCH_INTERNAL = "GameplayEngine.StartMatchInternal";
         private const string CTX_MATCH_FINISHED = "GameplayEngine.MatchFinished";
-        private const string CTX_TURN_ORDER = "GameplayEngine.TurnOrder";
-        private const string CTX_TURN_ORDER_CHANGED = "GameplayEngine.TurnOrderChanged";
 
         internal static void JoinMatchInternal(
             MatchRuntimeState state,
@@ -268,9 +264,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal static void StartNextRound(MatchRuntimeState state)
         {
-            List<MatchPlayerRuntime> alivePlayers = state.Players
-                .Where(p => p != null && !p.IsEliminated)
-                .ToList();
+            List<MatchPlayerRuntime> alivePlayers = GetAlivePlayers(state);
 
             if (alivePlayers.Count < GameplayEngineConstants.MIN_PLAYERS_TO_CONTINUE)
             {
@@ -296,6 +290,220 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
+        internal static bool StartFinalPhaseIfApplicable(MatchRuntimeState state)
+        {
+            if (state == null || state.IsFinished)
+            {
+                return false;
+            }
+
+            if (state.IsInFinalPhase)
+            {
+                return true;
+            }
+
+            List<MatchPlayerRuntime> alivePlayers = GetAlivePlayers(state);
+            if (alivePlayers.Count != GameplayEngineConstants.FINAL_PLAYERS_COUNT)
+            {
+                return false;
+            }
+
+            StartFinalPhase(state, alivePlayers);
+            return true;
+        }
+
+        internal static void ProcessFinalAnswerAndContinue(MatchRuntimeState state, int userId, bool isCorrect)
+        {
+            if (state == null)
+            {
+                throw new ArgumentNullException(nameof(state));
+            }
+
+            if (!state.IsInFinalPhase || state.IsFinished)
+            {
+                return;
+            }
+
+            EnsureFinalPlayerIsTracked(state, userId);
+
+            state.FinalAnsweredByUserId[userId] = state.FinalAnsweredByUserId[userId] + GameplayEngineConstants.FINAL_ANSWER_INCREMENT;
+
+            if (isCorrect)
+            {
+                state.FinalCorrectByUserId[userId] = state.FinalCorrectByUserId[userId] + GameplayEngineConstants.FINAL_ANSWER_INCREMENT;
+            }
+
+            if (TryFinishFinalIfApplicable(state))
+            {
+                return;
+            }
+
+            state.AdvanceTurn();
+            EnsureFinalQuestionPool(state);
+
+            GameplayTurnFlow.SendNextQuestion(state);
+        }
+
+        private static void StartFinalPhase(MatchRuntimeState state, List<MatchPlayerRuntime> alivePlayers)
+        {
+            state.IsInVotePhase = false;
+            state.IsInDuelPhase = false;
+
+            state.WeakestRivalUserId = null;
+            state.DuelTargetUserId = null;
+            state.VotersThisRound.Clear();
+            state.VotesThisRound.Clear();
+
+            state.QuestionsAskedThisRound = 0;
+            state.CurrentChain = 0m;
+            state.CurrentStreak = 0;
+
+            state.HasSpecialEventThisRound = false;
+            state.BombQuestionId = 0;
+
+            state.IsDarkModeActive = false;
+            state.DarkModeRoundNumber = 0;
+
+            state.ResetSurpriseExam();
+            state.RestoreTurnAfterLightning();
+            state.ResetLightningChallenge();
+
+            state.ActiveSpecialEvent = ServicesTheWeakestRival.Contracts.Enums.SpecialEventType.None;
+
+            state.ResetFinalPhase();
+            state.IsInFinalPhase = true;
+
+            foreach (MatchPlayerRuntime player in alivePlayers)
+            {
+                if (player == null)
+                {
+                    continue;
+                }
+
+                state.FinalAnsweredByUserId[player.UserId] = 0;
+                state.FinalCorrectByUserId[player.UserId] = 0;
+            }
+
+            EnsureCurrentPlayerIndexPointsToAlivePlayerOrReturn(state);
+
+            EnsureFinalQuestionPool(state);
+            GameplayTurnFlow.SendNextQuestion(state);
+        }
+
+        private static bool TryFinishFinalIfApplicable(MatchRuntimeState state)
+        {
+            List<MatchPlayerRuntime> alivePlayers = GetAlivePlayers(state);
+            if (alivePlayers.Count != GameplayEngineConstants.FINAL_PLAYERS_COUNT)
+            {
+                return false;
+            }
+
+            int playerAId = alivePlayers[0].UserId;
+            int playerBId = alivePlayers[1].UserId;
+
+            EnsureFinalPlayerIsTracked(state, playerAId);
+            EnsureFinalPlayerIsTracked(state, playerBId);
+
+            int answeredA = state.FinalAnsweredByUserId[playerAId];
+            int answeredB = state.FinalAnsweredByUserId[playerBId];
+
+            if (!state.IsFinalSuddenDeath)
+            {
+                if (answeredA < GameplayEngineConstants.FINAL_QUESTIONS_PER_PLAYER ||
+                    answeredB < GameplayEngineConstants.FINAL_QUESTIONS_PER_PLAYER)
+                {
+                    return false;
+                }
+
+                int correctA = state.FinalCorrectByUserId[playerAId];
+                int correctB = state.FinalCorrectByUserId[playerBId];
+
+                if (correctA == correctB)
+                {
+                    state.IsFinalSuddenDeath = true;
+                    return false;
+                }
+
+                int winnerUserId = correctA > correctB ? playerAId : playerBId;
+                FinishMatchByWinnerUserId(state, winnerUserId);
+                return true;
+            }
+
+            if (answeredA == answeredB)
+            {
+                int correctA = state.FinalCorrectByUserId[playerAId];
+                int correctB = state.FinalCorrectByUserId[playerBId];
+
+                if (correctA != correctB)
+                {
+                    int winnerUserId = correctA > correctB ? playerAId : playerBId;
+                    FinishMatchByWinnerUserId(state, winnerUserId);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void EnsureFinalQuestionPool(MatchRuntimeState state)
+        {
+            if (state.Questions.Count >= GameplayEngineConstants.FINAL_MIN_QUEUE_QUESTIONS)
+            {
+                return;
+            }
+
+            List<QuestionWithAnswersDto> batch = GameplayDataAccess.LoadQuestionsWithLocaleFallback(
+                state.Difficulty,
+                state.LocaleCode,
+                GameplayEngineConstants.FINAL_REFILL_BATCH_SIZE);
+
+            if (batch == null || batch.Count == 0)
+            {
+                return;
+            }
+
+            foreach (QuestionWithAnswersDto question in batch)
+            {
+                if (question == null)
+                {
+                    continue;
+                }
+
+                if (state.QuestionsById.ContainsKey(question.QuestionId))
+                {
+                    continue;
+                }
+
+                state.QuestionsById[question.QuestionId] = question;
+                state.Questions.Enqueue(question);
+            }
+        }
+
+        private static void EnsureFinalPlayerIsTracked(MatchRuntimeState state, int userId)
+        {
+            if (!state.FinalAnsweredByUserId.ContainsKey(userId))
+            {
+                state.FinalAnsweredByUserId[userId] = 0;
+            }
+
+            if (!state.FinalCorrectByUserId.ContainsKey(userId))
+            {
+                state.FinalCorrectByUserId[userId] = 0;
+            }
+        }
+
+        private static List<MatchPlayerRuntime> GetAlivePlayers(MatchRuntimeState state)
+        {
+            if (state == null)
+            {
+                return new List<MatchPlayerRuntime>();
+            }
+
+            return state.Players
+                .Where(p => p != null && !p.IsEliminated)
+                .ToList();
+        }
+
         private static void ResetRoundStateForNextRound(MatchRuntimeState state)
         {
             state.RoundNumber++;
@@ -304,6 +512,9 @@ namespace ServicesTheWeakestRival.Server.Services
             state.CurrentStreak = 0;
             state.IsInVotePhase = false;
             state.IsInDuelPhase = false;
+
+            state.ResetFinalPhase();
+
             state.WeakestRivalUserId = null;
             state.DuelTargetUserId = null;
             state.VotersThisRound.Clear();
@@ -346,16 +557,23 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
-            List<MatchPlayerRuntime> alivePlayers = state.Players
-                .Where(p => p != null && !p.IsEliminated)
-                .ToList();
+            List<MatchPlayerRuntime> alivePlayers = GetAlivePlayers(state);
 
             if (alivePlayers.Count != 1)
             {
                 return;
             }
 
-            MatchPlayerRuntime winner = alivePlayers[0];
+            FinishMatchByWinnerUserId(state, alivePlayers[0].UserId);
+        }
+
+        private static void FinishMatchByWinnerUserId(MatchRuntimeState state, int winnerUserId)
+        {
+            MatchPlayerRuntime winner = state.Players.FirstOrDefault(p => p != null && p.UserId == winnerUserId);
+            if (winner == null)
+            {
+                return;
+            }
 
             state.IsFinished = true;
             state.WinnerUserId = winner.UserId;
@@ -421,6 +639,9 @@ namespace ServicesTheWeakestRival.Server.Services
             state.RoundNumber = 1;
             state.IsInVotePhase = false;
             state.IsInDuelPhase = false;
+
+            state.ResetFinalPhase();
+
             state.WeakestRivalUserId = null;
             state.DuelTargetUserId = null;
             state.VotersThisRound.Clear();

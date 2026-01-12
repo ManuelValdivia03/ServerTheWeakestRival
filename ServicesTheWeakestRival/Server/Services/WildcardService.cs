@@ -223,12 +223,6 @@ namespace ServicesTheWeakestRival.Server.Services
                         List<PlayerWildcardDto> list =
                             LoadAvailableWildcards(connection, transaction, request.MatchId, userId);
 
-                        if (list.Count == 0)
-                        {
-                            GrantRandomWildcardInternal(connection, transaction, request.MatchId, userId);
-                            list = LoadAvailableWildcards(connection, transaction, request.MatchId, userId);
-                        }
-
                         transaction.Commit();
 
                         Logger.InfoFormat(

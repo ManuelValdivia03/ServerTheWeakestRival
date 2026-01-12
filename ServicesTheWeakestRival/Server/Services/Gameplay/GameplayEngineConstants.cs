@@ -36,6 +36,16 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string ERROR_NO_QUESTIONS_MESSAGE =
             "No se encontraron preguntas para la dificultad/idioma solicitados.";
 
+        internal const int FINAL_PLAYERS_COUNT = 2;
+
+        internal const int FINAL_QUESTIONS_PER_PLAYER = 5;
+
+        internal const int FINAL_ANSWER_INCREMENT = 1;
+
+        internal const int FINAL_MIN_QUEUE_QUESTIONS = FINAL_QUESTIONS_PER_PLAYER * FINAL_PLAYERS_COUNT;
+
+        internal const int FINAL_REFILL_BATCH_SIZE = DEFAULT_MAX_QUESTIONS;
+
         internal const int DEFAULT_MAX_QUESTIONS = 40;
         internal const int QUESTIONS_PER_PLAYER_PER_ROUND = 2;
         internal const int VOTE_PHASE_TIME_LIMIT_SECONDS = 30;
@@ -61,7 +71,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal const int SURPRISE_EXAM_RANDOM_MIN_VALUE = 0;
         internal const int SURPRISE_EXAM_RANDOM_MAX_VALUE = 100;
-        internal const int SURPRISE_EXAM_PROBABILITY_PERCENT = 100;
+        internal const int SURPRISE_EXAM_PROBABILITY_PERCENT = 20;
 
         internal const int SURPRISE_EXAM_TIME_LIMIT_SECONDS = 20;
 
@@ -128,12 +138,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal const string WILDCARD_CHANGE_Q = "CHANGE_Q";
         internal const string WILDCARD_PASS_Q = "PASS_Q";
-        internal const string WILDCARD_SHIELD = "SHIELD";
         internal const string WILDCARD_FORCED_BANK = "FORCED_BANK";
         internal const string WILDCARD_DOUBLE = "DOUBLE";
         internal const string WILDCARD_BLOCK = "BLOCK";
-        internal const string WILDCARD_SABOTAGE = "SABOTAGE";
-        internal const string WILDCARD_EXTRA_TIME = "EXTRA_TIME";
 
         internal const string TURN_REASON_TIME_DELTA_PREFIX = "TIME_DELTA:";
         internal const string TURN_REASON_WILDCARD_PASS_Q = "WILDCARD_PASS_Q";

@@ -163,6 +163,11 @@ namespace ServicesTheWeakestRival.Server.Services
                     return;
                 }
 
+                if (GameplayMatchFlow.StartFinalPhaseIfApplicable(state))
+                {
+                    return;
+                }
+
                 GameplayMatchFlow.StartNextRound(state);
                 return;
             }
@@ -322,6 +327,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
             GameplayMatchFlow.FinishMatchWithWinnerIfApplicable(state);
             if (state.IsFinished)
+            {
+                return;
+            }
+
+            if (GameplayMatchFlow.StartFinalPhaseIfApplicable(state))
             {
                 return;
             }

@@ -1,4 +1,5 @@
-﻿using ServicesTheWeakestRival.Contracts.Data;
+﻿using log4net;
+using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services.Gameplay;
 using ServicesTheWeakestRival.Server.Services.Logic;
@@ -18,9 +19,18 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal const string MESSAGE_UNEXPECTED_ERROR = GameplayEngineConstants.MESSAGE_UNEXPECTED_ERROR;
 
+        private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayEngine));
+
         private const string CTX_GET_QUESTIONS = "GameplayEngine.GetQuestions";
         private const string MESSAGE_REQUEST_IS_NULL = "Request is null.";
         private const string MESSAGE_MATCH_ID_REQUIRED = "MatchId is required.";
+
+        private const int MIN_ANSWERS_REQUIRED = 2;
+        private const int EXPECTED_CORRECT_ANSWERS = 1;
+        private const byte DISPLAY_ORDER_START = 1;
+
+        private static readonly Random RandomGenerator = new Random();
+        private static readonly object RandomSyncRoot = new object();
 
         private GameplayEngine()
         {
@@ -39,9 +49,13 @@ namespace ServicesTheWeakestRival.Server.Services
                 List<QuestionWithAnswersDto> questions =
                     GameplayDataAccess.LoadQuestions(request.Difficulty, request.LocaleCode, maxQuestions);
 
+                List<QuestionWithAnswersDto> safeQuestions = questions ?? new List<QuestionWithAnswersDto>();
+
+                ShuffleAnswersForGameplay(safeQuestions);
+
                 return new GetQuestionsResponse
                 {
-                    Questions = questions ?? new List<QuestionWithAnswersDto>()
+                    Questions = safeQuestions
                 };
             }
             catch (FaultException<ServiceFault>)
@@ -166,6 +180,98 @@ namespace ServicesTheWeakestRival.Server.Services
             if (matchId == Guid.Empty)
             {
                 throw ThrowFault(ERROR_INVALID_REQUEST, MESSAGE_MATCH_ID_REQUIRED);
+            }
+        }
+
+        private static void ShuffleAnswersForGameplay(List<QuestionWithAnswersDto> questions)
+        {
+            if (questions == null || questions.Count == 0)
+            {
+                return;
+            }
+
+            foreach (QuestionWithAnswersDto question in questions)
+            {
+                if (question == null)
+                {
+                    continue;
+                }
+
+                List<AnswerDto> answers = question.Answers;
+                if (answers == null || answers.Count < MIN_ANSWERS_REQUIRED)
+                {
+                    Logger.WarnFormat(
+                        "ShuffleAnswersForGameplay: QuestionId={0} has insufficient answers. Count={1}.",
+                        question.QuestionId,
+                        answers == null ? 0 : answers.Count);
+                    continue;
+                }
+
+                int correctCount = 0;
+                foreach (AnswerDto answer in answers)
+                {
+                    if (answer != null && answer.IsCorrect)
+                    {
+                        correctCount++;
+                    }
+                }
+
+                if (correctCount != EXPECTED_CORRECT_ANSWERS)
+                {
+                    Logger.WarnFormat(
+                        "ShuffleAnswersForGameplay: QuestionId={0} has invalid correct answers count. Expected={1}, Actual={2}.",
+                        question.QuestionId,
+                        EXPECTED_CORRECT_ANSWERS,
+                        correctCount);
+                    continue;
+                }
+
+                ShuffleInPlace(answers);
+
+                ReassignDisplayOrder(answers);
+            }
+        }
+
+        private static void ShuffleInPlace(List<AnswerDto> answers)
+        {
+            if (answers == null || answers.Count <= 1)
+            {
+                return;
+            }
+
+            lock (RandomSyncRoot)
+            {
+                for (int i = answers.Count - 1; i > 0; i--)
+                {
+                    int j = RandomGenerator.Next(i + 1);
+
+                    AnswerDto temp = answers[i];
+                    answers[i] = answers[j];
+                    answers[j] = temp;
+                }
+            }
+        }
+
+        private static void ReassignDisplayOrder(List<AnswerDto> answers)
+        {
+            if (answers == null || answers.Count == 0)
+            {
+                return;
+            }
+
+            byte displayOrder = DISPLAY_ORDER_START;
+
+            foreach (AnswerDto answer in answers)
+            {
+                if (answer != null)
+                {
+                    answer.DisplayOrder = displayOrder;
+                }
+
+                unchecked
+                {
+                    displayOrder++;
+                }
             }
         }
     }

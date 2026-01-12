@@ -54,6 +54,41 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                         @UserId,
                         SYSUTCDATETIME(),
                         0);";
+
+                public const string GET_MATCH_ID_BY_ACCESS_CODE = @"
+                    SELECT TOP (1) m.match_id
+                    FROM dbo.Matches m
+                    WHERE m.access_code = @AccessCode;";
+
+                public const string GET_MATCH_MAX_PLAYERS = @"
+                    SELECT TOP (1) m.max_players
+                    FROM dbo.Matches m
+                    WHERE m.match_id = @MatchId;";
+
+                public const string COUNT_MATCH_PLAYERS = @"
+                    SELECT COUNT(1)
+                    FROM dbo.MatchPlayers mp
+                    WHERE mp.match_id = @MatchId;";
+
+                public const string INSERT_MATCH_PLAYER_IF_NOT_EXISTS = @"
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.MatchPlayers mp
+                        WHERE mp.match_id = @MatchId
+                          AND mp.user_id = @UserId
+                    )
+                    BEGIN
+                        INSERT INTO dbo.MatchPlayers
+                                (match_id,
+                                 user_id,
+                                 joined_at,
+                                 is_eliminated)
+                        VALUES  (@MatchId,
+                                 @UserId,
+                                 SYSUTCDATETIME(),
+                                 0);
+                    END";
+
             }
         }
     }

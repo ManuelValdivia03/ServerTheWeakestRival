@@ -309,7 +309,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             DateTime expiresAtUtc = DateTime.UtcNow.AddMinutes(AuthServiceConstants.DEFAULT_CODE_TTL_MINUTES);
 
             CreateVerification(email, CODE_VALID, expiresAtUtc);
-            CreateVerification(email, CODE_INVALID, expiresAtUtc); // invalida la anterior
+            CreateVerification(email, CODE_INVALID, expiresAtUtc);
 
             var workflow = new CompleteRegisterWorkflow(authRepository, passwordPolicy, passwordService);
 

@@ -1,9 +1,10 @@
-﻿using log4net;
-using ServicesTheWeakestRival.Contracts.Data;
-using ServicesTheWeakestRival.Server.Services.Logic;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
+using System.Linq;
+using log4net;
+using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Server.Services.Logic;
 using TheWeakestRival.Data;
 
 namespace ServicesTheWeakestRival.Server.Services.Lobby
@@ -37,14 +38,34 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
             try
             {
+                if (!callbackHub.TryGetLobbyUidForCurrentSession(out Guid lobbyUid))
+                {
+                    Logger.Warn("StartLobbyMatch: could not resolve lobbyUid for current session.");
+                    return new StartLobbyMatchResponse
+                    {
+                        Match = null
+                    };
+                }
+
+                int lobbyId = lobbyRepository.GetLobbyIdFromUid(lobbyUid);
+                List<LobbyMembers> members = lobbyRepository.GetLobbyMembers(lobbyId);
+
+                UserAvatarSql avatarSql = avatarSqlFactory();
+                List<AccountMini> accountMinis = LobbyMappers.MapToAccountMini(members, avatarSql);
+
+                int[] lobbyUserIds = (accountMinis ?? new List<AccountMini>())
+                    .Where(a => a != null)
+                    .Select(a => a.AccountId)
+                    .Where(id => id > 0)
+                    .Distinct()
+                    .ToArray();
+
                 var manager = new MatchManager(connectionString);
 
                 int maxPlayers =
                     request.MaxPlayers > 0
                         ? request.MaxPlayers
                         : LobbyServiceConstants.DEFAULT_MAX_PLAYERS;
-
-
 
                 MatchConfigDto config = BuildMatchConfigOrDefault(request.Config);
 
@@ -57,7 +78,7 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
                 };
 
                 var createResponse = manager.CreateMatch(hostUserId, createRequest);
-                var match = createResponse != null ? createResponse.Match : null;
+                MatchInfo match = createResponse != null ? createResponse.Match : null;
 
                 if (match == null)
                 {
@@ -70,39 +91,37 @@ namespace ServicesTheWeakestRival.Server.Services.Lobby
 
                 match.Config = config;
 
-                if (callbackHub.TryGetLobbyUidForCurrentSession(out Guid lobbyUid))
+                if (match.MatchDbId <= 0)
                 {
-                    int lobbyId = lobbyRepository.GetLobbyIdFromUid(lobbyUid);
+                    throw LobbyServiceContext.ThrowTechnicalFault(
+                        LobbyServiceConstants.ERROR_UNEXPECTED,
+                        LobbyServiceConstants.MESSAGE_UNEXPECTED_ERROR,
+                        "LobbyService.StartLobbyMatch.InvalidMatchDbId",
+                        new InvalidOperationException("MatchDbId is invalid."));
+                }
 
-                    List<LobbyMembers> members = lobbyRepository.GetLobbyMembers(lobbyId);
-                    UserAvatarSql avatarSql = avatarSqlFactory();
-                    List<AccountMini> accountMinis = LobbyMappers.MapToAccountMini(members, avatarSql);
+                manager.EnsurePlayersAndInitialWildcards(match.MatchDbId, lobbyUserIds);
 
-                    match.Players = LobbyMappers.MapToPlayerSummaries(accountMinis);
+                match.Players = LobbyMappers.MapToPlayerSummaries(accountMinis);
 
-                    Logger.InfoFormat(
-                        "StartLobbyMatch: broadcasting OnMatchStarted. LobbyUid={0}, PlayersCount={1}",
-                        lobbyUid,
-                        match.Players != null ? match.Players.Count : 0);
+                Logger.InfoFormat(
+                    "StartLobbyMatch: broadcasting OnMatchStarted. LobbyUid={0}, PlayersCount={1}",
+                    lobbyUid,
+                    match.Players != null ? match.Players.Count : 0);
 
-                    callbackHub.Broadcast(
-                        lobbyUid,
-                        cb =>
+                callbackHub.Broadcast(
+                    lobbyUid,
+                    cb =>
+                    {
+                        try
                         {
-                            try
-                            {
-                                cb.OnMatchStarted(match);
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.Warn("Error sending OnMatchStarted callback.", ex);
-                            }
-                        });
-                }
-                else
-                {
-                    Logger.Warn("StartLobbyMatch: could not resolve lobbyUid for current session.");
-                }
+                            cb.OnMatchStarted(match);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn("Error sending OnMatchStarted callback.", ex);
+                        }
+                    });
 
                 return new StartLobbyMatchResponse
                 {

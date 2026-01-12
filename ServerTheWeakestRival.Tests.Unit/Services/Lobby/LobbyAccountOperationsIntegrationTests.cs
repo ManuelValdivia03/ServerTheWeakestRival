@@ -2,7 +2,7 @@
 using ServerTheWeakestRival.Tests.Integration.Helpers;
 using ServerTheWeakestRival.Tests.Unit.Infrastructure;
 using ServicesTheWeakestRival.Contracts.Data;
-using ServicesTheWeakestRival.Server.Services; // TokenStore lives here
+using ServicesTheWeakestRival.Server.Services;
 using ServicesTheWeakestRival.Server.Services.Lobby;
 using ServicesTheWeakestRival.Server.Services.Logic;
 using System;

@@ -56,6 +56,12 @@ namespace ServicesTheWeakestRival.Server.Services
                         result),
                     "GameplayEngine.SubmitAnswerInternal");
 
+                if (state.IsInFinalPhase)
+                {
+                    GameplayMatchFlow.ProcessFinalAnswerAndContinue(state, currentPlayer.UserId, isCorrect);
+                    return result;
+                }
+
                 if (GameplayVotingAndDuelFlow.ShouldHandleDuelTurn(state, currentPlayer))
                 {
                     GameplayVotingAndDuelFlow.HandleDuelTurn(state, currentPlayer, isCorrect);
@@ -70,6 +76,12 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 if (state.QuestionsAskedThisRound >= maxQuestionsThisRound || hasNoMoreQuestions)
                 {
+                    if (alivePlayersCount == GameplayEngineConstants.FINAL_PLAYERS_COUNT)
+                    {
+                        GameplayMatchFlow.StartFinalPhaseIfApplicable(state);
+                        return result;
+                    }
+
                     GameplayVotingAndDuelFlow.StartVotePhase(state);
                     return result;
                 }
@@ -153,7 +165,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     effectiveRoundNumber = serverRoundNumber;
                 }
 
-                if (state.IsInVotePhase || state.IsInDuelPhase || state.IsSurpriseExamActive || GameplaySpecialEvents.IsLightningActive(state))
+                if (state.IsInVotePhase || state.IsInDuelPhase || state.IsSurpriseExamActive || GameplaySpecialEvents.IsLightningActive(state) || state.IsInFinalPhase)
                 {
                     throw GameplayFaults.ThrowFault(
                         GameplayEngineConstants.ERROR_WILDCARD_INVALID_TIMING,
