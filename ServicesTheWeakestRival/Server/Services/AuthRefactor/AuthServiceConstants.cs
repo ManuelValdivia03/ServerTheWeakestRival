@@ -42,13 +42,13 @@
         public const string ERROR_ACCOUNT_BANNED = "ACCOUNT_BANNED";
 
         public const string ERROR_ALREADY_LOGGED_IN = "ALREADY_LOGGED_IN";
-        public const string MESSAGE_ALREADY_LOGGED_IN = "This account is already online.";
+        public const string MESSAGE_ALREADY_LOGGED_IN = "Auth.IssueToken.AlreadyLoggedIn";
 
         public const string ERROR_FORCED_LOGOUT = "FORCED_LOGOUT";
         public const string MESSAGE_FORCED_LOGOUT = "Session replaced by a new login.";
 
         public const string MESSAGE_INVALID_REQUEST = "Invalid request.";
-        public const string MESSAGE_CONFIG_ERROR = "Configuration error. Please contact support.";
+        public const string MESSAGE_CONFIG_ERROR = "Auth.ResolveConnectionString.Configuration";
         public const string MESSAGE_PAYLOAD_NULL = "Request payload is null.";
         public const string MESSAGE_EMAIL_REQUIRED = "Email is required.";
         public const string MESSAGE_VERIFICATION_EMAIL_FAILED = "Failed to send verification email. Please try again later.";
@@ -84,7 +84,7 @@
             "Password does not meet the minimum length requirements ({0} characters).";
 
         public const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
-        public const string MESSAGE_UNEXPECTED_ERROR = "Unexpected error. Please try again later.";
+        public const string MESSAGE_UNEXPECTED_ERROR = "Auth.Unexpected";
 
 
         public const string MESSAGE_VERIFICATION_CODE_MISSING = "No pending code. Request a new one.";
@@ -111,7 +111,7 @@
         public const string APPSETTING_EMAIL_CODE_TTL_MINUTES = "EmailCodeTtlMinutes";
         public const string APPSETTING_EMAIL_RESEND_COOLDOWN_SECONDS = "EmailResendCooldownSeconds";
 
-        public const string MESSAGE_INVALID_USER_ID = "Invalid user id.";
+        public const string MESSAGE_INVALID_USER_ID = "Auth.IssueToken.InvalidUserId";
 
         public const string TOKEN_GUID_FORMAT = "N";
         public const int SQL_TRUE = 1;
