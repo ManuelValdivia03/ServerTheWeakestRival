@@ -69,7 +69,7 @@
 
         public const string MESSAGE_COMPLETE_RESET_REQUIRED_FIELDS = "Email, code and new password are required.";
         public const string MESSAGE_RESET_CODE_EXPIRED = "Reset code expired. Request a new one.";
-        public const string MESSAGE_EMAIL_NOT_REGISTERED = "No account is registered with that email.";
+        public const string MESSAGE_EMAIL_NOT_REGISTERED = "Auth.Email.NotRegistered";
         public const string MESSAGE_UNEXPECTED_DB_COMPLETE_RESET = "Unexpected database error while completing password reset.";
 
         public const string MESSAGE_REGISTER_REQUIRED_FIELDS = "Email, display name and password are required.";
@@ -90,7 +90,7 @@
         public const string MESSAGE_VERIFICATION_CODE_MISSING = "No pending code. Request a new one.";
         public const string MESSAGE_RESET_CODE_MISSING = "No pending reset code. Request a new one.";
 
-        public const string MESSAGE_EMAIL_TAKEN = "Email is already registered.";
+        public const string MESSAGE_EMAIL_TAKEN = "Auth.Email.Taken";
         public const string MESSAGE_TOO_SOON = "Please wait before requesting another code.";
 
         public const string MESSAGE_UNEXPECTED_DB_BEGIN_REGISTER = "Unexpected database error while starting registration.";
