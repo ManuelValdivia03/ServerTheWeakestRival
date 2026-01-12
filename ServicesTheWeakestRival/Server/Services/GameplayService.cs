@@ -1,14 +1,15 @@
-﻿using ServicesTheWeakestRival.Contracts.Data;
+﻿using log4net;
+using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services.Gameplay;
-using ServicesTheWeakestRival.Server.Services.Logic;
 using System;
 using System.ServiceModel;
-using log4net;
 
 namespace ServicesTheWeakestRival.Server.Services
 {
-    [ServiceBehavior(InstanceContextMode = InstanceContextMode.PerSession, ConcurrencyMode = ConcurrencyMode.Multiple)]
+    [ServiceBehavior(
+        InstanceContextMode = InstanceContextMode.PerSession,
+        ConcurrencyMode = ConcurrencyMode.Multiple)]
     public sealed class GameplayService : IGameplayService
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayService));
@@ -20,16 +21,16 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string CTX_START_MATCH = "GameplayService.StartMatch";
         private const string CTX_CHOOSE_DUEL = "GameplayService.ChooseDuelOpponent";
         private const string CTX_GET_QUESTIONS = "GameplayService.GetQuestions";
+        private const string CTX_USE_LIFELINE = "GameplayService.UseLifeline";
+        private const string CTX_ACK_EVENT_SEEN = "GameplayService.AckEventSeen";
 
-        private readonly GameplayEngine engine;
         private readonly GameplayMatchLogic matchLogic;
         private readonly GameplayTurnLogic turnLogic;
 
         public GameplayService()
         {
-            engine = GameplayEngine.Shared;
-            matchLogic = new GameplayMatchLogic(engine);
-            turnLogic = new GameplayTurnLogic(engine);
+            matchLogic = new GameplayMatchLogic();
+            turnLogic = new GameplayTurnLogic();
         }
 
         public SubmitAnswerResponse SubmitAnswer(SubmitAnswerRequest request)
@@ -44,12 +45,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public UseLifelineResponse UseLifeline(UseLifelineRequest request)
         {
-            return ExecuteService("GameplayService.UseLifeline", () =>
+            return ExecuteService(CTX_USE_LIFELINE, () =>
             {
-                if (request == null)
-                {
-                    throw GameplayEngine.ThrowFault(GameplayEngine.ERROR_INVALID_REQUEST, "Request is null.");
-                }
+                GameplayEngine.ValidateNotNullRequest(request);
 
                 return new UseLifelineResponse
                 {
@@ -65,12 +63,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public AckEventSeenResponse AckEventSeen(AckEventSeenRequest request)
         {
-            return ExecuteService("GameplayService.AckEventSeen", () =>
+            return ExecuteService(CTX_ACK_EVENT_SEEN, () =>
             {
-                if (request == null)
-                {
-                    throw GameplayEngine.ThrowFault(GameplayEngine.ERROR_INVALID_REQUEST, "Request is null.");
-                }
+                GameplayEngine.ValidateNotNullRequest(request);
 
                 return new AckEventSeenResponse
                 {
@@ -81,7 +76,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public GetQuestionsResponse GetQuestions(GetQuestionsRequest request)
         {
-            return ExecuteService(CTX_GET_QUESTIONS, () => engine.GetQuestions(request));
+            return ExecuteService(CTX_GET_QUESTIONS, () => GameplayEngine.GetQuestions(request));
         }
 
         public GameplayJoinMatchResponse JoinMatch(GameplayJoinMatchRequest request)
@@ -101,6 +96,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static T ExecuteService<T>(string context, Func<T> action)
         {
+            if (string.IsNullOrWhiteSpace(context))
+            {
+                throw new ArgumentException("Context is required.", nameof(context));
+            }
+
             if (action == null)
             {
                 throw new ArgumentNullException(nameof(action));
@@ -117,6 +117,7 @@ namespace ServicesTheWeakestRival.Server.Services
             catch (Exception ex)
             {
                 Logger.Error(context, ex);
+
                 throw GameplayEngine.ThrowTechnicalFault(
                     GameplayEngine.ERROR_UNEXPECTED,
                     GameplayEngine.MESSAGE_UNEXPECTED_ERROR,

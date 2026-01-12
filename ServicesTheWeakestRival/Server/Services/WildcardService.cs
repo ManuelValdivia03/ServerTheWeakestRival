@@ -316,7 +316,7 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
 
-                GameplayEngine.Shared.ApplyWildcardFromDbOrThrow(
+                GameplayEngine.ApplyWildcardFromDbOrThrow(
                     request.MatchId,
                     userId,
                     consumedWildcard.Code,

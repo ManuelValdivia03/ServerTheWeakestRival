@@ -1,5 +1,4 @@
-﻿using log4net;
-using ServicesTheWeakestRival.Contracts.Data;
+﻿using ServicesTheWeakestRival.Contracts.Data;
 using ServicesTheWeakestRival.Contracts.Services;
 using ServicesTheWeakestRival.Server.Services.Gameplay;
 using ServicesTheWeakestRival.Server.Services.Logic;
@@ -14,8 +13,6 @@ namespace ServicesTheWeakestRival.Server.Services
     {
         internal static readonly GameplayEngine Shared = new GameplayEngine();
 
-        private static readonly ILog Logger = LogManager.GetLogger(typeof(GameplayEngine));
-
         internal const string ERROR_INVALID_REQUEST = GameplayEngineConstants.ERROR_INVALID_REQUEST;
         internal const string ERROR_UNEXPECTED = GameplayEngineConstants.ERROR_UNEXPECTED;
 
@@ -29,7 +26,7 @@ namespace ServicesTheWeakestRival.Server.Services
         {
         }
 
-        internal GetQuestionsResponse GetQuestions(GetQuestionsRequest request)
+        internal static GetQuestionsResponse GetQuestions(GetQuestionsRequest request)
         {
             GameplayDataAccess.ValidateGetQuestionsRequest(request);
 
@@ -69,27 +66,27 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        internal MatchRuntimeState GetOrCreateMatch(Guid matchId)
+        internal static MatchRuntimeState GetOrCreateMatch(Guid matchId)
         {
             return GameplayMatchRegistry.GetOrCreateMatch(matchId);
         }
 
-        internal MatchRuntimeState GetMatchOrThrow(Guid matchId)
+        internal static MatchRuntimeState GetMatchOrThrow(Guid matchId)
         {
             return GameplayMatchRegistry.GetMatchOrThrow(matchId);
         }
 
-        internal MatchRuntimeState GetMatchByWildcardDbIdOrThrow(int wildcardMatchId)
+        internal static MatchRuntimeState GetMatchByWildcardDbIdOrThrow(int wildcardMatchId)
         {
             return GameplayMatchRegistry.GetMatchByWildcardDbIdOrThrow(wildcardMatchId);
         }
 
-        internal Guid ResolveMatchIdForUserOrThrow(int userId)
+        internal static Guid ResolveMatchIdForUserOrThrow(int userId)
         {
             return GameplayMatchRegistry.ResolveMatchIdForUserOrThrow(userId);
         }
 
-        internal void JoinMatchInternal(
+        internal static void JoinMatchInternal(
             MatchRuntimeState state,
             Guid matchId,
             int userId,
@@ -98,12 +95,12 @@ namespace ServicesTheWeakestRival.Server.Services
             GameplayMatchFlow.JoinMatchInternal(state, matchId, userId, callback);
         }
 
-        internal void StartMatchInternal(MatchRuntimeState state, GameplayStartMatchRequest request, int hostUserId)
+        internal static void StartMatchInternal(MatchRuntimeState state, GameplayStartMatchRequest request, int hostUserId)
         {
             GameplayMatchFlow.StartMatchInternal(state, request, hostUserId);
         }
 
-        internal void InitializeMatchState(
+        internal static void InitializeMatchState(
             MatchRuntimeState state,
             GameplayStartMatchRequest request,
             int hostUserId,
@@ -112,32 +109,32 @@ namespace ServicesTheWeakestRival.Server.Services
             GameplayMatchFlow.InitializeMatchState(state, request, hostUserId, questions);
         }
 
-        internal void ChooseDuelOpponentInternal(MatchRuntimeState state, int userId, int targetUserId)
+        internal static void ChooseDuelOpponentInternal(MatchRuntimeState state, int userId, int targetUserId)
         {
             GameplayActionsFlow.ChooseDuelOpponentInternal(state, userId, targetUserId);
         }
 
-        internal AnswerResult SubmitAnswerInternal(MatchRuntimeState state, int userId, SubmitAnswerRequest request)
+        internal static AnswerResult SubmitAnswerInternal(MatchRuntimeState state, int userId, SubmitAnswerRequest request)
         {
             return GameplayActionsFlow.SubmitAnswerInternal(state, userId, request);
         }
 
-        internal BankState BankInternal(MatchRuntimeState state, int userId)
+        internal static BankState BankInternal(MatchRuntimeState state, int userId)
         {
             return GameplayActionsFlow.BankInternal(state, userId);
         }
 
-        internal bool CastVoteInternal(MatchRuntimeState state, int userId, int? targetUserId)
+        internal static bool CastVoteInternal(MatchRuntimeState state, int userId, int? targetUserId)
         {
             return GameplayActionsFlow.CastVoteInternal(state, userId, targetUserId);
         }
 
-        internal int ApplyWildcardFromDbOrThrow(int wildcardMatchId, int userId, string wildcardCode, int clientRoundNumber)
+        internal static int ApplyWildcardFromDbOrThrow(int wildcardMatchId, int userId, string wildcardCode, int clientRoundNumber)
         {
             return GameplayActionsFlow.ApplyWildcardFromDbOrThrow(wildcardMatchId, userId, wildcardCode, clientRoundNumber);
         }
 
-        internal int Authenticate(string token)
+        internal static int Authenticate(string token)
         {
             return GameplayAuth.Authenticate(token);
         }
@@ -156,7 +153,7 @@ namespace ServicesTheWeakestRival.Server.Services
             return GameplayFaults.ThrowTechnicalFault(code, message, context, ex);
         }
 
-        internal void ValidateNotNullRequest(object request)
+        internal static void ValidateNotNullRequest(object request)
         {
             if (request == null)
             {
@@ -164,7 +161,7 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
-        internal void ValidateMatchId(Guid matchId)
+        internal static void ValidateMatchId(Guid matchId)
         {
             if (matchId == Guid.Empty)
             {

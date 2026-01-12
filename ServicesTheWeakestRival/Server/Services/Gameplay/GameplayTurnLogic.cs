@@ -6,22 +6,19 @@ namespace ServicesTheWeakestRival.Server.Services
 {
     internal sealed class GameplayTurnLogic
     {
-        private readonly GameplayEngine engine;
-
-        public GameplayTurnLogic(GameplayEngine engine)
+        public GameplayTurnLogic()
         {
-            this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
         }
 
         public SubmitAnswerResponse SubmitAnswer(SubmitAnswerRequest request)
         {
-            engine.ValidateNotNullRequest(request);
-            engine.ValidateMatchId(request.MatchId);
+            GameplayEngine.ValidateNotNullRequest(request);
+            GameplayEngine.ValidateMatchId(request.MatchId);
 
-            int userId = engine.Authenticate(request.Token);
-            MatchRuntimeState state = engine.GetMatchOrThrow(request.MatchId);
+            int userId = GameplayEngine.Authenticate(request.Token);
+            MatchRuntimeState state = GameplayEngine.GetMatchOrThrow(request.MatchId);
 
-            AnswerResult result = engine.SubmitAnswerInternal(state, userId, request);
+            AnswerResult result = GameplayEngine.SubmitAnswerInternal(state, userId, request);
 
             return new SubmitAnswerResponse
             {
@@ -31,13 +28,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public BankResponse Bank(BankRequest request)
         {
-            engine.ValidateNotNullRequest(request);
-            engine.ValidateMatchId(request.MatchId);
+            GameplayEngine.ValidateNotNullRequest(request);
+            GameplayEngine.ValidateMatchId(request.MatchId);
 
-            int userId = engine.Authenticate(request.Token);
-            MatchRuntimeState state = engine.GetMatchOrThrow(request.MatchId);
+            int userId = GameplayEngine.Authenticate(request.Token);
+            MatchRuntimeState state = GameplayEngine.GetMatchOrThrow(request.MatchId);
 
-            BankState bank = engine.BankInternal(state, userId);
+            BankState bank = GameplayEngine.BankInternal(state, userId);
 
             return new BankResponse
             {
@@ -47,13 +44,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public CastVoteResponse CastVote(CastVoteRequest request)
         {
-            engine.ValidateNotNullRequest(request);
-            engine.ValidateMatchId(request.MatchId);
+            GameplayEngine.ValidateNotNullRequest(request);
+            GameplayEngine.ValidateMatchId(request.MatchId);
 
-            int userId = engine.Authenticate(request.Token);
-            MatchRuntimeState state = engine.GetMatchOrThrow(request.MatchId);
+            int userId = GameplayEngine.Authenticate(request.Token);
+            MatchRuntimeState state = GameplayEngine.GetMatchOrThrow(request.MatchId);
 
-            bool accepted = engine.CastVoteInternal(state, userId, request.TargetUserId);
+            bool accepted = GameplayEngine.CastVoteInternal(state, userId, request.TargetUserId);
 
             return new CastVoteResponse
             {

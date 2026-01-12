@@ -8,26 +8,23 @@ namespace ServicesTheWeakestRival.Server.Services
 {
     internal sealed class GameplayMatchLogic
     {
-        private readonly GameplayEngine engine;
-
-        public GameplayMatchLogic(GameplayEngine engine)
+        public GameplayMatchLogic()
         {
-            this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
         }
 
         public GameplayJoinMatchResponse JoinMatch(GameplayJoinMatchRequest request)
         {
-            engine.ValidateNotNullRequest(request);
-            engine.ValidateMatchId(request.MatchId);
+            GameplayEngine.ValidateNotNullRequest(request);
+            GameplayEngine.ValidateMatchId(request.MatchId);
 
-            int userId = engine.Authenticate(request.Token);
+            int userId = GameplayEngine.Authenticate(request.Token);
 
             IGameplayServiceCallback callback =
                 OperationContext.Current.GetCallbackChannel<IGameplayServiceCallback>();
 
-            MatchRuntimeState state = engine.GetOrCreateMatch(request.MatchId);
+            MatchRuntimeState state = GameplayEngine.GetOrCreateMatch(request.MatchId);
 
-            engine.JoinMatchInternal(state, request.MatchId, userId, callback);
+            GameplayEngine.JoinMatchInternal(state, request.MatchId, userId, callback);
 
             return new GameplayJoinMatchResponse
             {
@@ -37,24 +34,28 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public GameplayStartMatchResponse StartMatch(GameplayStartMatchRequest request)
         {
-            engine.ValidateNotNullRequest(request);
-            engine.ValidateMatchId(request.MatchId);
+            GameplayEngine.ValidateNotNullRequest(request);
+            GameplayEngine.ValidateMatchId(request.MatchId);
 
             if (request.Difficulty <= 0)
             {
-                throw GameplayEngine.ThrowFault(GameplayEngine.ERROR_INVALID_REQUEST, "Difficulty must be greater than zero.");
+                throw GameplayEngine.ThrowFault(
+                    GameplayEngine.ERROR_INVALID_REQUEST,
+                    "Difficulty must be greater than zero.");
             }
 
             if (string.IsNullOrWhiteSpace(request.LocaleCode))
             {
-                throw GameplayEngine.ThrowFault(GameplayEngine.ERROR_INVALID_REQUEST, "LocaleCode is required.");
+                throw GameplayEngine.ThrowFault(
+                    GameplayEngine.ERROR_INVALID_REQUEST,
+                    "LocaleCode is required.");
             }
 
-            int userId = engine.Authenticate(request.Token);
+            int userId = GameplayEngine.Authenticate(request.Token);
 
-            MatchRuntimeState state = engine.GetOrCreateMatch(request.MatchId);
+            MatchRuntimeState state = GameplayEngine.GetOrCreateMatch(request.MatchId);
 
-            engine.StartMatchInternal(state, request, userId);
+            GameplayEngine.StartMatchInternal(state, request, userId);
 
             return new GameplayStartMatchResponse
             {
@@ -64,20 +65,22 @@ namespace ServicesTheWeakestRival.Server.Services
 
         public ChooseDuelOpponentResponse ChooseDuelOpponent(ChooseDuelOpponentRequest request)
         {
-            engine.ValidateNotNullRequest(request);
+            GameplayEngine.ValidateNotNullRequest(request);
 
             if (request.TargetUserId <= 0)
             {
-                throw GameplayEngine.ThrowFault(GameplayEngine.ERROR_INVALID_REQUEST, "TargetUserId is required.");
+                throw GameplayEngine.ThrowFault(
+                    GameplayEngine.ERROR_INVALID_REQUEST,
+                    "TargetUserId is required.");
             }
 
-            int userId = engine.Authenticate(request.Token);
+            int userId = GameplayEngine.Authenticate(request.Token);
 
-            Guid matchId = engine.ResolveMatchIdForUserOrThrow(userId);
+            Guid matchId = GameplayEngine.ResolveMatchIdForUserOrThrow(userId);
 
-            MatchRuntimeState state = engine.GetMatchOrThrow(matchId);
+            MatchRuntimeState state = GameplayEngine.GetMatchOrThrow(matchId);
 
-            engine.ChooseDuelOpponentInternal(state, userId, request.TargetUserId);
+            GameplayEngine.ChooseDuelOpponentInternal(state, userId, request.TargetUserId);
 
             return new ChooseDuelOpponentResponse
             {
