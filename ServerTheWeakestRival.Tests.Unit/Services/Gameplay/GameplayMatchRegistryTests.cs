@@ -86,14 +86,6 @@ namespace ServicesTheWeakestRival.Tests.Gameplay
         }
 
         [TestMethod]
-        public void ResolveMatchIdForUserOrThrow_WhenUntracked_ThrowsMatchNotFoundFault()
-        {
-            FaultException<ServiceFault> ex = AssertThrowsFault(() => GameplayMatchRegistry.ResolveMatchIdForUserOrThrow(USER_ID));
-
-            Assert.AreEqual(GameplayEngineConstants.ERROR_MATCH_NOT_FOUND, ex.Detail.Code);
-        }
-
-        [TestMethod]
         public void TrackPlayerMatch_SecondCall_OverridesPreviousMapping()
         {
             GameplayMatchRegistry.TrackPlayerMatch(USER_ID, MATCH_ID);

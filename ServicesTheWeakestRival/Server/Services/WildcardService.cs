@@ -20,7 +20,7 @@ namespace ServicesTheWeakestRival.Server.Services
     {
         private static readonly ILog Logger = LogManager.GetLogger(typeof(WildcardService));
 
-        private static readonly Random RandomGenerator = new Random();
+        private static readonly Random randomGenerator = new Random();
         private static readonly object randomSyncRoot = new object();
 
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
@@ -30,11 +30,20 @@ namespace ServicesTheWeakestRival.Server.Services
         private const int MIN_VALID_ID = 1;
         private const int ROUND_ID_NOT_FOUND = 0;
 
-        private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
-        private const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
+        private const int COMMAND_TIMEOUT_SECONDS = 30;
 
-        private const string ERROR_DB = "DB_ERROR";
-        private const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
+        private const string CONTEXT_GET_CONNECTION_STRING = "WildcardService.GetConnectionString";
+        private const string CONTEXT_LIST_WILDCARD_TYPES = "WildcardService.ListWildcardTypes";
+        private const string CONTEXT_GET_PLAYER_WILDCARDS = "WildcardService.GetPlayerWildcards";
+        private const string CONTEXT_USE_WILDCARD = "WildcardService.UseWildcard";
+
+        private const string CONFIG_ERROR = "CONFIG_ERROR";
+
+        private const string ERROR_INVALID_REQUEST = "Solicitud invalida";
+        private const string ERROR_INVALID_REQUEST_MESSAGE = "La solicitud no es valida";
+
+        private const string ERROR_DB = "Error base de datos";
+        private const string ERROR_UNEXPECTED = "Error inesp";
 
         private const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
@@ -42,19 +51,23 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string MESSAGE_UNEXPECTED_ERROR =
             "Ocurrió un error inesperado. Intenta de nuevo más tarde.";
 
-        private const string ERROR_WILDCARD_NOT_FOUND = "WILDCARD_NOT_FOUND";
+        private const string ERROR_WILDCARD_NOT_FOUND = "Comodin no encontrado";
         private const string ERROR_WILDCARD_NOT_FOUND_MESSAGE =
             "El comodín no existe o ya fue consumido.";
 
-        private const string ERROR_INVALID_MATCH = "INVALID_MATCH";
-        private const string ERROR_INVALID_MATCH_MESSAGE = "MatchId inválido.";
+        private const string ERROR_INVALID_MATCH = "Partida invalida";
+        private const string ERROR_INVALID_MATCH_MESSAGE = "Match Id inválido.";
 
-        private const string ERROR_INVALID_PARAMS = "INVALID_PARAMS";
+        private const string ERROR_INVALID_PARAMS = "Invalides en parametros";
         private const string ERROR_INVALID_PARAMS_MESSAGE = "Parámetros inválidos.";
 
-        private const string AUTH_REQUIRED = "AUTH_REQUIRED";
-        private const string AUTH_INVALID = "AUTH_INVALID";
-        private const string AUTH_EXPIRED = "AUTH_EXPIRED";
+        private const string AUTH_REQUIRED = "Autentaticacion requerida";
+        private const string AUTH_INVALID = "Autenticacion invalida";
+        private const string AUTH_EXPIRED = "Autenticacion expirada";
+
+        private const string AUTH_REQUIRED_MESSAGE = "Missing token.";
+        private const string AUTH_INVALID_MESSAGE = "Invalid token.";
+        private const string AUTH_EXPIRED_MESSAGE = "Token expired.";
 
         private const string PARAM_MATCH_ID = "@MatchId";
         private const string PARAM_USER_ID = "@UserId";
@@ -62,6 +75,24 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string PARAM_ROUND_NUMBER = "@RoundNumber";
         private const string PARAM_ROUND_ID = "@RoundId";
         private const string PARAM_WILDCARD_TYPE_ID = "@WildcardTypeId";
+
+        private const int ORD_WILDCARD_TYPE_ID = 0;
+        private const int ORD_WILDCARD_TYPE_CODE = 1;
+        private const int ORD_WILDCARD_TYPE_NAME = 2;
+        private const int ORD_WILDCARD_TYPE_DESCRIPTION = 3;
+        private const int ORD_WILDCARD_TYPE_MAX_USES = 4;
+
+        private const int ORD_PLAYER_WILDCARD_ID = 0;
+        private const int ORD_PLAYER_MATCH_ID = 1;
+        private const int ORD_PLAYER_USER_ID = 2;
+        private const int ORD_PLAYER_WILDCARD_TYPE_ID = 3;
+        private const int ORD_PLAYER_CODE = 4;
+        private const int ORD_PLAYER_NAME = 5;
+        private const int ORD_PLAYER_DESCRIPTION = 6;
+        private const int ORD_PLAYER_MAX_USES = 7;
+        private const int ORD_PLAYER_GRANTED_AT = 8;
+        private const int ORD_PLAYER_CONSUMED_AT = 9;
+        private const int ORD_PLAYER_CONSUMED_IN_ROUND = 10;
 
         private static string GetConnectionString()
         {
@@ -73,9 +104,9 @@ namespace ServicesTheWeakestRival.Server.Services
                 Logger.ErrorFormat("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME);
 
                 throw ThrowTechnicalFault(
-                    "CONFIG_ERROR",
+                    CONFIG_ERROR,
                     "Configuration error. Please contact support.",
-                    "WildcardService.GetConnectionString",
+                    CONTEXT_GET_CONNECTION_STRING,
                     new ConfigurationErrorsException(
                         string.Format(
                             CultureInfo.InvariantCulture,
@@ -127,17 +158,17 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                throw ThrowFault(AUTH_REQUIRED, "Missing token.");
+                throw ThrowFault(AUTH_REQUIRED, AUTH_REQUIRED_MESSAGE);
             }
 
             if (!TokenCache.TryGetValue(token, out AuthToken authToken))
             {
-                throw ThrowFault(AUTH_INVALID, "Invalid token.");
+                throw ThrowFault(AUTH_INVALID, AUTH_INVALID_MESSAGE);
             }
 
             if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
             {
-                throw ThrowFault(AUTH_EXPIRED, "Token expired.");
+                throw ThrowFault(AUTH_EXPIRED, AUTH_EXPIRED_MESSAGE);
             }
 
             return authToken.UserId;
@@ -158,6 +189,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (SqlCommand command = new SqlCommand(WildcardSql.Text.GET_WILDCARD_TYPES, connection))
                 {
                     command.CommandType = CommandType.Text;
+                    command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
+
                     connection.Open();
 
                     List<WildcardTypeDto> list = new List<WildcardTypeDto>();
@@ -180,12 +213,12 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                LogSqlException("WildcardService.ListWildcardTypes", ex);
+                LogSqlException(CONTEXT_LIST_WILDCARD_TYPES, ex);
 
                 throw ThrowTechnicalFault(
                     ERROR_DB,
                     MESSAGE_DB_ERROR,
-                    "WildcardService.ListWildcardTypes",
+                    CONTEXT_LIST_WILDCARD_TYPES,
                     ex);
             }
             catch (Exception ex)
@@ -193,7 +226,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowTechnicalFault(
                     ERROR_UNEXPECTED,
                     MESSAGE_UNEXPECTED_ERROR,
-                    "WildcardService.ListWildcardTypes",
+                    CONTEXT_LIST_WILDCARD_TYPES,
                     ex);
             }
         }
@@ -238,18 +271,14 @@ namespace ServicesTheWeakestRival.Server.Services
                     }
                 }
             }
-            catch (FaultException<ServiceFault>)
-            {
-                throw;
-            }
             catch (SqlException ex)
             {
-                LogSqlException("WildcardService.GetPlayerWildcards", ex);
+                LogSqlException(CONTEXT_GET_PLAYER_WILDCARDS, ex);
 
                 throw ThrowTechnicalFault(
                     ERROR_DB,
                     MESSAGE_DB_ERROR,
-                    "WildcardService.GetPlayerWildcards",
+                    CONTEXT_GET_PLAYER_WILDCARDS,
                     ex);
             }
             catch (Exception ex)
@@ -257,7 +286,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowTechnicalFault(
                     ERROR_UNEXPECTED,
                     MESSAGE_UNEXPECTED_ERROR,
-                    "WildcardService.GetPlayerWildcards",
+                    CONTEXT_GET_PLAYER_WILDCARDS,
                     ex);
             }
         }
@@ -338,14 +367,14 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (SqlException ex)
             {
-                LogSqlException("WildcardService.UseWildcard", ex);
+                LogSqlException(CONTEXT_USE_WILDCARD, ex);
 
                 TryRollbackConsumedWildcard(request.MatchId, userId, request.PlayerWildcardId, roundId);
 
                 throw ThrowTechnicalFault(
                     ERROR_DB,
                     MESSAGE_DB_ERROR,
-                    "WildcardService.UseWildcard",
+                    CONTEXT_USE_WILDCARD,
                     ex);
             }
             catch (Exception ex)
@@ -355,7 +384,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 throw ThrowTechnicalFault(
                     ERROR_UNEXPECTED,
                     MESSAGE_UNEXPECTED_ERROR,
-                    "WildcardService.UseWildcard",
+                    CONTEXT_USE_WILDCARD,
                     ex);
             }
         }
@@ -387,6 +416,8 @@ namespace ServicesTheWeakestRival.Server.Services
                        transaction))
             {
                 command.CommandType = CommandType.Text;
+                command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
+
                 command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
                 command.Parameters.Add(PARAM_ROUND_NUMBER, SqlDbType.Int).Value = roundNumber;
 
@@ -414,6 +445,7 @@ namespace ServicesTheWeakestRival.Server.Services
                        transaction))
             {
                 command.CommandType = CommandType.Text;
+                command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
 
                 command.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
                 command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
@@ -437,6 +469,7 @@ namespace ServicesTheWeakestRival.Server.Services
                        transaction))
             {
                 command.CommandType = CommandType.Text;
+                command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
 
                 command.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
                 command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
@@ -457,17 +490,17 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 return new PlayerWildcardDto
                 {
-                    PlayerWildcardId = reader.GetInt32(0),
-                    MatchId = reader.GetInt32(1),
-                    UserId = reader.GetInt32(2),
-                    WildcardTypeId = reader.GetInt32(3),
-                    Code = reader.GetString(4),
-                    Name = reader.GetString(5),
-                    Description = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                    MaxUsesPerMatch = reader.GetByte(7),
-                    GrantedAt = reader.GetDateTime(8),
-                    ConsumedAt = reader.IsDBNull(9) ? (DateTime?)null : reader.GetDateTime(9),
-                    ConsumedInRound = reader.IsDBNull(10) ? (int?)null : reader.GetInt32(10)
+                    PlayerWildcardId = reader.GetInt32(ORD_PLAYER_WILDCARD_ID),
+                    MatchId = reader.GetInt32(ORD_PLAYER_MATCH_ID),
+                    UserId = reader.GetInt32(ORD_PLAYER_USER_ID),
+                    WildcardTypeId = reader.GetInt32(ORD_PLAYER_WILDCARD_TYPE_ID),
+                    Code = reader.GetString(ORD_PLAYER_CODE),
+                    Name = reader.GetString(ORD_PLAYER_NAME),
+                    Description = reader.IsDBNull(ORD_PLAYER_DESCRIPTION) ? string.Empty : reader.GetString(ORD_PLAYER_DESCRIPTION),
+                    MaxUsesPerMatch = reader.GetByte(ORD_PLAYER_MAX_USES),
+                    GrantedAt = reader.GetDateTime(ORD_PLAYER_GRANTED_AT),
+                    ConsumedAt = reader.IsDBNull(ORD_PLAYER_CONSUMED_AT) ? (DateTime?)null : reader.GetDateTime(ORD_PLAYER_CONSUMED_AT),
+                    ConsumedInRound = reader.IsDBNull(ORD_PLAYER_CONSUMED_IN_ROUND) ? (int?)null : reader.GetInt32(ORD_PLAYER_CONSUMED_IN_ROUND)
                 };
             }
         }
@@ -484,6 +517,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 using (SqlCommand command = new SqlCommand(sql, connection))
                 {
                     command.CommandType = CommandType.Text;
+                    command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
 
                     command.Parameters.Add(PARAM_PLAYER_WILDCARD_ID, SqlDbType.Int).Value = playerWildcardId;
                     command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
@@ -518,6 +552,8 @@ namespace ServicesTheWeakestRival.Server.Services
                        transaction))
             {
                 command.CommandType = CommandType.Text;
+                command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
+
                 command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
                 command.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
 
@@ -564,11 +600,13 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             return new WildcardTypeDto
             {
-                WildcardTypeId = reader.GetInt32(0),
-                Code = reader.GetString(1),
-                Name = reader.GetString(2),
-                Description = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                MaxUsesPerMatch = reader.GetByte(4)
+                WildcardTypeId = reader.GetInt32(ORD_WILDCARD_TYPE_ID),
+                Code = reader.GetString(ORD_WILDCARD_TYPE_CODE),
+                Name = reader.GetString(ORD_WILDCARD_TYPE_NAME),
+                Description = reader.IsDBNull(ORD_WILDCARD_TYPE_DESCRIPTION)
+                    ? string.Empty
+                    : reader.GetString(ORD_WILDCARD_TYPE_DESCRIPTION),
+                MaxUsesPerMatch = reader.GetByte(ORD_WILDCARD_TYPE_MAX_USES)
             };
         }
 
@@ -576,17 +614,17 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             return new PlayerWildcardDto
             {
-                PlayerWildcardId = reader.GetInt32(0),
-                MatchId = reader.GetInt32(1),
-                UserId = reader.GetInt32(2),
-                WildcardTypeId = reader.GetInt32(3),
-                Code = reader.GetString(4),
-                Name = reader.GetString(5),
-                Description = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                MaxUsesPerMatch = reader.GetByte(7),
-                GrantedAt = reader.GetDateTime(8),
-                ConsumedAt = reader.IsDBNull(9) ? (DateTime?)null : reader.GetDateTime(9),
-                ConsumedInRound = reader.IsDBNull(10) ? (int?)null : reader.GetInt32(10)
+                PlayerWildcardId = reader.GetInt32(ORD_PLAYER_WILDCARD_ID),
+                MatchId = reader.GetInt32(ORD_PLAYER_MATCH_ID),
+                UserId = reader.GetInt32(ORD_PLAYER_USER_ID),
+                WildcardTypeId = reader.GetInt32(ORD_PLAYER_WILDCARD_TYPE_ID),
+                Code = reader.GetString(ORD_PLAYER_CODE),
+                Name = reader.GetString(ORD_PLAYER_NAME),
+                Description = reader.IsDBNull(ORD_PLAYER_DESCRIPTION) ? string.Empty : reader.GetString(ORD_PLAYER_DESCRIPTION),
+                MaxUsesPerMatch = reader.GetByte(ORD_PLAYER_MAX_USES),
+                GrantedAt = reader.GetDateTime(ORD_PLAYER_GRANTED_AT),
+                ConsumedAt = reader.IsDBNull(ORD_PLAYER_CONSUMED_AT) ? (DateTime?)null : reader.GetDateTime(ORD_PLAYER_CONSUMED_AT),
+                ConsumedInRound = reader.IsDBNull(ORD_PLAYER_CONSUMED_IN_ROUND) ? (int?)null : reader.GetInt32(ORD_PLAYER_CONSUMED_IN_ROUND)
             };
         }
 
@@ -617,15 +655,16 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             List<int> wildcardTypeIds = new List<int>();
 
-            using (SqlCommand cmd = new SqlCommand(WildcardSql.Text.GET_WILDCARD_TYPES, connection, transaction))
+            using (SqlCommand command = new SqlCommand(WildcardSql.Text.GET_WILDCARD_TYPES, connection, transaction))
             {
-                cmd.CommandType = CommandType.Text;
+                command.CommandType = CommandType.Text;
+                command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
 
-                using (SqlDataReader reader = cmd.ExecuteReader())
+                using (SqlDataReader reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        wildcardTypeIds.Add(reader.GetInt32(0));
+                        wildcardTypeIds.Add(reader.GetInt32(ORD_WILDCARD_TYPE_ID));
                     }
                 }
             }
@@ -640,18 +679,20 @@ namespace ServicesTheWeakestRival.Server.Services
 
             lock (randomSyncRoot)
             {
-                int index = RandomGenerator.Next(wildcardTypeIds.Count);
+                int index = randomGenerator.Next(wildcardTypeIds.Count);
                 selectedTypeId = wildcardTypeIds[index];
             }
 
-            using (SqlCommand cmd = new SqlCommand(WildcardSql.Text.INSERT_PLAYER_WILDCARD, connection, transaction))
+            using (SqlCommand command = new SqlCommand(WildcardSql.Text.INSERT_PLAYER_WILDCARD, connection, transaction))
             {
-                cmd.CommandType = CommandType.Text;
-                cmd.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
-                cmd.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
-                cmd.Parameters.Add(PARAM_WILDCARD_TYPE_ID, SqlDbType.Int).Value = selectedTypeId;
+                command.CommandType = CommandType.Text;
+                command.CommandTimeout = COMMAND_TIMEOUT_SECONDS;
 
-                cmd.ExecuteNonQuery();
+                command.Parameters.Add(PARAM_MATCH_ID, SqlDbType.Int).Value = matchId;
+                command.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
+                command.Parameters.Add(PARAM_WILDCARD_TYPE_ID, SqlDbType.Int).Value = selectedTypeId;
+
+                command.ExecuteNonQuery();
             }
 
             Logger.InfoFormat(
