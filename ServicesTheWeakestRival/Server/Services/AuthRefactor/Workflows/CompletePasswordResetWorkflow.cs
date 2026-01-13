@@ -14,6 +14,10 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
         private const string OPERATION_KEY_PREFIX = AuthServiceConstants.KEY_PREFIX_COMPLETE_RESET;
         private const string DB_CONTEXT = AuthServiceConstants.CTX_COMPLETE_RESET;
 
+        private const string EMPTY_STRING = "";
+
+        private const int MIN_AFFECTED_ROWS = 1;
+
         private readonly AuthRepository authRepository;
         private readonly PasswordPolicy passwordPolicy;
         private readonly PasswordService passwordService;
@@ -57,9 +61,9 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
                     AuthServiceConstants.MESSAGE_PAYLOAD_NULL);
             }
 
-            string email = (request.Email ?? string.Empty).Trim();
-            string code = request.Code ?? string.Empty;
-            string newPassword = request.NewPassword ?? string.Empty;
+            string email = (request.Email ?? EMPTY_STRING).Trim();
+            string code = request.Code ?? EMPTY_STRING;
+            string newPassword = request.NewPassword ?? EMPTY_STRING;
 
             if (string.IsNullOrWhiteSpace(email)
                 || string.IsNullOrWhiteSpace(code)
@@ -122,7 +126,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
                 DB_CONTEXT,
                 AuthServiceContext.CreateSqlTechnicalFault);
 
-            if (rows <= 0)
+            if (rows < MIN_AFFECTED_ROWS)
             {
                 throw AuthServiceContext.ThrowFault(
                     AuthServiceConstants.ERROR_EMAIL_NOT_FOUND,
@@ -148,9 +152,9 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 
             public ResetPasswordInput(string email, string code, string newPassword)
             {
-                Email = email ?? string.Empty;
-                Code = code ?? string.Empty;
-                NewPassword = newPassword ?? string.Empty;
+                Email = email ?? EMPTY_STRING;
+                Code = code ?? EMPTY_STRING;
+                NewPassword = newPassword ?? EMPTY_STRING;
             }
         }
     }

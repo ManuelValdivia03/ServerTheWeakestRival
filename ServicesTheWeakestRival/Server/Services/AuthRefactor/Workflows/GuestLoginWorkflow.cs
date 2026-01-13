@@ -5,7 +5,6 @@ using ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels;
 using ServicesTheWeakestRival.Server.Infrastructure.Randomization;
 using System;
 using System.Globalization;
-using System.Security.Cryptography;
 
 namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 {
@@ -13,6 +12,8 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
     {
         private const string OPERATION_KEY_PREFIX = "Auth.GuestLogin";
         private const string DB_CONTEXT = "AuthService.GuestLogin";
+
+        private const string EMPTY_STRING = "";
 
         private const string GUEST_EMAIL_PREFIX = "guest-";
         private const string GUEST_EMAIL_DOMAIN = "@guest.local";
@@ -22,6 +23,8 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
         private const int GUEST_SUFFIX_MAX_EXCLUSIVE = 10000;
 
         private const string GUID_FORMAT_NO_HYPHENS = "N";
+
+        private const int PROFILE_IMAGE_BYTES_LENGTH = 0;
 
         private readonly AuthRepository authRepository;
 
@@ -41,7 +44,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
                 email,
                 passwordHash,
                 displayName,
-                new ProfileImagePayload(Array.Empty<byte>(), string.Empty));
+                new ProfileImagePayload(new byte[PROFILE_IMAGE_BYTES_LENGTH], EMPTY_STRING));
 
             int userId = SqlExceptionFaultGuard.Execute(
                 () => authRepository.CreateAccountAndUser(data),
@@ -60,7 +63,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 
         private static string NormalizeDisplayName(string raw)
         {
-            string trimmed = (raw ?? string.Empty).Trim();
+            string trimmed = (raw ?? EMPTY_STRING).Trim();
 
             if (string.IsNullOrWhiteSpace(trimmed))
             {

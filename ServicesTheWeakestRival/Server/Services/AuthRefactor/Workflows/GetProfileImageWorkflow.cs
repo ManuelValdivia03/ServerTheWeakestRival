@@ -12,7 +12,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
         private const string OPERATION_KEY_PREFIX = AuthServiceConstants.KEY_PREFIX_GET_PROFILE_IMAGE;
         private const string DB_CONTEXT = AuthServiceConstants.CTX_GET_PROFILE_IMAGE;
 
-        private const string MESSAGE_ACCOUNT_ID_REQUIRED = "AccountId is required.";
+        private const string MESSAGE_ACCOUNT_ID_REQUIRED = "Identificador de cuenta solicitada.";
 
         private const char PROFILE_IMAGE_CODE_SEPARATOR = '|';
 

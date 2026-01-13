@@ -2,8 +2,14 @@
 {
     public sealed class ResetLookupResult
     {
-        public bool Found { get; }
-        public ResetRow Reset { get; }
+        public bool Found 
+        { 
+            get;
+        }
+        public ResetRow Reset 
+        { 
+            get;
+        }
 
         private ResetLookupResult(bool found, ResetRow reset)
         {

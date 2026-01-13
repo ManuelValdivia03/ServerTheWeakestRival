@@ -2,9 +2,18 @@
 {
     public sealed class PasswordResetCreateResult
     {
-        public bool Success { get; }
-        public bool EmailNotFound { get; }
-        public bool TooSoon { get; }
+        public bool Success 
+        { 
+            get; 
+        }
+        public bool EmailNotFound 
+        { 
+            get; 
+        }
+        public bool TooSoon 
+        { 
+            get; 
+        }
 
         private PasswordResetCreateResult(bool success, bool emailNotFound, bool tooSoon)
         {

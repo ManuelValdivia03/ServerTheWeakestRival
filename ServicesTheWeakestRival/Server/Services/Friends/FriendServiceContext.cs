@@ -15,12 +15,16 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
+        private const string EMPTY_STRING = "";
+
         internal const int ONLINE_WINDOW_SECONDS = 75;
         internal const int MAX_EMAIL_LENGTH = 320;
         internal const int MAX_DISPLAY_NAME_LENGTH = 100;
         internal const int DEVICE_MAX_LENGTH = 64;
         internal const int DEFAULT_MAX_RESULTS = 20;
         internal const int MAX_RESULTS_LIMIT = 100;
+
+        private const int MIN_ALLOWED_MAX_RESULTS = 1;
 
         internal const int SQL_ERROR_UNIQUE_CONSTRAINT = 2627;
         internal const int SQL_ERROR_UNIQUE_INDEX = 2601;
@@ -29,17 +33,32 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
         private const int EXECUTE_DB_ACTION_RESULT = 0;
 
-        internal const string ERROR_INVALID_REQUEST = "Error";
-        internal const string ERROR_INVALID_REQUEST_MESSAGE = "Error";
-        internal const string ERROR_RACE = "Error";
-        internal const string ERROR_DB = "Error";
-        internal const string ERROR_UNEXPECTED = "Error";
-        internal const string ERROR_FR_SELF = "Error";
-        internal const string ERROR_FR_ALREADY = "Error";
-        internal const string ERROR_FR_NOT_FOUND = "Error";
-        internal const string ERROR_FR_NOT_PENDING = "Error";
-        internal const string ERROR_FR_FORBIDDEN = "Error";
-        internal const string ERROR_FORBIDDEN = "Error";
+        private const string LOG_MISSING_CONNECTION_STRING_TEMPLATE = "Missing connection string '{0}'.";
+        private const string ERROR_CONFIG = "Error de configuracion";
+        private const string MESSAGE_CONFIG_ERROR = "Configuration error. Please contact support.";
+        private const string CONTEXT_GET_CONNECTION_STRING = "FriendService.GetConnectionString";
+
+        private const string LOG_SERVICE_FAULT_TEMPLATE = "Service fault. Code='{0}', Message='{1}'";
+
+        private const string ERROR_AUTH_REQUIRED = "AUTH_REQUIRED";
+        private const string ERROR_AUTH_INVALID = "AUTH_INVALID";
+        private const string ERROR_AUTH_EXPIRED = "AUTH_EXPIRED";
+
+        private const string MESSAGE_AUTH_REQUIRED = "Missing token.";
+        private const string MESSAGE_AUTH_INVALID = "Invalid token.";
+        private const string MESSAGE_AUTH_EXPIRED = "Token expired.";
+
+        internal const string ERROR_INVALID_REQUEST = "Solicitud inválida";
+        internal const string ERROR_INVALID_REQUEST_MESSAGE = "La solicitud es inválida o está incompleta.";
+        internal const string ERROR_RACE = "Conflicto de concurrencia";
+        internal const string ERROR_DB = "Error de base de datos";
+        internal const string ERROR_UNEXPECTED = "Error inesperado";
+        internal const string ERROR_FR_SELF = "Solicitud a uno mismo no permitida";
+        internal const string ERROR_FR_ALREADY = "Amistad ya existente";
+        internal const string ERROR_FR_NOT_FOUND = "Solicitud no encontrada";
+        internal const string ERROR_FR_NOT_PENDING = "Solicitud no pendiente";
+        internal const string ERROR_FR_FORBIDDEN = "Acceso no autorizado";
+        internal const string ERROR_FORBIDDEN = "Acceso denegado";
 
         internal const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
@@ -97,11 +116,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal const string CONTEXT_SEND_LOBBY_INVITE_EMAIL = "FriendService.SendLobbyInviteEmail";
 
-        internal const string ERROR_INVITE_INVALID_TARGET = "INVITE_INVALID_TARGET";
-        internal const string ERROR_INVITE_INVALID_CODE = "INVITE_INVALID_CODE";
-        internal const string ERROR_INVITE_NOT_FRIEND = "INVITE_NOT_FRIEND";
-        internal const string ERROR_INVITE_ACCOUNT_NOT_FOUND = "INVITE_ACCOUNT_NOT_FOUND";
-        internal const string ERROR_INVITE_EMAIL_FAILED = "INVITE_EMAIL_FAILED";
+        internal const string ERROR_INVITE_INVALID_TARGET = "Invitación: jugador inválido";
+        internal const string ERROR_INVITE_INVALID_CODE = "Invitación: código de lobby inválido";
+        internal const string ERROR_INVITE_NOT_FRIEND = "Invitación: no es tu amigo";
+        internal const string ERROR_INVITE_ACCOUNT_NOT_FOUND = "Invitación: cuenta no encontrada";
+        internal const string ERROR_INVITE_EMAIL_FAILED = "Invitación: fallo al enviar correo";
 
         internal const string MESSAGE_INVITE_INVALID_TARGET = "Jugador inválido.";
         internal const string MESSAGE_INVITE_INVALID_CODE = "No hay un código de lobby válido.";
@@ -117,22 +136,23 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal static string GetConnectionString()
         {
-            ConnectionStringSettings configurationString =
+            ConnectionStringSettings connectionStringSettings =
                 ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME];
 
-            if (configurationString == null || string.IsNullOrWhiteSpace(configurationString.ConnectionString))
+            if (connectionStringSettings == null
+                || string.IsNullOrWhiteSpace(connectionStringSettings.ConnectionString))
             {
-                Logger.ErrorFormat("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME);
+                Logger.ErrorFormat(LOG_MISSING_CONNECTION_STRING_TEMPLATE, MAIN_CONNECTION_STRING_NAME);
 
                 throw ThrowTechnicalFault(
-                    "CONFIG_ERROR",
-                    "Configuration error. Please contact support.",
-                    "FriendService.GetConnectionString",
+                    ERROR_CONFIG,
+                    MESSAGE_CONFIG_ERROR,
+                    CONTEXT_GET_CONNECTION_STRING,
                     new ConfigurationErrorsException(
-                        string.Format("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME)));
+                        string.Format(LOG_MISSING_CONNECTION_STRING_TEMPLATE, MAIN_CONNECTION_STRING_NAME)));
             }
 
-            return configurationString.ConnectionString;
+            return connectionStringSettings.ConnectionString;
         }
 
         internal static void ValidateRequest(object request)
@@ -145,7 +165,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
-            Logger.WarnFormat("Service fault. Code='{0}', Message='{1}'", code, message);
+            Logger.WarnFormat(LOG_SERVICE_FAULT_TEMPLATE, code, message);
 
             ServiceFault fault = new ServiceFault
             {
@@ -197,7 +217,6 @@ namespace ServicesTheWeakestRival.Server.Services
                 FaceType = (AvatarFaceType)entity.FaceType,
                 UseProfilePhotoAsFace = entity.UseProfilePhoto
             };
-
         }
 
         internal static bool IsUniqueViolation(SqlException ex)
@@ -207,25 +226,25 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            return ex.Number == SQL_ERROR_UNIQUE_CONSTRAINT ||
-                   ex.Number == SQL_ERROR_UNIQUE_INDEX;
+            return ex.Number == SQL_ERROR_UNIQUE_CONSTRAINT
+                || ex.Number == SQL_ERROR_UNIQUE_INDEX;
         }
 
         internal static int Authenticate(string token)
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                throw ThrowFault("AUTH_REQUIRED", "Missing token.");
+                throw ThrowFault(ERROR_AUTH_REQUIRED, MESSAGE_AUTH_REQUIRED);
             }
 
             if (!TokenCache.TryGetValue(token, out AuthToken authToken))
             {
-                throw ThrowFault("AUTH_INVALID", "Invalid token.");
+                throw ThrowFault(ERROR_AUTH_INVALID, MESSAGE_AUTH_INVALID);
             }
 
             if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
             {
-                throw ThrowFault("AUTH_EXPIRED", "Token expired.");
+                throw ThrowFault(ERROR_AUTH_EXPIRED, MESSAGE_AUTH_EXPIRED);
             }
 
             return authToken.UserId;
@@ -280,12 +299,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal static string NormalizeQuery(string query)
         {
-            return (query ?? string.Empty).Trim();
+            return (query ?? EMPTY_STRING).Trim();
         }
 
         internal static int NormalizeMaxResults(int requestedMaxResults)
         {
-            if (requestedMaxResults <= 0 || requestedMaxResults > MAX_RESULTS_LIMIT)
+            if (requestedMaxResults < MIN_ALLOWED_MAX_RESULTS
+                || requestedMaxResults > MAX_RESULTS_LIMIT)
             {
                 return DEFAULT_MAX_RESULTS;
             }

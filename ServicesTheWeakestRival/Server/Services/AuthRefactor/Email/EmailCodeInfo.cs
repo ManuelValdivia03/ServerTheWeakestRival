@@ -4,9 +4,18 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Email
 {
     public sealed class EmailCodeInfo
     {
-        public string Code { get; }
-        public byte[] Hash { get; }
-        public DateTime ExpiresAtUtc { get; }
+        public string Code 
+        {
+            get; 
+        }
+        public byte[] Hash 
+        {
+            get; 
+        }
+        public DateTime ExpiresAtUtc 
+        { 
+            get; 
+        }
 
         public EmailCodeInfo(string code, byte[] hash, DateTime expiresAtUtc)
         {

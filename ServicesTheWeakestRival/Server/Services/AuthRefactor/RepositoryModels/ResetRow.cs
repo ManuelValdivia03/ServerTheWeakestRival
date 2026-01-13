@@ -8,9 +8,18 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels
 
         public static ResetRow Empty => new ResetRow(ID_EMPTY, DateTime.MinValue, false);
 
-        public int Id { get; }
-        public DateTime ExpiresAtUtc { get; }
-        public bool Used { get; }
+        public int Id 
+        { 
+            get;
+        }
+        public DateTime ExpiresAtUtc 
+        { 
+            get;
+        }
+        public bool Used 
+        { 
+            get;
+        }
 
         public ResetRow(int id, DateTime expiresAtUtc, bool used)
         {

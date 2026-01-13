@@ -2,8 +2,14 @@
 {
     public sealed class VerificationLookupResult
     {
-        public bool Found { get; }
-        public VerificationRow Verification { get; }
+        public bool Found 
+        { 
+            get;
+        }
+        public VerificationRow Verification 
+        { 
+            get;
+        }
 
         private VerificationLookupResult(bool found, VerificationRow verification)
         {

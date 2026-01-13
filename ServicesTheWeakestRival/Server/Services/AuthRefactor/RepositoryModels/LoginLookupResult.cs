@@ -2,8 +2,14 @@
 {
     public sealed class LoginLookupResult
     {
-        public bool Found { get; }
-        public LoginAccountRow Account { get; }
+        public bool Found 
+        { 
+            get; 
+        }
+        public LoginAccountRow Account 
+        { 
+            get; 
+        }
 
         private LoginLookupResult(bool found, LoginAccountRow account)
         {

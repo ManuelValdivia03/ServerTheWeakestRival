@@ -4,8 +4,14 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels
 {
     public sealed class LastRequestUtcResult
     {
-        public bool HasValue { get; }
-        public DateTime Utc { get; }
+        public bool HasValue 
+        { 
+            get; 
+        }
+        public DateTime Utc 
+        { 
+            get; 
+        }
 
         private LastRequestUtcResult(bool hasValue, DateTime utc)
         {

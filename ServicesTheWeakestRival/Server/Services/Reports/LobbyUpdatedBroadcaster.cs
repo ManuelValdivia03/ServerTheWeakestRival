@@ -58,7 +58,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
         private static SqlConnection CreateOpenConnection()
         {
             string connectionString =
-                ConfigurationManager.ConnectionStrings[ReportSql.MainConnectionStringName].ConnectionString;
+                ConfigurationManager.ConnectionStrings[ReportSql.MAIN_CONNECTION_STRING_NAME ].ConnectionString;
 
             var connection = new SqlConnection(connectionString);
             connection.Open();

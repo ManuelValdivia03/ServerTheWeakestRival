@@ -123,9 +123,18 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 
         private sealed class RegisterInput
         {
-            public string Email { get; }
-            public string DisplayName { get; }
-            public string Password { get; }
+            public string Email 
+            { 
+                get;
+            }
+            public string DisplayName 
+            { 
+                get;
+            }
+            public string Password 
+            { 
+                get;
+            }
 
             public RegisterInput(string email, string displayName, string password)
             {
