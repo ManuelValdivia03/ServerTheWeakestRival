@@ -22,11 +22,28 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const string MAIN_CONNECTION_STRING_NAME = "TheWeakestRivalDb";
 
-        private const string ERROR_INVALID_REQUEST = "INVALID_REQUEST";
-        private const string ERROR_INVALID_REQUEST_MESSAGE = "Request is null.";
+        private const string ERROR_CONFIG = "Error de configuración";
+        private const string ERROR_SOLICITUD_INVALIDA = "Error de solicitud inválida";
+        private const string ERROR_AUTENTICACION_REQUERIDA = "Error de autenticación requerida";
+        private const string ERROR_AUTENTICACION_INVALIDA = "Error de autenticación inválida";
+        private const string ERROR_AUTENTICACION_EXPIRADA = "Error de autenticación expirada";
+        private const string ERROR_BASE_DATOS = "Error de base de datos";
+        private const string ERROR_INESPERADO = "Error inesperado";
 
-        private const string ERROR_DB = "DB_ERROR";
-        private const string ERROR_UNEXPECTED = "UNEXPECTED_ERROR";
+        private const string MESSAGE_CONFIG_ERROR =
+            "Error de configuración. Por favor contacta a soporte.";
+
+        private const string MESSAGE_INVALID_REQUEST =
+            "La solicitud es inválida.";
+
+        private const string MESSAGE_MISSING_TOKEN =
+            "Token requerido.";
+
+        private const string MESSAGE_INVALID_TOKEN =
+            "Token inválido.";
+
+        private const string MESSAGE_EXPIRED_TOKEN =
+            "Tu sesión expiró. Inicia sesión de nuevo.";
 
         private const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
@@ -34,20 +51,28 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string MESSAGE_UNEXPECTED_ERROR =
             "Ocurrió un error inesperado. Intenta de nuevo más tarde.";
 
+        private const string CONTEXT_GET_CONNECTION_STRING = "MatchmakingService.GetConnectionString";
+        private const string CONTEXT_CREATE_MATCH = "MatchmakingService.CreateMatch";
+        private const string CONTEXT_CREATE_MATCH_NULL_MATCH = "MatchmakingService.CreateMatch.NullMatch";
+        private const string CONTEXT_JOIN_MATCH = "MatchmakingService.JoinMatch";
+        private const string CONTEXT_LEAVE_MATCH = "MatchmakingService.LeaveMatch";
+        private const string CONTEXT_START_MATCH = "MatchmakingService.StartMatch";
+
         private static string GetConnectionString()
         {
-            var configurationString = ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME];
+            ConnectionStringSettings configurationString =
+                ConfigurationManager.ConnectionStrings[MAIN_CONNECTION_STRING_NAME];
 
             if (configurationString == null || string.IsNullOrWhiteSpace(configurationString.ConnectionString))
             {
-                Logger.ErrorFormat("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME);
+                Logger.ErrorFormat("Falta la cadena de conexión '{0}'.", MAIN_CONNECTION_STRING_NAME);
 
                 throw ThrowTechnicalFault(
-                    "CONFIG_ERROR",
-                    "Configuration error. Please contact support.",
-                    "MatchmakingService.GetConnectionString",
+                    ERROR_CONFIG,
+                    MESSAGE_CONFIG_ERROR,
+                    CONTEXT_GET_CONNECTION_STRING,
                     new ConfigurationErrorsException(
-                        string.Format("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME)));
+                        string.Format("Falta la cadena de conexión '{0}'.", MAIN_CONNECTION_STRING_NAME)));
             }
 
             return configurationString.ConnectionString;
@@ -55,7 +80,7 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
-            Logger.WarnFormat("Service fault. Code='{0}', Message='{1}'", code, message);
+            Logger.WarnFormat("Falla de servicio. Código='{0}', Mensaje='{1}'", code, message);
 
             var fault = new ServiceFault
             {
@@ -87,18 +112,18 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                throw ThrowFault("AUTH_REQUIRED", "Missing token.");
+                throw ThrowFault(ERROR_AUTENTICACION_REQUERIDA, MESSAGE_MISSING_TOKEN);
             }
 
             AuthToken authToken;
             if (!TokenCache.TryGetValue(token, out authToken))
             {
-                throw ThrowFault("AUTH_INVALID", "Invalid token.");
+                throw ThrowFault(ERROR_AUTENTICACION_INVALIDA, MESSAGE_INVALID_TOKEN);
             }
 
             if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
             {
-                throw ThrowFault("AUTH_EXPIRED", "Token expired.");
+                throw ThrowFault(ERROR_AUTENTICACION_EXPIRADA, MESSAGE_EXPIRED_TOKEN);
             }
 
             return authToken.UserId;
@@ -108,44 +133,57 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
+                throw ThrowFault(ERROR_SOLICITUD_INVALIDA, MESSAGE_INVALID_REQUEST);
             }
 
-            var hostUserId = Authenticate(request.Token);
+            int hostUserId = Authenticate(request.Token);
 
             try
             {
                 var manager = new MatchManager(GetConnectionString());
-                var response = manager.CreateMatch(hostUserId, request);
+                CreateMatchResponse response = manager.CreateMatch(hostUserId, request);
 
-                var cb = OperationContext.Current.GetCallbackChannel<IMatchmakingClientCallback>();
-
-                var match = response.Match;
+                MatchInfo match = response != null ? response.Match : null;
                 if (match == null)
                 {
                     throw ThrowTechnicalFault(
-                        ERROR_UNEXPECTED,
+                        ERROR_INESPERADO,
                         MESSAGE_UNEXPECTED_ERROR,
-                        "MatchmakingService.CreateMatch.NullMatch",
-                        new InvalidOperationException("MatchManager returned null Match."));
+                        CONTEXT_CREATE_MATCH_NULL_MATCH,
+                        new InvalidOperationException("MatchManager regresó Match null."));
                 }
 
-                Cbs[match.MatchId] = cb;
+                match.MatchId = Guid.NewGuid();
 
-                try
+                IMatchmakingClientCallback cb = null;
+                if (OperationContext.Current != null)
                 {
-                    cb.OnMatchCreated(match);
+                    cb = OperationContext.Current.GetCallbackChannel<IMatchmakingClientCallback>();
                 }
-                catch (Exception ex)
+
+                if (cb != null)
                 {
-                    Logger.Warn("Error calling OnMatchCreated callback.", ex);
+                    Cbs[match.MatchId] = cb;
+
+                    try
+                    {
+                        cb.OnMatchCreated(match);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn("Error al invocar callback OnMatchCreated.", ex);
+                    }
                 }
 
                 return response;
             }
             catch (SqlException ex)
             {
-                throw ThrowTechnicalFault(ERROR_DB, MESSAGE_DB_ERROR, "MatchmakingService.CreateMatch", ex);
+                throw ThrowTechnicalFault(
+                    ERROR_BASE_DATOS,
+                    MESSAGE_DB_ERROR,
+                    CONTEXT_CREATE_MATCH,
+                    ex);
             }
             catch (FaultException<ServiceFault>)
             {
@@ -153,7 +191,11 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                throw ThrowTechnicalFault(ERROR_UNEXPECTED, MESSAGE_UNEXPECTED_ERROR, "MatchmakingService.CreateMatch", ex);
+                throw ThrowTechnicalFault(
+                    ERROR_INESPERADO,
+                    MESSAGE_UNEXPECTED_ERROR,
+                    CONTEXT_CREATE_MATCH,
+                    ex);
             }
         }
 
@@ -161,26 +203,22 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (request == null)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
+                throw ThrowFault(ERROR_SOLICITUD_INVALIDA, MESSAGE_INVALID_REQUEST);
             }
 
-            int userId = Authenticate(request.Token);
-
-            if (string.IsNullOrWhiteSpace(request.MatchCode))
-            {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "MatchCode is required.");
-            }
+            Authenticate(request.Token);
 
             try
             {
-                var manager = new MatchManager(GetConnectionString());
-                MatchInfo match = manager.JoinMatchByCode(userId, request.MatchCode);
+                var match = new MatchInfo
+                {
+                    MatchId = Guid.NewGuid(),
+                    MatchCode = request.MatchCode,
+                    Players = new List<PlayerSummary>(),
+                    State = "Waiting"
+                };
 
                 return new JoinMatchResponse { Match = match };
-            }
-            catch (SqlException ex)
-            {
-                throw ThrowTechnicalFault(ERROR_DB, MESSAGE_DB_ERROR, "MatchmakingService.JoinMatch", ex);
             }
             catch (FaultException<ServiceFault>)
             {
@@ -188,56 +226,88 @@ namespace ServicesTheWeakestRival.Server.Services
             }
             catch (Exception ex)
             {
-                throw ThrowTechnicalFault(ERROR_UNEXPECTED, MESSAGE_UNEXPECTED_ERROR, "MatchmakingService.JoinMatch", ex);
+                throw ThrowTechnicalFault(
+                    ERROR_INESPERADO,
+                    MESSAGE_UNEXPECTED_ERROR,
+                    CONTEXT_JOIN_MATCH,
+                    ex);
             }
         }
-
 
         public void LeaveMatch(LeaveMatchRequest request)
         {
             if (request == null)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
+                throw ThrowFault(ERROR_SOLICITUD_INVALIDA, MESSAGE_INVALID_REQUEST);
             }
 
             Authenticate(request.Token);
 
-            IMatchmakingClientCallback removed;
-            Cbs.TryRemove(request.MatchId, out removed);
-
+            try
+            {
+                IMatchmakingClientCallback removed;
+                Cbs.TryRemove(request.MatchId, out removed);
+            }
+            catch (FaultException<ServiceFault>)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw ThrowTechnicalFault(
+                    ERROR_INESPERADO,
+                    MESSAGE_UNEXPECTED_ERROR,
+                    CONTEXT_LEAVE_MATCH,
+                    ex);
+            }
         }
 
         public StartMatchResponse StartMatch(StartMatchRequest request)
         {
             if (request == null)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, ERROR_INVALID_REQUEST_MESSAGE);
+                throw ThrowFault(ERROR_SOLICITUD_INVALIDA, MESSAGE_INVALID_REQUEST);
             }
 
             Authenticate(request.Token);
 
-            var match = new MatchInfo
+            try
             {
-                MatchId = request.MatchId,
-                MatchCode = "NA",
-                Players = new List<PlayerSummary>(),
-                State = "InProgress"
-            };
+                var match = new MatchInfo
+                {
+                    MatchId = request.MatchId,
+                    MatchCode = "NA",
+                    Players = new List<PlayerSummary>(),
+                    State = "InProgress"
+                };
 
-            IMatchmakingClientCallback cb;
-            if (Cbs.TryGetValue(request.MatchId, out cb))
-            {
-                try
+                IMatchmakingClientCallback cb;
+                if (Cbs.TryGetValue(request.MatchId, out cb))
                 {
-                    cb.OnMatchStarted(match);
+                    try
+                    {
+                        cb.OnMatchStarted(match);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn("Error al invocar callback OnMatchStarted.", ex);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Logger.Warn("Error calling OnMatchStarted callback.", ex);
-                }
+
+                return new StartMatchResponse { Match = match };
             }
-
-            return new StartMatchResponse { Match = match };
+            catch (FaultException<ServiceFault>)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw ThrowTechnicalFault(
+                    ERROR_INESPERADO,
+                    MESSAGE_UNEXPECTED_ERROR,
+                    CONTEXT_START_MATCH,
+                    ex);
+            }
         }
 
         public ListOpenMatchesResponse ListOpenMatches(ListOpenMatchesRequest request)
