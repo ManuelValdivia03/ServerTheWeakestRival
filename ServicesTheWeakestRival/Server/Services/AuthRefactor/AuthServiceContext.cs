@@ -81,9 +81,14 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                 }
                 else
                 {
-                    throw ThrowFault(
-                        AuthServiceConstants.ERROR_ALREADY_LOGGED_IN,
-                        AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN);
+                    try
+                    {
+                        TokenStore.RevokeAllForUser(userId);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn("IssueToken: RevokeAllForUser failed.", ex);
+                    }
                 }
             }
 
@@ -91,18 +96,9 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             {
                 AuthToken token = CreateNewToken(userId);
 
-                if (!TokenStore.Cache.TryAdd(token.Token, token))
+                if (!TokenStore.TryAddToken(token))
                 {
                     continue;
-                }
-
-                if (!TokenStore.ActiveTokenByUserId.TryAdd(userId, token.Token))
-                {
-                    TokenStore.Cache.TryRemove(token.Token, out _);
-
-                    throw ThrowFault(
-                        AuthServiceConstants.ERROR_ALREADY_LOGGED_IN,
-                        AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN);
                 }
 
                 return token;
