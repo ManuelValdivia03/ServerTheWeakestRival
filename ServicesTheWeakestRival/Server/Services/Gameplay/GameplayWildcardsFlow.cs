@@ -88,13 +88,16 @@ namespace ServicesTheWeakestRival.Server.Services
                 "GameplayEngine.Wildcard.PassQuestion");
         }
 
-        private static void ApplyWildcardShield(MatchPlayerRuntime currentPlayer)
-        {
-            currentPlayer.IsShieldActive = true;
-        }
-
         private static void ApplyWildcardForcedBank(MatchRuntimeState state)
         {
+            decimal projected = state.BankedPoints + state.CurrentChain;
+            if (projected > GameplayEngineConstants.MAX_BANKED_POINTS)
+            {
+                throw GameplayFaults.ThrowFault(
+                    GameplayEngineConstants.ERROR_BANK_LIMIT_REACHED,
+                    GameplayEngineConstants.MESSAGE_BANK_LIMIT_REACHED);
+            }
+
             state.BankedPoints += state.CurrentChain;
             state.CurrentChain = 0m;
             state.CurrentStreak = 0;
@@ -123,51 +126,33 @@ namespace ServicesTheWeakestRival.Server.Services
             target.BlockWildcardsRoundNumber = state.RoundNumber;
         }
 
-        private static void ApplyWildcardSabotage(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
-        {
-            MatchPlayerRuntime target = ResolveNextAlivePlayerOrThrow(state, currentPlayer.UserId);
-
-            target.PendingTimeDeltaSeconds -= GameplayEngineConstants.WILDCARD_TIME_PENALTY_SECONDS;
-
-            GameplayBroadcaster.Broadcast(
-                state,
-                cb => cb.OnSpecialEvent(
-                    state.MatchId,
-                    GameplayEngineConstants.SPECIAL_EVENT_TIME_PENALTY_CODE,
-                    string.Format(
-                        CultureInfo.CurrentCulture,
-                        GameplayEngineConstants.SPECIAL_EVENT_TIME_PENALTY_DESCRIPTION_TEMPLATE,
-                        target.DisplayName,
-                        GameplayEngineConstants.WILDCARD_TIME_PENALTY_SECONDS)),
-                "GameplayEngine.Wildcard.Sabotage");
-        }
-
-        private static void ApplyWildcardExtraTime(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
-        {
-            currentPlayer.PendingTimeDeltaSeconds += GameplayEngineConstants.WILDCARD_TIME_BONUS_SECONDS;
-
-            GameplayBroadcaster.Broadcast(
-                state,
-                cb => cb.OnSpecialEvent(
-                    state.MatchId,
-                    GameplayEngineConstants.SPECIAL_EVENT_TIME_BONUS_CODE,
-                    string.Format(
-                        CultureInfo.CurrentCulture,
-                        GameplayEngineConstants.SPECIAL_EVENT_TIME_BONUS_DESCRIPTION_TEMPLATE,
-                        currentPlayer.DisplayName,
-                        GameplayEngineConstants.WILDCARD_TIME_BONUS_SECONDS)),
-                "GameplayEngine.Wildcard.ExtraTime");
-        }
-
         internal static void BroadcastWildcardUsed(MatchRuntimeState state, MatchPlayerRuntime actor, string wildcardCode)
         {
-            string code = string.Format(CultureInfo.InvariantCulture, GameplayEngineConstants.SPECIAL_EVENT_WILDCARD_USED_CODE_TEMPLATE, wildcardCode);
-            string description = string.Format(CultureInfo.CurrentCulture, GameplayEngineConstants.SPECIAL_EVENT_WILDCARD_USED_DESCRIPTION_TEMPLATE, actor.DisplayName, wildcardCode);
+            const char PAYLOAD_SEPARATOR = '|';
+            const string CTX = "GameplayEngine.Wildcard.Used";
+
+            string safeName = actor != null && !string.IsNullOrWhiteSpace(actor.DisplayName)
+                ? actor.DisplayName
+                : string.Empty;
+
+            string safeCode = wildcardCode ?? string.Empty;
+
+            string eventCode = string.Format(
+                CultureInfo.InvariantCulture,
+                GameplayEngineConstants.SPECIAL_EVENT_WILDCARD_USED_CODE_TEMPLATE,
+                safeCode);
+
+            string payload = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}{1}{2}",
+                safeName,
+                PAYLOAD_SEPARATOR,
+                safeCode);
 
             GameplayBroadcaster.Broadcast(
                 state,
-                cb => cb.OnSpecialEvent(state.MatchId, code, description),
-                "GameplayEngine.Wildcard.Used");
+                cb => cb.OnSpecialEvent(state.MatchId, eventCode, payload),
+                CTX);
         }
 
         private static MatchPlayerRuntime ResolveNextAlivePlayerOrThrow(MatchRuntimeState state, int currentUserId)

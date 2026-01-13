@@ -36,6 +36,11 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string ERROR_NO_QUESTIONS_MESSAGE =
             "No se encontraron preguntas para la dificultad/idioma solicitados.";
 
+        internal const decimal MAX_BANKED_POINTS = 10m;
+
+        internal const string ERROR_BANK_LIMIT_REACHED = "Error: Límite de calificación";
+        internal const string MESSAGE_BANK_LIMIT_REACHED = "No se puede exceder la calificación máxima de 10.";
+
         internal const int FINAL_PLAYERS_COUNT = 2;
 
         internal const int FINAL_QUESTIONS_PER_PLAYER = 5;
