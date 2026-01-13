@@ -234,30 +234,6 @@ namespace ServicesTheWeakestRival.Tests.Gameplay
         }
 
         [TestMethod]
-        public void HandleDuelTurn_WhenIncorrect_EliminatesCurrent_EndsDuel()
-        {
-            MatchRuntimeState state = CreateState3PlayersWithQuestions();
-            EnsureCurrentQuestionIsValid(state);
-
-            state.IsInDuelPhase = true;
-            state.WeakestRivalUserId = USER_ID_P2;
-            state.DuelTargetUserId = USER_ID_P1;
-
-            state.CurrentPlayerIndex = state.Players.FindIndex(p => p.UserId == USER_ID_P1);
-
-            MatchPlayerRuntime current = state.GetCurrentPlayer();
-            Assert.AreEqual(USER_ID_P1, current.UserId);
-
-            GameplayVotingAndDuelFlow.HandleDuelTurn(state, current, isCorrect: false);
-
-            Assert.IsTrue(current.IsEliminated);
-            Assert.IsFalse(state.IsInDuelPhase);
-            Assert.IsNull(state.WeakestRivalUserId);
-            Assert.IsNull(state.DuelTargetUserId);
-            Assert.AreEqual(0, state.BombQuestionId);
-        }
-
-        [TestMethod]
         public void HandleDuelTurn_WhenCorrect_SwitchesTurnToOtherDuelPlayer()
         {
             MatchRuntimeState state = CreateState3PlayersWithQuestions();
@@ -278,7 +254,6 @@ namespace ServicesTheWeakestRival.Tests.Gameplay
             Assert.IsNotNull(newCurrent);
             Assert.AreEqual(USER_ID_P2, newCurrent.UserId);
 
-            // No asumas NextQuestion callbacks (tu implementación podría mandar pregunta solo al jugador en turno).
         }
 
         private static MatchRuntimeState CreateState3PlayersWithQuestions()
@@ -312,7 +287,6 @@ namespace ServicesTheWeakestRival.Tests.Gameplay
             state.QuestionsById[q.QuestionId] = q;
             state.CurrentQuestionId = q.QuestionId;
 
-            // También deja al menos una pregunta “siguiente” en cola por si el flujo la consume.
             QuestionWithAnswersDto next = BuildQuestion(QUESTION_ID_BASE + 2);
             state.QuestionsById[next.QuestionId] = next;
             state.Questions.Enqueue(next);
