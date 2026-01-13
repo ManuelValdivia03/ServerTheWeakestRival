@@ -8,6 +8,10 @@ using ServicesTheWeakestRival.Server.Infrastructure;
 using System.Data;
 using System.Data.SqlClient;
 using System;
+using ServicesTheWeakestRival.Server.Services;
+using System.Linq;
+using System.Reflection;
+
 
 namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 {
@@ -337,13 +341,12 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_CREDENTIALS, fault.Message);
         }
-
         [TestMethod]
         public void Login_WhenAlreadyLoggedIn_ThrowsAlreadyLoggedIn()
         {
             string email = CreateUniqueEmail();
 
-            RegisterResponse register = authOperations.Register(new RegisterRequest
+            authOperations.Register(new RegisterRequest
             {
                 Email = email,
                 Password = PASSWORD,
@@ -352,13 +355,30 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
                 ProfileImageContentType = string.Empty
             });
 
+            LoginResponse firstLogin = authOperations.Login(new LoginRequest
+            {
+                Email = email,
+                Password = PASSWORD
+            });
+
+            Assert.IsNotNull(firstLogin);
+
             ServiceFault fault = FaultAssert.Capture(() =>
-                authOperations.Login(new LoginRequest { Email = email, Password = PASSWORD }));
+                authOperations.Login(new LoginRequest
+                {
+                    Email = email,
+                    Password = PASSWORD
+                }));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_ALREADY_LOGGED_IN, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN, fault.Message);
 
-            authOperations.Logout(new LogoutRequest { Token = register.Token.Token });
+            // Best-effort cleanup (optional)
+            string token = TryResolveTokenFromLogin(firstLogin);
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                authOperations.Logout(new LogoutRequest { Token = token });
+            }
         }
 
         [TestMethod]
@@ -510,6 +530,235 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
 
                 connection.Open();
                 cmd.ExecuteNonQuery();
+            }
+        }
+
+        private static string GetActiveTokenOrFail(int userId)
+        {
+            bool found = TokenStore.ActiveTokenByUserId.TryGetValue(userId, out string activeToken);
+
+            Assert.IsTrue(found);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(activeToken));
+
+            return activeToken;
+        }
+
+        private static string TryResolveTokenFromLogin(LoginResponse response)
+        {
+            if (response == null || response.Token == null)
+            {
+                return string.Empty;
+            }
+
+            string token = TryReadStringProperty(response.Token, "Token");
+            token = FirstNonEmpty(token, TryReadStringProperty(response.Token, "TokenValue"));
+            token = FirstNonEmpty(token, TryReadStringProperty(response.Token, "Value"));
+            token = FirstNonEmpty(token, TryReadStringProperty(response.Token, "AccessToken"));
+            token = FirstNonEmpty(token, TryReadStringProperty(response.Token, "SessionToken"));
+
+            return (token ?? string.Empty).Trim();
+        }
+
+        private static string TryReadStringProperty(object instance, string propertyName)
+        {
+            if (instance == null)
+            {
+                return string.Empty;
+            }
+
+            PropertyInfo property = instance.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Instance | BindingFlags.Public);
+
+            if (property == null || property.PropertyType != typeof(string))
+            {
+                return string.Empty;
+            }
+
+            return (string)property.GetValue(instance) ?? string.Empty;
+        }
+
+        private static string FirstNonEmpty(string first, string second)
+        {
+            return string.IsNullOrWhiteSpace(first) ? second : first;
+        }
+
+        private static string TryGetTokenValue(LoginResponse response)
+        {
+            if (response == null)
+            {
+                return string.Empty;
+            }
+
+            if (response.Token == null)
+            {
+                return string.Empty;
+            }
+
+            return (response.Token.Token ?? string.Empty).Trim();
+        }
+
+        private const string TOKEN_COLUMN_NAME = "token";
+
+        private const string USER_ID_COLUMN_NAME = "user_id";
+        private const string ACCOUNT_ID_COLUMN_NAME = "account_id";
+
+        private const string CREATED_AT_UTC_COLUMN_NAME = "created_at_utc";
+        private const string ISSUED_AT_UTC_COLUMN_NAME = "issued_at_utc";
+        private const string EXPIRES_AT_UTC_COLUMN_NAME = "expires_at_utc";
+
+        private const string SQL_FIND_TOKEN_TABLE = @"
+SELECT TOP (1)
+    sch.name AS schema_name,
+    t.name AS table_name
+FROM sys.tables t
+INNER JOIN sys.schemas sch ON sch.schema_id = t.schema_id
+WHERE EXISTS (
+    SELECT 1
+    FROM sys.columns c
+    WHERE c.object_id = t.object_id
+      AND LOWER(c.name) = @TokenColumn
+)
+AND EXISTS (
+    SELECT 1
+    FROM sys.columns c
+    WHERE c.object_id = t.object_id
+      AND LOWER(c.name) IN (@UserIdColumn, @AccountIdColumn)
+)
+ORDER BY
+    CASE
+        WHEN LOWER(t.name) LIKE '%token%' THEN 0
+        WHEN LOWER(t.name) LIKE '%auth%' THEN 1
+        WHEN LOWER(t.name) LIKE '%session%' THEN 2
+        ELSE 3
+    END,
+    t.name;";
+
+        private const string SQL_FIND_BEST_USER_COLUMN = @"
+SELECT TOP (1) c.name
+FROM sys.columns c
+WHERE c.object_id = OBJECT_ID(@FullTableName)
+  AND LOWER(c.name) IN (@UserIdColumn, @AccountIdColumn)
+ORDER BY CASE WHEN LOWER(c.name) = @UserIdColumn THEN 0 ELSE 1 END;";
+
+        private const string SQL_FIND_BEST_ORDER_COLUMN = @"
+SELECT TOP (1) c.name
+FROM sys.columns c
+WHERE c.object_id = OBJECT_ID(@FullTableName)
+  AND LOWER(c.name) IN (@CreatedAtUtc, @IssuedAtUtc, @ExpiresAtUtc)
+ORDER BY CASE
+    WHEN LOWER(c.name) = @CreatedAtUtc THEN 0
+    WHEN LOWER(c.name) = @IssuedAtUtc THEN 1
+    WHEN LOWER(c.name) = @ExpiresAtUtc THEN 2
+    ELSE 3
+END;";
+
+
+        private static class TokenValueResolver
+        {
+            private const string PropertyTokenContainer = "Token";
+
+            private static readonly string[] CandidateTokenValuePropertyNames =
+            {
+        "Token",
+        "TokenValue",
+        "Value",
+        "AccessToken",
+        "SessionToken",
+        "AuthToken"
+    };
+
+            internal static string GetTokenOrFail(object response, string responseName)
+            {
+                if (response == null)
+                {
+                    Assert.Fail(string.Concat(responseName, " was null."));
+                }
+
+                object tokenContainer = TryGetPropertyValue(response, PropertyTokenContainer);
+                if (tokenContainer == null)
+                {
+                    Assert.Fail(string.Concat(
+                        responseName,
+                        " did not contain Token container. Public properties: ",
+                        DescribePublicProperties(response)));
+                }
+
+                string tokenValue = TryResolveTokenValue(tokenContainer);
+                if (!string.IsNullOrWhiteSpace(tokenValue))
+                {
+                    return tokenValue.Trim();
+                }
+
+                Assert.Fail(string.Concat(
+                    responseName,
+                    " Token container did not contain a token value. Token properties: ",
+                    DescribePublicProperties(tokenContainer)));
+                return string.Empty;
+            }
+
+            private static string TryResolveTokenValue(object tokenContainer)
+            {
+                if (tokenContainer == null)
+                {
+                    return string.Empty;
+                }
+
+                Type type = tokenContainer.GetType();
+
+                foreach (string name in CandidateTokenValuePropertyNames)
+                {
+                    PropertyInfo prop = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+                    if (prop == null || prop.PropertyType != typeof(string))
+                    {
+                        continue;
+                    }
+
+                    string value = (string)prop.GetValue(tokenContainer);
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value;
+                    }
+                }
+
+                // Fallback: if there is a nested object with token-ish strings, try one level deeper.
+                foreach (string name in CandidateTokenValuePropertyNames)
+                {
+                    PropertyInfo prop = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+                    if (prop == null || prop.PropertyType == typeof(string))
+                    {
+                        continue;
+                    }
+
+                    object nested = prop.GetValue(tokenContainer);
+                    string nestedValue = TryResolveTokenValue(nested);
+                    if (!string.IsNullOrWhiteSpace(nestedValue))
+                    {
+                        return nestedValue;
+                    }
+                }
+
+                return string.Empty;
+            }
+
+            private static object TryGetPropertyValue(object instance, string propertyName)
+            {
+                PropertyInfo prop = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+                if (prop == null)
+                {
+                    return null;
+                }
+
+                return prop.GetValue(instance);
+            }
+
+            private static string DescribePublicProperties(object instance)
+            {
+                PropertyInfo[] props = instance.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public);
+
+                return string.Join(
+                    ", ",
+                    props.Select(p => string.Concat(p.Name, ":", p.PropertyType.Name)));
             }
         }
     }

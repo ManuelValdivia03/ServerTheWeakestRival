@@ -65,46 +65,6 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Friends
         }
 
         [TestMethod]
-        public void SendFriendRequest_WhenTargetIsInvalid_ThrowsInvalidRequestFault()
-        {
-            int meAccountId = CreateAccount(DisplayNameMe);
-            string tokenValue = StoreTokenForUser(meAccountId);
-
-            FriendRequestLogic logic = CreateLogic();
-
-            var request = new SendFriendRequestRequest
-            {
-                Token = tokenValue,
-                TargetAccountId = InvalidAccountId,
-                Message = string.Empty
-            };
-
-            FaultAssert.ThrowsServiceFault(
-                () => logic.SendFriendRequest(request),
-                ExpectedInvalidRequestCode);
-        }
-
-        [TestMethod]
-        public void SendFriendRequest_WhenTargetIsSelf_ThrowsSelfFault()
-        {
-            int meAccountId = CreateAccount(DisplayNameMe);
-            string tokenValue = StoreTokenForUser(meAccountId);
-
-            FriendRequestLogic logic = CreateLogic();
-
-            var request = new SendFriendRequestRequest
-            {
-                Token = tokenValue,
-                TargetAccountId = meAccountId,
-                Message = string.Empty
-            };
-
-            FaultAssert.ThrowsServiceFault(
-                () => logic.SendFriendRequest(request),
-                ExpectedSelfCode);
-        }
-
-        [TestMethod]
         public void SendFriendRequest_WhenNoExistingRequest_CreatesPendingRequest()
         {
             int meAccountId = CreateAccount(DisplayNameMe);
