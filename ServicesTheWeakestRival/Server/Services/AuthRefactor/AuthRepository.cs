@@ -8,11 +8,45 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 {
     public sealed class AuthRepository
     {
+        private const string PARAM_CODE_HASH = "@CodeHash";
+        private const string PARAM_EXPIRES_AT_UTC = "@ExpiresAtUtc";
+
+        private const string PARAM_ID = "@Id";
+        private const string PARAM_HASH = "@Hash";
+
+        private const string PARAM_PASSWORD_HASH = "@PasswordHash";
+        private const string PARAM_STATUS = "@Status";
+        private const string PARAM_USER_ID = "@UserId";
+        private const string PARAM_DISPLAY_NAME = "@DisplayName";
+
+        private const string PARAM_PROFILE_IMAGE = "@ProfileImage";
+        private const string PARAM_PROFILE_IMAGE_CONTENT_TYPE = "@ProfileImageContentType";
+        private const string PARAM_PROFILE_IMAGE_UPDATED_AT_UTC = "@ProfileImageUpdatedAtUtc";
+
+        private const int VERIFICATION_COL_ID = 0;
+        private const int VERIFICATION_COL_EXPIRES_AT_UTC = 1;
+        private const int VERIFICATION_COL_USED = 2;
+
+        private const int RESET_COL_ID = 0;
+        private const int RESET_COL_EXPIRES_AT_UTC = 1;
+        private const int RESET_COL_USED = 2;
+
+        private const int LOGIN_COL_USER_ID = 0;
+        private const int LOGIN_COL_PASSWORD_HASH = 1;
+        private const int LOGIN_COL_STATUS = 2;
+
+        private const int PROFILE_IMAGE_COL_BYTES = 0;
+        private const int PROFILE_IMAGE_COL_CONTENT_TYPE = 1;
+        private const int PROFILE_IMAGE_COL_UPDATED_AT_UTC = 2;
+
+        private const int EMPTY_BINARY_LENGTH = 0;
+
         private readonly Func<string> connectionStringProvider;
 
         public AuthRepository(Func<string> connectionStringProvider)
         {
-            this.connectionStringProvider = connectionStringProvider ?? throw new ArgumentNullException(nameof(connectionStringProvider));
+            this.connectionStringProvider = connectionStringProvider
+                ?? throw new ArgumentNullException(nameof(connectionStringProvider));
         }
 
         public void CreateRegisterVerification(string email, byte[] codeHash, DateTime expiresAtUtc)
@@ -23,31 +57,31 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
-                    using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_VERIFICATIONS, connection, transaction))
+                    using (var invalidateCommand = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_VERIFICATIONS, connection, transaction))
                     {
-                        invalidate.Parameters.Add(
+                        invalidateCommand.Parameters.Add(
                             AuthServiceConstants.PARAMETER_EMAIL,
                             SqlDbType.NVarChar,
                             AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
 
-                        invalidate.ExecuteNonQuery();
+                        invalidateCommand.ExecuteNonQuery();
                     }
 
-                    using (var insert = new SqlCommand(AuthSql.Text.INSERT_VERIFICATION, connection, transaction))
+                    using (var insertCommand = new SqlCommand(AuthSql.Text.INSERT_VERIFICATION, connection, transaction))
                     {
-                        insert.Parameters.Add(
+                        insertCommand.Parameters.Add(
                             AuthServiceConstants.PARAMETER_EMAIL,
                             SqlDbType.NVarChar,
                             AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
 
-                        insert.Parameters.Add(
-                            "@CodeHash",
+                        insertCommand.Parameters.Add(
+                            PARAM_CODE_HASH,
                             SqlDbType.VarBinary,
                             AuthServiceConstants.SHA256_HASH_BYTES).Value = codeHash;
 
-                        insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
+                        insertCommand.Parameters.Add(PARAM_EXPIRES_AT_UTC, SqlDbType.DateTime2).Value = expiresAtUtc;
 
-                        insert.ExecuteNonQuery();
+                        insertCommand.ExecuteNonQuery();
                     }
 
                     transaction.Commit();
@@ -63,31 +97,31 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
-                    using (var invalidate = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_RESETS, connection, transaction))
+                    using (var invalidateCommand = new SqlCommand(AuthSql.Text.INVALIDATE_PENDING_RESETS, connection, transaction))
                     {
-                        invalidate.Parameters.Add(
+                        invalidateCommand.Parameters.Add(
                             AuthServiceConstants.PARAMETER_EMAIL,
                             SqlDbType.NVarChar,
                             AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
 
-                        invalidate.ExecuteNonQuery();
+                        invalidateCommand.ExecuteNonQuery();
                     }
 
-                    using (var insert = new SqlCommand(AuthSql.Text.INSERT_RESET_REQUEST, connection, transaction))
+                    using (var insertCommand = new SqlCommand(AuthSql.Text.INSERT_RESET_REQUEST, connection, transaction))
                     {
-                        insert.Parameters.Add(
+                        insertCommand.Parameters.Add(
                             AuthServiceConstants.PARAMETER_EMAIL,
                             SqlDbType.NVarChar,
                             AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
 
-                        insert.Parameters.Add(
-                            "@CodeHash",
+                        insertCommand.Parameters.Add(
+                            PARAM_CODE_HASH,
                             SqlDbType.VarBinary,
                             AuthServiceConstants.SHA256_HASH_BYTES).Value = codeHash;
 
-                        insert.Parameters.Add("@ExpiresAtUtc", SqlDbType.DateTime2).Value = expiresAtUtc;
+                        insertCommand.Parameters.Add(PARAM_EXPIRES_AT_UTC, SqlDbType.DateTime2).Value = expiresAtUtc;
 
-                        insert.ExecuteNonQuery();
+                        insertCommand.ExecuteNonQuery();
                     }
 
                     transaction.Commit();
@@ -95,14 +129,12 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             }
         }
 
-
-
         public VerificationLookupResult ReadLatestVerification(string email)
         {
             using (var connection = new SqlConnection(connectionStringProvider()))
-            using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_VERIFICATION, connection))
+            using (var pickCommand = new SqlCommand(AuthSql.Text.PICK_LATEST_VERIFICATION, connection))
             {
-                pick.Parameters.Add(
+                pickCommand.Parameters.Add(
                         AuthServiceConstants.PARAMETER_EMAIL,
                         SqlDbType.NVarChar,
                         AuthServiceConstants.EMAIL_MAX_LENGTH)
@@ -110,29 +142,29 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 connection.Open();
 
-                using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
+                using (var reader = pickCommand.ExecuteReader(CommandBehavior.SingleRow))
                 {
                     if (!reader.Read())
                     {
                         return VerificationLookupResult.NotFound();
                     }
 
-                    int verificationId = reader.GetInt32(0);
-                    DateTime expiresAtUtc = reader.GetDateTime(1);
-                    bool used = reader.GetBoolean(2);
+                    int verificationId = reader.GetInt32(VERIFICATION_COL_ID);
+                    DateTime expiresAtUtc = reader.GetDateTime(VERIFICATION_COL_EXPIRES_AT_UTC);
+                    bool used = reader.GetBoolean(VERIFICATION_COL_USED);
 
-                    return VerificationLookupResult.FoundVerification(new VerificationRow(verificationId, expiresAtUtc, used));
+                    return VerificationLookupResult.FoundVerification(
+                        new VerificationRow(verificationId, expiresAtUtc, used));
                 }
             }
         }
 
-
         public ResetLookupResult ReadLatestReset(string email)
         {
             using (var connection = new SqlConnection(connectionStringProvider()))
-            using (var pick = new SqlCommand(AuthSql.Text.PICK_LATEST_RESET, connection))
+            using (var pickCommand = new SqlCommand(AuthSql.Text.PICK_LATEST_RESET, connection))
             {
-                pick.Parameters.Add(
+                pickCommand.Parameters.Add(
                         AuthServiceConstants.PARAMETER_EMAIL,
                         SqlDbType.NVarChar,
                         AuthServiceConstants.EMAIL_MAX_LENGTH)
@@ -140,72 +172,70 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 connection.Open();
 
-                using (var reader = pick.ExecuteReader(CommandBehavior.SingleRow))
+                using (var reader = pickCommand.ExecuteReader(CommandBehavior.SingleRow))
                 {
                     if (!reader.Read())
                     {
                         return ResetLookupResult.NotFound();
                     }
 
-                    int resetId = reader.GetInt32(0);
-                    DateTime expiresAtUtc = reader.GetDateTime(1);
-                    bool used = reader.GetBoolean(2);
+                    int resetId = reader.GetInt32(RESET_COL_ID);
+                    DateTime expiresAtUtc = reader.GetDateTime(RESET_COL_EXPIRES_AT_UTC);
+                    bool used = reader.GetBoolean(RESET_COL_USED);
 
                     return ResetLookupResult.FoundReset(new ResetRow(resetId, expiresAtUtc, used));
                 }
             }
         }
 
-
         public CodeValidationResult ValidateVerificationCodeOrThrow(int verificationId, byte[] codeHash)
         {
             using (var connection = new SqlConnection(connectionStringProvider()))
-            using (var validate = new SqlCommand(AuthSql.Text.VALIDATE_VERIFICATION, connection))
+            using (var validateCommand = new SqlCommand(AuthSql.Text.VALIDATE_VERIFICATION, connection))
             {
-                validate.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
-                validate.Parameters.Add("@Hash", SqlDbType.VarBinary, AuthServiceConstants.SHA256_HASH_BYTES).Value = codeHash;
+                validateCommand.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = verificationId;
+                validateCommand.Parameters.Add(PARAM_HASH, SqlDbType.VarBinary, AuthServiceConstants.SHA256_HASH_BYTES).Value = codeHash;
 
                 connection.Open();
 
-                bool isValid = Convert.ToInt32(validate.ExecuteScalar()) == AuthServiceConstants.SQL_TRUE;
+                bool isValid = Convert.ToInt32(validateCommand.ExecuteScalar()) == AuthServiceConstants.SQL_TRUE;
 
                 if (isValid)
                 {
                     return CodeValidationResult.Valid();
                 }
 
-                using (var inc = new SqlCommand(AuthSql.Text.INCREMENT_ATTEMPTS, connection))
+                using (var incrementAttemptsCommand = new SqlCommand(AuthSql.Text.INCREMENT_ATTEMPTS, connection))
                 {
-                    inc.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
-                    inc.ExecuteNonQuery();
+                    incrementAttemptsCommand.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = verificationId;
+                    incrementAttemptsCommand.ExecuteNonQuery();
                 }
 
                 return CodeValidationResult.Invalid();
             }
         }
 
-
         public CodeValidationResult ValidateResetCodeOrThrow(int resetId, byte[] codeHash)
         {
             using (var connection = new SqlConnection(connectionStringProvider()))
-            using (var validate = new SqlCommand(AuthSql.Text.VALIDATE_RESET, connection))
+            using (var validateCommand = new SqlCommand(AuthSql.Text.VALIDATE_RESET, connection))
             {
-                validate.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
-                validate.Parameters.Add("@Hash", SqlDbType.VarBinary, AuthServiceConstants.SHA256_HASH_BYTES).Value = codeHash;
+                validateCommand.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = resetId;
+                validateCommand.Parameters.Add(PARAM_HASH, SqlDbType.VarBinary, AuthServiceConstants.SHA256_HASH_BYTES).Value = codeHash;
 
                 connection.Open();
 
-                bool isValid = Convert.ToInt32(validate.ExecuteScalar()) == AuthServiceConstants.SQL_TRUE;
+                bool isValid = Convert.ToInt32(validateCommand.ExecuteScalar()) == AuthServiceConstants.SQL_TRUE;
 
                 if (isValid)
                 {
                     return CodeValidationResult.Valid();
                 }
 
-                using (var inc = new SqlCommand(AuthSql.Text.INCREMENT_RESET_ATTEMPTS, connection))
+                using (var incrementAttemptsCommand = new SqlCommand(AuthSql.Text.INCREMENT_RESET_ATTEMPTS, connection))
                 {
-                    inc.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
-                    inc.ExecuteNonQuery();
+                    incrementAttemptsCommand.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = resetId;
+                    incrementAttemptsCommand.ExecuteNonQuery();
                 }
 
                 return CodeValidationResult.Invalid();
@@ -227,76 +257,77 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 {
-                    using (var insertAcc = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
+                    using (var insertAccountCommand = new SqlCommand(AuthSql.Text.INSERT_ACCOUNT, connection, transaction))
                     {
-                        insertAcc.Parameters.Add(
+                        insertAccountCommand.Parameters.Add(
                             AuthServiceConstants.PARAMETER_EMAIL,
                             SqlDbType.NVarChar,
                             AuthServiceConstants.EMAIL_MAX_LENGTH).Value = data.Email;
 
-                        insertAcc.Parameters.Add(
-                            "@PasswordHash",
+                        insertAccountCommand.Parameters.Add(
+                            PARAM_PASSWORD_HASH,
                             SqlDbType.NVarChar,
                             AuthServiceConstants.PASSWORD_HASH_MAX_LENGTH).Value = data.PasswordHash;
 
-                        insertAcc.Parameters.Add("@Status", SqlDbType.TinyInt).Value = AuthServiceConstants.ACCOUNT_STATUS_ACTIVE;
+                        insertAccountCommand.Parameters.Add(PARAM_STATUS, SqlDbType.TinyInt).Value = AuthServiceConstants.ACCOUNT_STATUS_ACTIVE;
 
-                        newAccountId = Convert.ToInt32(insertAcc.ExecuteScalar());
+                        newAccountId = Convert.ToInt32(insertAccountCommand.ExecuteScalar());
                     }
 
-                    using (var insertUser = new SqlCommand(AuthSql.Text.INSERT_USER, connection, transaction))
+                    using (var insertUserCommand = new SqlCommand(AuthSql.Text.INSERT_USER, connection, transaction))
                     {
-                        insertUser.Parameters.Add("@UserId", SqlDbType.Int).Value = newAccountId;
+                        insertUserCommand.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = newAccountId;
 
-                        insertUser.Parameters.Add(
-                            "@DisplayName",
+                        insertUserCommand.Parameters.Add(
+                            PARAM_DISPLAY_NAME,
                             SqlDbType.NVarChar,
                             AuthServiceConstants.DISPLAY_NAME_MAX_LENGTH).Value = data.DisplayName;
 
                         if (!data.ProfileImage.HasImage)
                         {
-                            insertUser.Parameters.Add(
-                                "@ProfileImage",
+                            insertUserCommand.Parameters.Add(
+                                PARAM_PROFILE_IMAGE,
                                 SqlDbType.VarBinary,
                                 AuthServiceConstants.SQL_VARBINARY_MAX).Value = DBNull.Value;
 
-                            insertUser.Parameters.Add(
-                                "@ProfileImageContentType",
+                            insertUserCommand.Parameters.Add(
+                                PARAM_PROFILE_IMAGE_CONTENT_TYPE,
                                 SqlDbType.NVarChar,
                                 ProfileImageConstants.CONTENT_TYPE_MAX_LENGTH).Value = DBNull.Value;
 
-                            insertUser.Parameters.Add("@ProfileImageUpdatedAtUtc", SqlDbType.DateTime2).Value = DBNull.Value;
+                            insertUserCommand.Parameters.Add(PARAM_PROFILE_IMAGE_UPDATED_AT_UTC, SqlDbType.DateTime2).Value = DBNull.Value;
                         }
                         else
                         {
-                            insertUser.Parameters.Add(
-                                "@ProfileImage",
+                            insertUserCommand.Parameters.Add(
+                                PARAM_PROFILE_IMAGE,
                                 SqlDbType.VarBinary,
                                 AuthServiceConstants.SQL_VARBINARY_MAX).Value = data.ProfileImage.Bytes;
 
-                            insertUser.Parameters.Add(
-                                "@ProfileImageContentType",
+                            insertUserCommand.Parameters.Add(
+                                PARAM_PROFILE_IMAGE_CONTENT_TYPE,
                                 SqlDbType.NVarChar,
                                 ProfileImageConstants.CONTENT_TYPE_MAX_LENGTH).Value = data.ProfileImage.ContentType;
 
-                            insertUser.Parameters.Add("@ProfileImageUpdatedAtUtc", SqlDbType.DateTime2).Value = DateTime.UtcNow;
+                            insertUserCommand.Parameters.Add(PARAM_PROFILE_IMAGE_UPDATED_AT_UTC, SqlDbType.DateTime2).Value = DateTime.UtcNow;
                         }
 
-                        insertUser.ExecuteNonQuery();
+                        insertUserCommand.ExecuteNonQuery();
                     }
 
                     transaction.Commit();
                 }
             }
+
             return newAccountId;
         }
 
         public LoginLookupResult GetAccountForLogin(string email)
         {
             using (var connection = new SqlConnection(connectionStringProvider()))
-            using (var get = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
+            using (var getCommand = new SqlCommand(AuthSql.Text.GET_ACCOUNT_BY_EMAIL, connection))
             {
-                get.Parameters.Add(
+                getCommand.Parameters.Add(
                         AuthServiceConstants.PARAMETER_EMAIL,
                         SqlDbType.NVarChar,
                         AuthServiceConstants.EMAIL_MAX_LENGTH)
@@ -304,16 +335,16 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 connection.Open();
 
-                using (var reader = get.ExecuteReader(CommandBehavior.SingleRow))
+                using (var reader = getCommand.ExecuteReader(CommandBehavior.SingleRow))
                 {
                     if (!reader.Read())
                     {
                         return LoginLookupResult.NotFound();
                     }
 
-                    int userId = reader.GetInt32(0);
-                    string storedHash = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-                    byte status = reader.GetByte(2);
+                    int userId = reader.GetInt32(LOGIN_COL_USER_ID);
+                    string storedHash = reader.IsDBNull(LOGIN_COL_PASSWORD_HASH) ? string.Empty : reader.GetString(LOGIN_COL_PASSWORD_HASH);
+                    byte status = reader.GetByte(LOGIN_COL_STATUS);
 
                     return LoginLookupResult.FoundAccount(new LoginAccountRow(userId, storedHash, status));
                 }
@@ -325,7 +356,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             using (var connection = new SqlConnection(connectionStringProvider()))
             using (var cmd = new SqlCommand(AuthSql.Text.GET_PROFILE_IMAGE_BY_USER_ID, connection))
             {
-                cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                cmd.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
                 connection.Open();
 
                 using (var reader = cmd.ExecuteReader(CommandBehavior.SingleRow))
@@ -335,11 +366,11 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                         return ProfileImageRecord.Empty(userId);
                     }
 
-                    byte[] imageBytes = reader.IsDBNull(0) ? null : (byte[])reader[0];
-                    string contentType = reader.IsDBNull(1) ? null : reader.GetString(1);
-                    DateTime? updatedAtUtc = reader.IsDBNull(2) ? (DateTime?)null : reader.GetDateTime(2);
+                    byte[] imageBytes = reader.IsDBNull(PROFILE_IMAGE_COL_BYTES) ? null : (byte[])reader[PROFILE_IMAGE_COL_BYTES];
+                    string contentType = reader.IsDBNull(PROFILE_IMAGE_COL_CONTENT_TYPE) ? null : reader.GetString(PROFILE_IMAGE_COL_CONTENT_TYPE);
+                    DateTime? updatedAtUtc = reader.IsDBNull(PROFILE_IMAGE_COL_UPDATED_AT_UTC) ? (DateTime?)null : reader.GetDateTime(PROFILE_IMAGE_COL_UPDATED_AT_UTC);
 
-                    if (imageBytes == null || imageBytes.Length == 0)
+                    if (imageBytes == null || imageBytes.Length == EMPTY_BINARY_LENGTH)
                     {
                         return ProfileImageRecord.Empty(userId);
                     }
@@ -358,10 +389,15 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                 using (var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted))
                 using (var updatePwd = new SqlCommand(AuthSql.Text.UPDATE_ACCOUNT_PASSWORD, connection, transaction))
                 {
-                    updatePwd.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value
-                        = email;
-                    updatePwd.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, AuthServiceConstants.PASSWORD_HASH_MAX_LENGTH).Value
-                        = passwordHash;
+                    updatePwd.Parameters.Add(
+                        AuthServiceConstants.PARAMETER_EMAIL,
+                        SqlDbType.NVarChar,
+                        AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
+
+                    updatePwd.Parameters.Add(
+                        PARAM_PASSWORD_HASH,
+                        SqlDbType.NVarChar,
+                        AuthServiceConstants.PASSWORD_HASH_MAX_LENGTH).Value = passwordHash;
 
                     int rows = updatePwd.ExecuteNonQuery();
                     transaction.Commit();
@@ -378,7 +414,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 using (var mark = new SqlCommand(AuthSql.Text.MARK_VERIFICATION_USED, connection))
                 {
-                    mark.Parameters.Add("@Id", SqlDbType.Int).Value = verificationId;
+                    mark.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = verificationId;
                     mark.ExecuteNonQuery();
                 }
             }
@@ -392,7 +428,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
 
                 using (var mark = new SqlCommand(AuthSql.Text.MARK_RESET_USED, connection))
                 {
-                    mark.Parameters.Add("@Id", SqlDbType.Int).Value = resetId;
+                    mark.Parameters.Add(PARAM_ID, SqlDbType.Int).Value = resetId;
                     mark.ExecuteNonQuery();
                 }
             }
@@ -404,7 +440,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             using (var cmd = new SqlCommand(AuthSql.Text.SP_LOBBY_LEAVE_ALL_BY_USER, connection))
             {
                 cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                cmd.Parameters.Add(PARAM_USER_ID, SqlDbType.Int).Value = userId;
                 connection.Open();
                 cmd.ExecuteNonQuery();
             }
@@ -415,7 +451,11 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             using (var connection = new SqlConnection(connectionStringProvider()))
             using (var exists = new SqlCommand(AuthSql.Text.EXISTS_ACCOUNT_BY_EMAIL, connection))
             {
-                exists.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
+                exists.Parameters.Add(
+                    AuthServiceConstants.PARAMETER_EMAIL,
+                    SqlDbType.NVarChar,
+                    AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
+
                 connection.Open();
 
                 return exists.ExecuteScalar() != null;
@@ -427,7 +467,11 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             using (var connection = new SqlConnection(connectionStringProvider()))
             using (var last = new SqlCommand(AuthSql.Text.LAST_VERIFICATION, connection))
             {
-                last.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
+                last.Parameters.Add(
+                    AuthServiceConstants.PARAMETER_EMAIL,
+                    SqlDbType.NVarChar,
+                    AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
+
                 connection.Open();
 
                 object lastObj = last.ExecuteScalar();
@@ -445,7 +489,11 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             using (var connection = new SqlConnection(connectionStringProvider()))
             using (var last = new SqlCommand(AuthSql.Text.LAST_RESET_REQUEST, connection))
             {
-                last.Parameters.Add(AuthServiceConstants.PARAMETER_EMAIL, SqlDbType.NVarChar, AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
+                last.Parameters.Add(
+                    AuthServiceConstants.PARAMETER_EMAIL,
+                    SqlDbType.NVarChar,
+                    AuthServiceConstants.EMAIL_MAX_LENGTH).Value = email;
+
                 connection.Open();
 
                 object lastObj = last.ExecuteScalar();
@@ -457,16 +505,26 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
                 return LastRequestUtcResult.From((DateTime)lastObj);
             }
         }
-
-
     }
 
     public sealed class ProfileImageRecord
     {
-        public int UserId { get; }
-        public byte[] ImageBytes { get; }
-        public string ContentType { get; }
-        public DateTime? UpdatedAtUtc { get; }
+        public int UserId 
+        { 
+            get;
+        }
+        public byte[] ImageBytes 
+        { 
+            get; 
+        }
+        public string ContentType 
+        { 
+            get; 
+        }
+        public DateTime? UpdatedAtUtc 
+        { 
+            get; 
+        }
 
         public ProfileImageRecord(int userId, byte[] imageBytes, string contentType, DateTime? updatedAtUtc)
         {
@@ -481,6 +539,4 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor
             return new ProfileImageRecord(userId, Array.Empty<byte>(), string.Empty, null);
         }
     }
-
-
 }

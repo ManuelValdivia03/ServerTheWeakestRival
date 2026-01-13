@@ -4,8 +4,14 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels
 {
     public sealed class ProfileImagePayload
     {
-        public byte[] Bytes { get; }
-        public string ContentType { get; }
+        public byte[] Bytes 
+        { 
+            get; 
+        }
+        public string ContentType 
+        { 
+            get;
+        }
 
         public bool HasImage => Bytes.Length > 0;
 
@@ -18,10 +24,22 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.RepositoryModels
 
     public sealed class AccountRegistrationData
     {
-        public string Email { get; }
-        public string PasswordHash { get; }
-        public string DisplayName { get; }
-        public ProfileImagePayload ProfileImage { get; }
+        public string Email 
+        { 
+            get; 
+        }
+        public string PasswordHash 
+        { 
+            get;
+        }
+        public string DisplayName 
+        { 
+            get; 
+        }
+        public ProfileImagePayload ProfileImage 
+        { 
+            get;
+        }
 
         public AccountRegistrationData(
             string email,

@@ -194,10 +194,22 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 
         private sealed class CompleteRegisterInput
         {
-            public string Email { get; }
-            public string DisplayName { get; }
-            public string Password { get; }
-            public string Code { get; }
+            public string Email 
+            { 
+                get;
+            }
+            public string DisplayName 
+            { 
+                get;
+            }
+            public string Password 
+            { 
+                get;
+            }
+            public string Code 
+            { 
+                get;
+            }
 
             public CompleteRegisterInput(string email, string displayName, string password, string code)
             {

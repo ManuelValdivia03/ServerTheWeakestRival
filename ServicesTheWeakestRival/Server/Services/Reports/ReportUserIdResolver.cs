@@ -26,7 +26,7 @@ namespace ServicesTheWeakestRival.Server.Services.Reports
             }
 
             string connectionString =
-                ConfigurationManager.ConnectionStrings[ReportSql.MainConnectionStringName].ConnectionString;
+                ConfigurationManager.ConnectionStrings[ReportSql.MAIN_CONNECTION_STRING_NAME ].ConnectionString;
 
             try
             {

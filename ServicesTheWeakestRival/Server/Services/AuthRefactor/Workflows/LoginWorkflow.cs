@@ -81,8 +81,14 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Workflows
 
         private sealed class LoginInput
         {
-            public string Email { get; }
-            public string Password { get; }
+            public string Email 
+            { 
+                get;
+            }
+            public string Password 
+            { 
+                get;
+            }
 
             public LoginInput(string email, string password)
             {

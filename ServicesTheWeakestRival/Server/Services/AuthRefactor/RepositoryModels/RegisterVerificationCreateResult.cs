@@ -2,9 +2,18 @@
 {
     public sealed class RegisterVerificationCreateResult
     {
-        public bool Success { get; }
-        public bool EmailTaken { get; }
-        public bool TooSoon { get; }
+        public bool Success 
+        { 
+            get; 
+        }
+        public bool EmailTaken 
+        { 
+            get;
+        }
+        public bool TooSoon 
+        { 
+            get;
+        }
 
         private RegisterVerificationCreateResult(bool success, bool emailTaken, bool tooSoon)
         {

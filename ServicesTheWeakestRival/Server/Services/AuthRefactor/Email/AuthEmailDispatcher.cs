@@ -12,6 +12,8 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Email
         private const string OPERATION_KEY_PREFIX_SEND_VERIFICATION = "Email.SendVerificationCode";
         private const string OPERATION_KEY_PREFIX_SEND_PASSWORD_RESET = "Email.SendPasswordResetCode";
 
+        private const string ERROR_CONTEXT_REQUIRED = "Context is required.";
+
         private readonly IEmailService emailService;
 
         public AuthEmailDispatcher(IEmailService emailService)
@@ -38,7 +40,7 @@ namespace ServicesTheWeakestRival.Server.Services.AuthRefactor.Email
         private static void SendOrThrow(Action sendAction, string context, string operationKeyPrefix)
         {
             if (sendAction == null) throw new ArgumentNullException(nameof(sendAction));
-            if (string.IsNullOrWhiteSpace(context)) throw new ArgumentException("Context is required.", nameof(context));
+            if (string.IsNullOrWhiteSpace(context)) throw new ArgumentException(ERROR_CONTEXT_REQUIRED, nameof(context));
 
             try
             {

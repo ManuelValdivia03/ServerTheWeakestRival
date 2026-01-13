@@ -16,13 +16,25 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
         private const string AUTH_REASON_INVALID_TOKEN = "invalid auth token.";
         private const string AUTH_REASON_INVALID_USER_ID = "token with invalid UserId.";
 
+        private const string AUTH_LOG_EXPIRED_TOKEN_TEMPLATE = "{0}: expired token for UserId={1}.";
+        private const string LOG_CHAT_SERVICE_FAULT_TEMPLATE = "ChatService fault. Code='{0}', Message='{1}'";
+
+        private const int DEFAULT_SINCE_ID = 0;
+        private const int MIN_SINCE_ID = 0;
+
+        private const int MIN_PAGE_SIZE = 1;
+
+        private const int EMPTY_TEXT_LENGTH = 0;
+
+        private const int MIN_VALID_USER_ID = 1;
+
         private static readonly ILog Logger = LogManager.GetLogger(typeof(ChatServiceContext));
 
         private static ConcurrentDictionary<string, AuthToken> TokenCache => TokenStore.Cache;
 
         public static string ResolveConnectionString(string name)
         {
-            var setting = ConfigurationManager.ConnectionStrings[name];
+            ConnectionStringSettings setting = ConfigurationManager.ConnectionStrings[name];
 
             if (setting == null || string.IsNullOrWhiteSpace(setting.ConnectionString))
             {
@@ -41,7 +53,7 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
                 throw ThrowFault(ChatServiceConstants.ERROR_UNAUTHORIZED, ChatServiceConstants.MESSAGE_TOKEN_REQUIRED);
             }
 
-            if (!TokenCache.TryGetValue(authToken, out var token) || token == null)
+            if (!TokenCache.TryGetValue(authToken, out AuthToken token) || token == null)
             {
                 Logger.WarnFormat(AUTH_LOG_FORMAT, ChatServiceConstants.CTX_AUTH, AUTH_REASON_INVALID_TOKEN);
                 throw ThrowFault(ChatServiceConstants.ERROR_UNAUTHORIZED, ChatServiceConstants.MESSAGE_TOKEN_INVALID);
@@ -50,14 +62,14 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
             if (token.ExpiresAtUtc <= DateTime.UtcNow)
             {
                 Logger.WarnFormat(
-                    "{0}: expired token for UserId={1}.",
+                    AUTH_LOG_EXPIRED_TOKEN_TEMPLATE,
                     ChatServiceConstants.CTX_AUTH,
                     token.UserId);
 
                 throw ThrowFault(ChatServiceConstants.ERROR_UNAUTHORIZED, ChatServiceConstants.MESSAGE_TOKEN_EXPIRED);
             }
 
-            if (token.UserId <= 0)
+            if (token.UserId < MIN_VALID_USER_ID)
             {
                 Logger.WarnFormat(AUTH_LOG_FORMAT, ChatServiceConstants.CTX_AUTH, AUTH_REASON_INVALID_USER_ID);
                 throw ThrowFault(ChatServiceConstants.ERROR_UNAUTHORIZED, ChatServiceConstants.MESSAGE_TOKEN_INVALID);
@@ -73,16 +85,16 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
                 throw ThrowFault(ChatServiceConstants.ERROR_INVALID_REQUEST, ChatServiceConstants.MESSAGE_REQUEST_NULL);
             }
 
-            var messageText = (request.MessageText ?? string.Empty).Trim();
+            string messageText = (request.MessageText ?? string.Empty).Trim();
 
-            if (messageText.Length == 0)
+            if (messageText.Length == EMPTY_TEXT_LENGTH)
             {
                 throw ThrowFault(ChatServiceConstants.ERROR_VALIDATION, ChatServiceConstants.MESSAGE_TEXT_EMPTY);
             }
 
             if (messageText.Length > ChatServiceConstants.MAX_MESSAGE_LENGTH)
             {
-                var message =
+                string message =
                     ChatServiceConstants.MESSAGE_TEXT_TOO_LONG_PREFIX
                     + ChatServiceConstants.MAX_MESSAGE_LENGTH
                     + ChatServiceConstants.MESSAGE_TEXT_TOO_LONG_SUFFIX;
@@ -95,17 +107,17 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
 
         public static int ResolveSinceId(int? sinceChatMessageId)
         {
-            var sinceId = sinceChatMessageId.GetValueOrDefault(0);
-            return sinceId < 0 ? 0 : sinceId;
+            int sinceId = sinceChatMessageId.GetValueOrDefault(DEFAULT_SINCE_ID);
+            return sinceId < MIN_SINCE_ID ? MIN_SINCE_ID : sinceId;
         }
 
         public static int ResolveMaxCount(int? maxCount)
         {
-            var requested = maxCount.GetValueOrDefault(ChatServiceConstants.DEFAULT_PAGE_SIZE);
+            int requested = maxCount.GetValueOrDefault(ChatServiceConstants.DEFAULT_PAGE_SIZE);
 
-            if (requested < 1)
+            if (requested < MIN_PAGE_SIZE)
             {
-                requested = 1;
+                requested = MIN_PAGE_SIZE;
             }
 
             if (requested > ChatServiceConstants.MAX_PAGE_SIZE)
@@ -119,11 +131,11 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
         public static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
             Logger.WarnFormat(
-                "ChatService fault. Code='{0}', Message='{1}'",
+                LOG_CHAT_SERVICE_FAULT_TEMPLATE,
                 code,
                 message);
 
-            var fault = new ServiceFault
+            ServiceFault fault = new ServiceFault
             {
                 Code = code,
                 Message = message
@@ -136,7 +148,7 @@ namespace ServicesTheWeakestRival.Server.Services.Chat
         {
             Logger.Error(context, ex);
 
-            var fault = new ServiceFault
+            ServiceFault fault = new ServiceFault
             {
                 Code = code,
                 Message = userMessage
