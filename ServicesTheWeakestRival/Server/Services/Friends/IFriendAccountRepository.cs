@@ -27,9 +27,21 @@ namespace ServicesTheWeakestRival.Server.Services.Friends.Infrastructure
             ProfileImageCode = profileImageCode ?? string.Empty;
         }
 
-        public byte[] Bytes { get; }
-        public string ContentType { get; }
-        public System.DateTime? UpdatedAtUtc { get; }
-        public string ProfileImageCode { get; }
+        public byte[] Bytes 
+        { 
+            get; 
+        }
+        public string ContentType 
+        { 
+            get; 
+        }
+        public System.DateTime? UpdatedAtUtc 
+        { 
+            get; 
+        }
+        public string ProfileImageCode 
+        { 
+            get; 
+        }
     }
 }

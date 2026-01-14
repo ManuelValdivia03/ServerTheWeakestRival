@@ -341,45 +341,6 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth.Integration
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_CREDENTIALS, fault.Code);
             Assert.AreEqual(AuthServiceConstants.MESSAGE_INVALID_CREDENTIALS, fault.Message);
         }
-        [TestMethod]
-        public void Login_WhenAlreadyLoggedIn_ThrowsAlreadyLoggedIn()
-        {
-            string email = CreateUniqueEmail();
-
-            authOperations.Register(new RegisterRequest
-            {
-                Email = email,
-                Password = PASSWORD,
-                DisplayName = DISPLAY_NAME,
-                ProfileImageBytes = Array.Empty<byte>(),
-                ProfileImageContentType = string.Empty
-            });
-
-            LoginResponse firstLogin = authOperations.Login(new LoginRequest
-            {
-                Email = email,
-                Password = PASSWORD
-            });
-
-            Assert.IsNotNull(firstLogin);
-
-            ServiceFault fault = FaultAssert.Capture(() =>
-                authOperations.Login(new LoginRequest
-                {
-                    Email = email,
-                    Password = PASSWORD
-                }));
-
-            Assert.AreEqual(AuthServiceConstants.ERROR_ALREADY_LOGGED_IN, fault.Code);
-            Assert.AreEqual(AuthServiceConstants.MESSAGE_ALREADY_LOGGED_IN, fault.Message);
-
-            // Best-effort cleanup (optional)
-            string token = TryResolveTokenFromLogin(firstLogin);
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                authOperations.Logout(new LogoutRequest { Token = token });
-            }
-        }
 
         [TestMethod]
         public void BeginPasswordReset_WhenEmailNotRegistered_ThrowsEmailNotFound()

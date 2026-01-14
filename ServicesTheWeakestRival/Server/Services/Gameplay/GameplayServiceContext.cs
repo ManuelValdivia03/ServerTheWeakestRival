@@ -53,11 +53,28 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
         internal const string CONTEXT_START_MATCH = "GameplayService.StartMatch";
         internal const string CONTEXT_CHOOSE_DUEL = "GameplayService.ChooseDuelOpponent";
         internal const string CONTEXT_GET_QUESTIONS = "GameplayService.GetQuestions";
+        internal const string CONTEXT_GET_CONNECTION_STRING = "GameplayService.GetConnectionString";
 
         internal const int DEFAULT_MAX_QUESTIONS = 40;
 
-        private static readonly Random RandomGenerator = new Random();
-        private static readonly object RandomSyncRoot = new object();
+        private const string AUTH_REQUIRED_CODE = "AUTH_REQUIRED";
+        private const string AUTH_INVALID_CODE = "AUTH_INVALID";
+        private const string AUTH_EXPIRED_CODE = "AUTH_EXPIRED";
+
+        private const string AUTH_REQUIRED_MESSAGE = "Falta el token.";
+        private const string AUTH_INVALID_MESSAGE = "Token inválido.";
+        private const string AUTH_EXPIRED_MESSAGE = "El token expiró.";
+
+        private const string VALIDATION_MATCH_ID_REQUIRED_MESSAGE = "El MatchId es obligatorio.";
+
+        private const string CONFIG_ERROR_CODE = "CONFIG_ERROR";
+        private const string CONFIG_ERROR_USER_MESSAGE = "Error de configuración. Por favor contacta a soporte.";
+
+        private const string LOG_MISSING_CONNECTION_STRING_FORMAT = "Missing connection string '{0}'.";
+        private const string LOG_SERVICE_FAULT_FORMAT = "Service fault. Code='{0}', Message='{1}'";
+
+        private static readonly Random randomGenerator = new Random();
+        private static readonly object randomSyncRoot = new object();
 
         internal static void ValidateNotNullRequest(object request)
         {
@@ -71,7 +88,7 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
         {
             if (matchId == Guid.Empty)
             {
-                throw ThrowFault(ERROR_INVALID_REQUEST, "El MatchId es obligatorio.");
+                throw ThrowFault(ERROR_INVALID_REQUEST, VALIDATION_MATCH_ID_REQUIRED_MESSAGE);
             }
         }
 
@@ -82,14 +99,14 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
             if (configurationString == null || string.IsNullOrWhiteSpace(configurationString.ConnectionString))
             {
-                Logger.ErrorFormat("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME);
+                Logger.ErrorFormat(LOG_MISSING_CONNECTION_STRING_FORMAT, MAIN_CONNECTION_STRING_NAME);
 
                 throw ThrowTechnicalFault(
-                    "CONFIG_ERROR",
-                    "Error de configuración. Por favor contacta a soporte.",
-                    "GameplayService.GetConnectionString",
+                    CONFIG_ERROR_CODE,
+                    CONFIG_ERROR_USER_MESSAGE,
+                    CONTEXT_GET_CONNECTION_STRING,
                     new ConfigurationErrorsException(
-                        string.Format("Missing connection string '{0}'.", MAIN_CONNECTION_STRING_NAME)));
+                        string.Format(LOG_MISSING_CONNECTION_STRING_FORMAT, MAIN_CONNECTION_STRING_NAME)));
             }
 
             return configurationString.ConnectionString;
@@ -97,7 +114,7 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
         internal static FaultException<ServiceFault> ThrowFault(string code, string message)
         {
-            Logger.WarnFormat("Service fault. Code='{0}', Message='{1}'", code, message);
+            Logger.WarnFormat(LOG_SERVICE_FAULT_FORMAT, code, message);
 
             ServiceFault fault = new ServiceFault
             {
@@ -129,17 +146,17 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                throw ThrowFault("AUTH_REQUIRED", "Falta el token.");
+                throw ThrowFault(AUTH_REQUIRED_CODE, AUTH_REQUIRED_MESSAGE);
             }
 
             if (!TokenCache.TryGetValue(token, out AuthToken authToken))
             {
-                throw ThrowFault("AUTH_INVALID", "Token inválido.");
+                throw ThrowFault(AUTH_INVALID_CODE, AUTH_INVALID_MESSAGE);
             }
 
             if (authToken.ExpiresAtUtc <= DateTime.UtcNow)
             {
-                throw ThrowFault("AUTH_EXPIRED", "El token expiró.");
+                throw ThrowFault(AUTH_EXPIRED_CODE, AUTH_EXPIRED_MESSAGE);
             }
 
             return authToken.UserId;
@@ -147,9 +164,9 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
         internal static int NextRandom(int minInclusive, int maxExclusive)
         {
-            lock (RandomSyncRoot)
+            lock (randomSyncRoot)
             {
-                return RandomGenerator.Next(minInclusive, maxExclusive);
+                return randomGenerator.Next(minInclusive, maxExclusive);
             }
         }
 
@@ -194,6 +211,11 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
         internal static void ExecuteDbAction(string context, Action<SqlConnection> action)
         {
+            if (action == null)
+            {
+                throw new ArgumentNullException(nameof(action));
+            }
+
             ExecuteDbOperation<Unit>(
                 context,
                 connection =>
