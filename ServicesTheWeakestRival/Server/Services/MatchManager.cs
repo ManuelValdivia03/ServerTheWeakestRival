@@ -16,13 +16,13 @@ namespace ServicesTheWeakestRival.Server.Services
 
         private const byte MATCH_STATE_WAITING = 0;
 
-        private const int INITIAL_WILDCARDS_PER_PLAYER = 1;
-
         private static readonly Random RandomGenerator = new Random();
         private static readonly object RandomSyncRoot = new object();
 
         private const int ACCESS_CODE_MAX_LEN = 12;
         private const int MATCH_CODE_LEN = 6;
+        private static readonly int INITIAL_WILDCARDS_PER_PLAYER = 1;
+
 
         public MatchManager(string connectionString)
         {
