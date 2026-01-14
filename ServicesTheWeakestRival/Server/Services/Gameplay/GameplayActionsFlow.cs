@@ -141,6 +141,89 @@ namespace ServicesTheWeakestRival.Server.Services
             }
         }
 
+        internal static void HandleDisconnectedCurrentTurnLocked(MatchRuntimeState state, int userId)
+        {
+            if (state == null || userId <= 0 || state.IsFinished)
+            {
+                return;
+            }
+
+            if (state.IsSurpriseExamActive)
+            {
+                return;
+            }
+
+            if (GameplaySpecialEvents.IsLightningActive(state))
+            {
+                MatchPlayerRuntime currentLightning = state.GetCurrentPlayer();
+                if (currentLightning != null && currentLightning.UserId == userId)
+                {
+                    GameplaySpecialEvents.AbortLightningBecauseDisconnected(state, userId);
+                }
+
+                return;
+            }
+
+            if (state.IsInVotePhase)
+            {
+                return;
+            }
+
+            MatchPlayerRuntime current = state.GetCurrentPlayer();
+            if (current == null || current.UserId != userId)
+            {
+                return;
+            }
+
+            int currentQuestionId = state.CurrentQuestionId;
+
+            if (currentQuestionId > 0 && state.QuestionsById.TryGetValue(currentQuestionId, out QuestionWithAnswersDto q) && q != null)
+            {
+                bool isCorrect = false;
+
+                decimal chainIncrement = GameplayTurnFlow.UpdateChainState(state, current, isCorrect);
+                GameplaySpecialEvents.ApplyBombQuestionEffectIfNeeded(state, current, isCorrect);
+
+                AnswerResult result = GameplayTurnFlow.BuildAnswerResult(currentQuestionId, state, isCorrect, chainIncrement);
+
+                GameplayBroadcaster.Broadcast(
+                    state,
+                    cb => cb.OnAnswerEvaluated(
+                        state.MatchId,
+                        GameplayBroadcaster.BuildPlayerSummary(current, isOnline: false),
+                        result),
+                    "GameplayEngine.Disconnect.SkipTurn");
+            }
+
+            if (state.IsInFinalPhase)
+            {
+                GameplayMatchFlow.ProcessFinalAnswerAndContinue(state, userId, isCorrect: false);
+                return;
+            }
+
+            state.QuestionsAskedThisRound++;
+
+            int alivePlayersCount = GameplayTurnFlow.CountAlivePlayersOrFallbackToTotal(state);
+            int maxQuestionsThisRound = alivePlayersCount * GameplayEngineConstants.QUESTIONS_PER_PLAYER_PER_ROUND;
+            bool hasNoMoreQuestions = state.Questions.Count == 0;
+
+            if (state.QuestionsAskedThisRound >= maxQuestionsThisRound || hasNoMoreQuestions)
+            {
+                if (alivePlayersCount == GameplayEngineConstants.FINAL_PLAYERS_COUNT)
+                {
+                    GameplayMatchFlow.StartFinalPhaseIfApplicable(state);
+                    return;
+                }
+
+                GameplayVotingAndDuelFlow.StartVotePhase(state);
+                return;
+            }
+
+            state.AdvanceTurn();
+            GameplayTurnFlow.SendNextQuestion(state);
+        }
+
+
 
         internal static bool CastVoteInternal(MatchRuntimeState state, int userId, int? targetUserId)
         {

@@ -161,6 +161,7 @@
     <Compile Include="Server\Services\Gameplay\GameplayPlayerExitFlow.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayPlayerExitPersistence.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayQuestionsLogic.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayReconnectGraceFlow.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayRuntimeStore.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayServiceContext.cs" />
     <Compile Include="Server\Services\Gameplay\GameplaySpecialEvents.cs" />

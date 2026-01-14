@@ -281,7 +281,7 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                         nextIndex = 0;
                     }
 
-                    if (!Players[nextIndex].IsEliminated)
+                    if (!Players[nextIndex].IsEliminated && Players[nextIndex].IsOnline)
                     {
                         CurrentPlayerIndex = nextIndex;
                         return;
@@ -400,9 +400,16 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             BlockWildcardsRoundNumber = 0;
 
             PendingTimeDeltaSeconds = 0;
+
+            IsOnline = true;
+            DisconnectedAtUtc = null;
         }
 
         public int UserId { get; }
+
+        public bool IsOnline { get; set; }
+
+        public DateTime? DisconnectedAtUtc { get; set; }
 
         public string DisplayName { get; }
 

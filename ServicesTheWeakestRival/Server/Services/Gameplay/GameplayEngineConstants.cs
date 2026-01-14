@@ -17,6 +17,12 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string ERROR_MATCH_ALREADY_STARTED = "Partida ya iniciada";
         internal const string ERROR_NO_QUESTIONS = "Sin preguntas";
 
+        internal const int RECONNECT_GRACE_SECONDS = 60;
+
+        internal const string TURN_REASON_PLAYER_DISCONNECTED = "PLAYER_DISCONNECTED";
+        internal const string TURN_REASON_PLAYER_RECONNECTED = "PLAYER_RECONNECTED";
+
+
         internal const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
 

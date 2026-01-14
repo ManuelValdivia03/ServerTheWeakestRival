@@ -51,23 +51,6 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
             HookChannelOnce(sessionId);
         }
 
-        internal static void CleanupMatch(Guid matchId)
-        {
-            if (matchId == Guid.Empty)
-            {
-                return;
-            }
-
-            foreach (var kvp in SessionById)
-            {
-                if (kvp.Value != null && kvp.Value.MatchId == matchId)
-                {
-                    SessionById.TryRemove(kvp.Key, out _);
-                    HookedSessionIds.TryRemove(kvp.Key, out _);
-                }
-            }
-        }
-
         private static void HookChannelOnce(string sessionId)
         {
             if (!HookedSessionIds.TryAdd(sessionId, 0))
@@ -97,13 +80,33 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
                 HookedSessionIds.TryRemove(sessionId, out _);
 
-                GameplayPlayerExitFlow.HandlePlayerExit(info.MatchId, info.UserId, PlayerExitReason.Disconnected);
+                GameplayReconnectGraceFlow.MarkPlayerDisconnected(info.MatchId, info.UserId);
             }
             catch (Exception ex)
             {
                 Logger.Error("GameplayDisconnectHub.HandleSessionTerminated", ex);
             }
         }
+
+        internal static void CleanupMatch(Guid matchId)
+        {
+            if (matchId == Guid.Empty)
+            {
+                return;
+            }
+
+            foreach (var kvp in SessionById)
+            {
+                if (kvp.Value != null && kvp.Value.MatchId == matchId)
+                {
+                    SessionById.TryRemove(kvp.Key, out _);
+                    HookedSessionIds.TryRemove(kvp.Key, out _);
+                }
+            }
+
+            GameplayReconnectGraceFlow.CleanupMatch(matchId);
+        }
+
     }
 
     internal enum PlayerExitReason

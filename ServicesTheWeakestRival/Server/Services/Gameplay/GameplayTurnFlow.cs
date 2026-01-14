@@ -104,8 +104,15 @@ namespace ServicesTheWeakestRival.Server.Services
 
         internal static int CountAlivePlayersOrFallbackToTotal(MatchRuntimeState state)
         {
-            int alivePlayersCount = state.Players.Count(p => !p.IsEliminated);
-            return alivePlayersCount > 0 ? alivePlayersCount : state.Players.Count;
+            int alivePlayersCount = state.Players.Count(p => p != null && !p.IsEliminated && p.IsOnline);
+            if (alivePlayersCount > 0)
+            {
+                return alivePlayersCount;
+            }
+
+            int aliveCount = state.Players.Count(p => p != null && !p.IsEliminated);
+            return aliveCount > 0 ? aliveCount : state.Players.Count;
+
         }
 
         internal static void SendNextQuestion(MatchRuntimeState state)

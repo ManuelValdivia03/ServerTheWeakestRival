@@ -423,6 +423,23 @@ namespace ServicesTheWeakestRival.Server.Services
                    state.LightningChallenge != null;
         }
 
+        internal static void AbortLightningBecauseDisconnected(MatchRuntimeState state, int disconnectedUserId)
+        {
+            if (!IsLightningActive(state))
+            {
+                return;
+            }
+
+            LightningChallengeState challenge = state.LightningChallenge;
+            if (challenge == null || challenge.IsCompleted || challenge.PlayerId != disconnectedUserId)
+            {
+                return;
+            }
+
+            CompleteLightningChallenge(state, isSuccess: false);
+        }
+
+
         internal static bool TryStartLightningChallenge(MatchRuntimeState state)
         {
             if (state.HasSpecialEventThisRound || IsLightningActive(state))
@@ -444,7 +461,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 return false;
             }
 
-            List<MatchPlayerRuntime> candidates = state.Players.Where(p => !p.IsEliminated).ToList();
+            List<MatchPlayerRuntime> candidates = state.Players.Where(p => p != null && !p.IsEliminated && p.IsOnline).ToList();
             if (candidates.Count == 0)
             {
                 return false;
