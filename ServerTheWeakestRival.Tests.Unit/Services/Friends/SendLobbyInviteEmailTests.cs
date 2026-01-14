@@ -22,9 +22,9 @@ namespace ServerTheWeakestRival.Tests.Integration.Services.Friends
         private const int TokenLifetimeMinutes = 10;
         private const string TokenPrefix = "test-token-";
 
-        private const string ExpectedInvalidTargetCode = "INVITE_INVALID_TARGET";
-        private const string ExpectedInvalidCode = "INVITE_INVALID_CODE";
-        private const string ExpectedNotFriendCode = "INVITE_NOT_FRIEND";
+        private const string ExpectedInvalidTargetCode = "Invitación: jugador inválido";
+        private const string ExpectedInvalidCode = "Invitación: código de lobby inválido";
+        private const string ExpectedNotFriendCode = "Invitación: no es tu amigo";
         private const string ExpectedAccountNotFoundCode = "INVITE_ACCOUNT_NOT_FOUND";
 
         private const string SqlInsertAcceptedFriendRequest = @"

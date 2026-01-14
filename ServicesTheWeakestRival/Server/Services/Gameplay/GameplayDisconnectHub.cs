@@ -18,8 +18,14 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
         private sealed class SessionInfo
         {
-            public Guid MatchId { get; set; }
-            public int UserId { get; set; }
+            public Guid MatchId 
+            { 
+                get; set; 
+            }
+            public int UserId 
+            { 
+                get; set; 
+            }
         }
 
         internal static void RegisterCurrentSession(Guid matchId, int userId, IGameplayServiceCallback callback)

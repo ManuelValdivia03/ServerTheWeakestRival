@@ -12,10 +12,10 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
     {
         private const int EMPTY_LENGTH = 0;
 
-        private const string MSG_TOO_LARGE_CONTAINS = "Profile image is too large";
-        private const string MSG_CONTENT_TYPE_REQUIRED = "Profile image content type is required.";
-        private const string MSG_ONLY_PNG_JPG = "Only PNG and JPG profile images are allowed.";
-        private const string MSG_SIGNATURE_MISMATCH = "Profile image file does not match the declared format.";
+        private const string MSG_TOO_LARGE_CONTAINS = "La imagen de perfil es demasiado grande. El máximo permitido es 512 KB.";
+        private const string MSG_CONTENT_TYPE_REQUIRED = "El tipo de contenido de la imagen de perfil es obligatorio.";
+        private const string MSG_ONLY_PNG_JPG = "Solo se permiten imágenes de perfil PNG y JPG.";
+        private const string MSG_SIGNATURE_MISMATCH = "El archivo de la imagen de perfil no coincide con el formato declarado.";
 
         private static readonly byte[] PngMinimalValidBytes = new byte[]
         {

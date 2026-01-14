@@ -212,7 +212,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(request));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_REQUEST, fault.Code);
-            Assert.AreEqual("Profile image content type is required.", fault.Message);
+            Assert.AreEqual("El tipo de contenido de la imagen de perfil es obligatorio.", fault.Message);
         }
 
         [TestMethod]
@@ -232,7 +232,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(request));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_REQUEST, fault.Code);
-            Assert.AreEqual("Only PNG and JPG profile images are allowed.", fault.Message);
+            Assert.AreEqual("Solo se permiten imágenes de perfil PNG y JPG.", fault.Message);
         }
 
         [TestMethod]
@@ -255,7 +255,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(request));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_REQUEST, fault.Code);
-            Assert.AreEqual("Profile image file does not match the declared format.", fault.Message);
+            Assert.AreEqual("El archivo de la imagen de perfil no coincide con el formato declarado.", fault.Message);
         }
 
         [TestMethod]
@@ -280,7 +280,7 @@ namespace ServerTheWeakestRival.Tests.Unit.Services.Auth
             ServiceFault fault = FaultAssert.Capture(() => workflow.Execute(request));
 
             Assert.AreEqual(AuthServiceConstants.ERROR_INVALID_REQUEST, fault.Code);
-            StringAssert.Contains(fault.Message, "Profile image is too large");
+            StringAssert.Contains(fault.Message, "La imagen de perfil es demasiado grande. El máximo permitido es 512 KB.");
         }
 
         [TestMethod]
