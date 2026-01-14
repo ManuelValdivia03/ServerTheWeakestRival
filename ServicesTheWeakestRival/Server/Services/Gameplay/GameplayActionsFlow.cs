@@ -1,5 +1,6 @@
 ﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Server.Services.Gameplay;
 using ServicesTheWeakestRival.Server.Services.Logic;
 using System;
 using System.Collections.Generic;
@@ -39,6 +40,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 {
                     return GameplaySpecialEvents.HandleLightningSubmitAnswer(state, currentPlayer, request);
                 }
+
+                GameplayTurnTimeout.Cancel(state);
 
                 QuestionWithAnswersDto question = GameplayTurnFlow.GetCurrentQuestionOrThrow(state);
                 bool isCorrect = GameplayTurnFlow.EvaluateAnswerOrThrow(question, request.AnswerText);
@@ -121,6 +124,8 @@ namespace ServicesTheWeakestRival.Server.Services
                         GameplayEngineConstants.MESSAGE_BANK_LIMIT_REACHED);
                 }
 
+                GameplayTurnTimeout.Cancel(state);
+
                 state.BankedPoints += state.CurrentChain;
                 state.CurrentChain = 0m;
                 state.CurrentStreak = 0;
@@ -153,6 +158,8 @@ namespace ServicesTheWeakestRival.Server.Services
                 return;
             }
 
+            GameplayTurnTimeout.Cancel(state);
+
             if (GameplaySpecialEvents.IsLightningActive(state))
             {
                 MatchPlayerRuntime currentLightning = state.GetCurrentPlayer();
@@ -176,11 +183,17 @@ namespace ServicesTheWeakestRival.Server.Services
             }
 
             int currentQuestionId = state.CurrentQuestionId;
-
-            if (currentQuestionId > 0 && state.QuestionsById.TryGetValue(currentQuestionId, out QuestionWithAnswersDto q) && q != null)
+            if (currentQuestionId <= 0)
             {
-                bool isCorrect = false;
+                state.AdvanceTurn();
+                GameplayTurnFlow.SendNextQuestion(state);
+                return;
+            }
 
+            bool isCorrect = false;
+
+            if (state.QuestionsById.TryGetValue(currentQuestionId, out QuestionWithAnswersDto q) && q != null)
+            {
                 decimal chainIncrement = GameplayTurnFlow.UpdateChainState(state, current, isCorrect);
                 GameplaySpecialEvents.ApplyBombQuestionEffectIfNeeded(state, current, isCorrect);
 
@@ -198,6 +211,12 @@ namespace ServicesTheWeakestRival.Server.Services
             if (state.IsInFinalPhase)
             {
                 GameplayMatchFlow.ProcessFinalAnswerAndContinue(state, userId, isCorrect: false);
+                return;
+            }
+
+            if (GameplayVotingAndDuelFlow.ShouldHandleDuelTurn(state, current))
+            {
+                GameplayVotingAndDuelFlow.HandleDuelTurn(state, current, isCorrect: false);
                 return;
             }
 
@@ -223,7 +242,79 @@ namespace ServicesTheWeakestRival.Server.Services
             GameplayTurnFlow.SendNextQuestion(state);
         }
 
+        internal static void HandleAnswerTimeoutLocked(MatchRuntimeState state, int userId, int questionId)
+        {
+            if (state == null || state.IsFinished)
+            {
+                return;
+            }
 
+            if (state.IsInVotePhase || state.IsSurpriseExamActive || GameplaySpecialEvents.IsLightningActive(state))
+            {
+                return;
+            }
+
+            MatchPlayerRuntime currentPlayer = state.GetCurrentPlayer();
+            if (currentPlayer == null || currentPlayer.UserId != userId)
+            {
+                return;
+            }
+
+            if (state.CurrentQuestionId != questionId)
+            {
+                return;
+            }
+
+            GameplayTurnTimeout.Cancel(state);
+
+            bool isCorrect = false;
+
+            decimal chainIncrement = GameplayTurnFlow.UpdateChainState(state, currentPlayer, isCorrect);
+            GameplaySpecialEvents.ApplyBombQuestionEffectIfNeeded(state, currentPlayer, isCorrect);
+
+            AnswerResult result = GameplayTurnFlow.BuildAnswerResult(questionId, state, isCorrect, chainIncrement);
+
+            GameplayBroadcaster.Broadcast(
+                state,
+                cb => cb.OnAnswerEvaluated(
+                    state.MatchId,
+                    GameplayBroadcaster.BuildPlayerSummary(currentPlayer, isOnline: currentPlayer.IsOnline),
+                    result),
+                GameplayEngineConstants.TURN_REASON_ANSWER_TIMEOUT);
+
+            if (state.IsInFinalPhase)
+            {
+                GameplayMatchFlow.ProcessFinalAnswerAndContinue(state, currentPlayer.UserId, isCorrect);
+                return;
+            }
+
+            if (GameplayVotingAndDuelFlow.ShouldHandleDuelTurn(state, currentPlayer))
+            {
+                GameplayVotingAndDuelFlow.HandleDuelTurn(state, currentPlayer, isCorrect);
+                return;
+            }
+
+            state.QuestionsAskedThisRound++;
+
+            int alivePlayersCount = GameplayTurnFlow.CountAlivePlayersOrFallbackToTotal(state);
+            int maxQuestionsThisRound = alivePlayersCount * GameplayEngineConstants.QUESTIONS_PER_PLAYER_PER_ROUND;
+            bool hasNoMoreQuestions = state.Questions.Count == 0;
+
+            if (state.QuestionsAskedThisRound >= maxQuestionsThisRound || hasNoMoreQuestions)
+            {
+                if (alivePlayersCount == GameplayEngineConstants.FINAL_PLAYERS_COUNT)
+                {
+                    GameplayMatchFlow.StartFinalPhaseIfApplicable(state);
+                    return;
+                }
+
+                GameplayVotingAndDuelFlow.StartVotePhase(state);
+                return;
+            }
+
+            state.AdvanceTurn();
+            GameplayTurnFlow.SendNextQuestion(state);
+        }
 
         internal static bool CastVoteInternal(MatchRuntimeState state, int userId, int? targetUserId)
         {

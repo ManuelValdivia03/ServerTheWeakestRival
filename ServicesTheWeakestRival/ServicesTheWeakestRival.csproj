@@ -167,6 +167,7 @@
     <Compile Include="Server\Services\Gameplay\GameplaySpecialEvents.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayTurnFlow.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayTurnLogic.cs" />
+    <Compile Include="Server\Services\Gameplay\GameplayTurnTimeout.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayVotingAndDuelFlow.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayWildcardsFlow.cs" />
     <Compile Include="Server\Services\Gameplay\IAvatarRepository.cs" />

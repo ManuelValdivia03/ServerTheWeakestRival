@@ -1,4 +1,5 @@
 ﻿using ServicesTheWeakestRival.Contracts.Data;
+using ServicesTheWeakestRival.Server.Services.Gameplay;
 using ServicesTheWeakestRival.Server.Services.Logic;
 using System;
 using System.Globalization;
@@ -33,7 +34,9 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             if (!state.QuestionsById.TryGetValue(state.CurrentQuestionId, out QuestionWithAnswersDto question))
             {
-                throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, "Current question not found for this match.");
+                throw GameplayFaults.ThrowFault(
+                    GameplayEngineConstants.ERROR_INVALID_REQUEST,
+                    "Current question not found for this match.");
             }
 
             return question;
@@ -53,7 +56,9 @@ namespace ServicesTheWeakestRival.Server.Services
 
             if (selectedAnswer == null)
             {
-                throw GameplayFaults.ThrowFault(GameplayEngineConstants.ERROR_INVALID_REQUEST, "Answer not found for current question.");
+                throw GameplayFaults.ThrowFault(
+                    GameplayEngineConstants.ERROR_INVALID_REQUEST,
+                    "Answer not found for current question.");
             }
 
             return selectedAnswer.IsCorrect;
@@ -112,24 +117,47 @@ namespace ServicesTheWeakestRival.Server.Services
 
             int aliveCount = state.Players.Count(p => p != null && !p.IsEliminated);
             return aliveCount > 0 ? aliveCount : state.Players.Count;
-
         }
 
         internal static void SendNextQuestion(MatchRuntimeState state)
         {
+            if (state == null || state.IsFinished)
+            {
+                return;
+            }
+
             if (state.Questions.Count == 0)
+            {
+                return;
+            }
+
+            int attempts = state.Players.Count;
+
+            while (attempts > 0)
+            {
+                MatchPlayerRuntime candidate = state.GetCurrentPlayer();
+                if (candidate == null)
+                {
+                    return;
+                }
+
+                if (!candidate.IsEliminated && candidate.IsOnline && candidate.Callback != null)
+                {
+                    break;
+                }
+
+                state.AdvanceTurn();
+                attempts--;
+            }
+
+            MatchPlayerRuntime targetPlayer = state.GetCurrentPlayer();
+            if (targetPlayer == null || targetPlayer.IsEliminated || !targetPlayer.IsOnline || targetPlayer.Callback == null)
             {
                 return;
             }
 
             QuestionWithAnswersDto question = state.Questions.Dequeue();
             state.CurrentQuestionId = question.QuestionId;
-
-            MatchPlayerRuntime targetPlayer = state.GetCurrentPlayer();
-            if (targetPlayer == null)
-            {
-                return;
-            }
 
             state.BombQuestionId = 0;
             GameplaySpecialEvents.TryStartBombQuestionEvent(state, targetPlayer, question.QuestionId);
@@ -144,6 +172,8 @@ namespace ServicesTheWeakestRival.Server.Services
                     state.CurrentChain,
                     state.BankedPoints),
                 "GameplayEngine.SendNextQuestion");
+
+            GameplayTurnTimeout.Arm(state, targetPlayer.UserId, question.QuestionId);
         }
     }
 }

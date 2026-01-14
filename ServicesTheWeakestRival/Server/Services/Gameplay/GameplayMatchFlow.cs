@@ -97,9 +97,9 @@ namespace ServicesTheWeakestRival.Server.Services
         }
 
         private static void UpsertPlayerCallbackOrAddPlayer(
-            MatchRuntimeState state,
-            int userId,
-            IGameplayServiceCallback callback)
+                MatchRuntimeState state,
+                int userId,
+                IGameplayServiceCallback callback)
         {
             MatchPlayerRuntime existingPlayer = state.Players.Find(p => p != null && p.UserId == userId);
             if (existingPlayer != null)
@@ -111,6 +111,8 @@ namespace ServicesTheWeakestRival.Server.Services
                         GameplayEngineConstants.ERROR_MATCH_ALREADY_STARTED_MESSAGE);
                 }
 
+                existingPlayer.IsOnline = true;
+                existingPlayer.DisconnectedAtUtc = null;
                 existingPlayer.Callback = callback;
                 return;
             }
@@ -124,11 +126,14 @@ namespace ServicesTheWeakestRival.Server.Services
 
             MatchPlayerRuntime player = new MatchPlayerRuntime(userId, displayName, callback)
             {
-                Avatar = GameplayDataAccess.MapAvatar(avatarEntity)
+                Avatar = GameplayDataAccess.MapAvatar(avatarEntity),
+                IsOnline = true,
+                DisconnectedAtUtc = null
             };
 
             state.Players.Add(player);
         }
+
 
         internal static void StartMatchInternal(MatchRuntimeState state, GameplayStartMatchRequest request, int hostUserId)
         {

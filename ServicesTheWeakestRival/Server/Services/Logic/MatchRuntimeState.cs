@@ -58,6 +58,11 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
 
             IsDarkModeActive = false;
             DarkModeRoundNumber = 0;
+
+            TurnSequence = 0;
+            TurnTimeoutUserId = 0;
+            TurnTimeoutQuestionId = 0;
+            TurnTimeoutTimer = null;
         }
 
         public Guid MatchId { get; }
@@ -139,6 +144,14 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
         public bool IsSurpriseExamActive =>
             ActiveSpecialEvent == SpecialEventType.SurpriseExam &&
             SurpriseExam != null;
+
+        public long TurnSequence { get; set; }
+
+        public int TurnTimeoutUserId { get; set; }
+
+        public int TurnTimeoutQuestionId { get; set; }
+
+        public Timer TurnTimeoutTimer { get; set; }
 
         public void SetPreLightningTurnIndex()
         {
@@ -224,6 +237,8 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
             RestoreTurnAfterLightning();
             ResetLightningChallenge();
 
+            ResetTurnTimeoutState();
+
             foreach (MatchPlayerRuntime player in Players)
             {
                 if (player == null)
@@ -235,6 +250,29 @@ namespace ServicesTheWeakestRival.Server.Services.Logic
                 player.IsDoublePointsActive = false;
                 player.BlockWildcardsRoundNumber = 0;
                 player.PendingTimeDeltaSeconds = 0;
+            }
+        }
+
+        private void ResetTurnTimeoutState()
+        {
+            Timer timer = TurnTimeoutTimer;
+            TurnTimeoutTimer = null;
+
+            TurnSequence = 0;
+            TurnTimeoutUserId = 0;
+            TurnTimeoutQuestionId = 0;
+
+            if (timer == null)
+            {
+                return;
+            }
+
+            try
+            {
+                timer.Dispose();
+            }
+            catch
+            {
             }
         }
 

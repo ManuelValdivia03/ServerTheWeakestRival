@@ -17,12 +17,6 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string ERROR_MATCH_ALREADY_STARTED = "Partida ya iniciada";
         internal const string ERROR_NO_QUESTIONS = "Sin preguntas";
 
-        internal const int RECONNECT_GRACE_SECONDS = 60;
-
-        internal const string TURN_REASON_PLAYER_DISCONNECTED = "PLAYER_DISCONNECTED";
-        internal const string TURN_REASON_PLAYER_RECONNECTED = "PLAYER_RECONNECTED";
-
-
         internal const string MESSAGE_DB_ERROR =
             "Ocurrió un error de base de datos. Intenta de nuevo más tarde.";
 
@@ -48,13 +42,10 @@ namespace ServicesTheWeakestRival.Server.Services
         internal const string MESSAGE_BANK_LIMIT_REACHED = "No se puede exceder la calificación máxima de 10.";
 
         internal const int FINAL_PLAYERS_COUNT = 2;
-
         internal const int FINAL_QUESTIONS_PER_PLAYER = 5;
-
         internal const int FINAL_ANSWER_INCREMENT = 1;
 
         internal const int FINAL_MIN_QUEUE_QUESTIONS = FINAL_QUESTIONS_PER_PLAYER * FINAL_PLAYERS_COUNT;
-
         internal const int FINAL_REFILL_BATCH_SIZE = DEFAULT_MAX_QUESTIONS;
 
         internal const int DEFAULT_MAX_QUESTIONS = 40;
@@ -187,6 +178,9 @@ namespace ServicesTheWeakestRival.Server.Services
             "La ronda del cliente no coincide con la del servidor.";
 
         internal const int LOCALE_CODE_MAX_LENGTH = 10;
+
+        internal const int QUESTION_TIME_LIMIT_SECONDS = 30;
+        internal const string TURN_REASON_ANSWER_TIMEOUT = "ANSWER_TIMEOUT";
 
         internal static readonly decimal[] CHAIN_STEPS =
         {

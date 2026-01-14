@@ -1,7 +1,9 @@
 ﻿using log4net;
 using ServicesTheWeakestRival.Contracts.Services;
+using ServicesTheWeakestRival.Server.Services.Logic;
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.ServiceModel;
 
 namespace ServicesTheWeakestRival.Server.Services.Gameplay
@@ -18,13 +20,14 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
 
         private sealed class SessionInfo
         {
-            public Guid MatchId 
-            { 
-                get; set; 
+            public Guid MatchId
+            {
+                get; set;
             }
-            public int UserId 
-            { 
-                get; set; 
+
+            public int UserId
+            {
+                get; set;
             }
         }
 
@@ -51,6 +54,23 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
             HookChannelOnce(sessionId);
         }
 
+        internal static void CleanupMatch(Guid matchId)
+        {
+            if (matchId == Guid.Empty)
+            {
+                return;
+            }
+
+            foreach (var kvp in SessionById)
+            {
+                if (kvp.Value != null && kvp.Value.MatchId == matchId)
+                {
+                    SessionById.TryRemove(kvp.Key, out _);
+                    HookedSessionIds.TryRemove(kvp.Key, out _);
+                }
+            }
+        }
+
         private static void HookChannelOnce(string sessionId)
         {
             if (!HookedSessionIds.TryAdd(sessionId, 0))
@@ -72,45 +92,37 @@ namespace ServicesTheWeakestRival.Server.Services.Gameplay
         {
             try
             {
-                SessionInfo info;
-                if (!SessionById.TryRemove(sessionId, out info) || info == null)
+                if (!SessionById.TryRemove(sessionId, out SessionInfo info) || info == null)
                 {
                     return;
                 }
 
                 HookedSessionIds.TryRemove(sessionId, out _);
 
-                GameplayReconnectGraceFlow.MarkPlayerDisconnected(info.MatchId, info.UserId);
+                if (!GameplayMatchRegistry.TryGetMatch(info.MatchId, out MatchRuntimeState state) || state == null)
+                {
+                    return;
+                }
+
+                lock (state.SyncRoot)
+                {
+                    MatchPlayerRuntime player = state.Players.FirstOrDefault(p => p != null && p.UserId == info.UserId);
+                    if (player == null || player.IsEliminated)
+                    {
+                        return;
+                    }
+
+                    player.IsOnline = false;
+                    player.DisconnectedAtUtc = DateTime.UtcNow;
+                    player.Callback = null;
+
+                    GameplayActionsFlow.HandleDisconnectedCurrentTurnLocked(state, info.UserId);
+                }
             }
             catch (Exception ex)
             {
                 Logger.Error("GameplayDisconnectHub.HandleSessionTerminated", ex);
             }
         }
-
-        internal static void CleanupMatch(Guid matchId)
-        {
-            if (matchId == Guid.Empty)
-            {
-                return;
-            }
-
-            foreach (var kvp in SessionById)
-            {
-                if (kvp.Value != null && kvp.Value.MatchId == matchId)
-                {
-                    SessionById.TryRemove(kvp.Key, out _);
-                    HookedSessionIds.TryRemove(kvp.Key, out _);
-                }
-            }
-
-            GameplayReconnectGraceFlow.CleanupMatch(matchId);
-        }
-
-    }
-
-    internal enum PlayerExitReason
-    {
-        Disconnected = 0
     }
 }
