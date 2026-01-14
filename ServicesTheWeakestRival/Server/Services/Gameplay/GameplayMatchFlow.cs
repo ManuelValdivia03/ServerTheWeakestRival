@@ -625,7 +625,6 @@ namespace ServicesTheWeakestRival.Server.Services
             GameplayMatchRegistry.CleanupFinishedMatch(state);
         }
 
-
         private static void EnsureHostPlayerRegistered(MatchRuntimeState state, int userId)
         {
             if (state.Players.Count != 0)
@@ -667,7 +666,6 @@ namespace ServicesTheWeakestRival.Server.Services
             state.VotesThisRound.Clear();
             state.BombQuestionId = 0;
             state.HasSpecialEventThisRound = false;
-
             state.IsDarkModeActive = false;
             state.DarkModeRoundNumber = 0;
 
