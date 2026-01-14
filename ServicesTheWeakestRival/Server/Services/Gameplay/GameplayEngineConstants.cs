@@ -178,6 +178,11 @@ namespace ServicesTheWeakestRival.Server.Services
             "La ronda del cliente no coincide con la del servidor.";
 
         internal const int LOCALE_CODE_MAX_LENGTH = 10;
+        internal const int RECONNECT_GRACE_SECONDS = 20;
+
+        internal const string TURN_REASON_PLAYER_DISCONNECTED = "PLAYER_DISCONNECTED";
+        internal const string TURN_REASON_PLAYER_RECONNECTED = "PLAYER_RECONNECTED";
+
 
         internal const int QUESTION_TIME_LIMIT_SECONDS = 30;
         internal const string TURN_REASON_ANSWER_TIMEOUT = "ANSWER_TIMEOUT";
