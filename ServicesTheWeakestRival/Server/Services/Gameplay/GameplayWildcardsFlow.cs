@@ -88,6 +88,11 @@ namespace ServicesTheWeakestRival.Server.Services
                 "GameplayEngine.Wildcard.PassQuestion");
         }
 
+        private static void ApplyWildcardShield(MatchPlayerRuntime currentPlayer)
+        {
+            currentPlayer.IsShieldActive = true;
+        }
+
         private static void ApplyWildcardForcedBank(MatchRuntimeState state)
         {
             decimal projected = state.BankedPoints + state.CurrentChain;
@@ -124,6 +129,42 @@ namespace ServicesTheWeakestRival.Server.Services
         {
             MatchPlayerRuntime target = ResolveNextAlivePlayerOrThrow(state, currentPlayer.UserId);
             target.BlockWildcardsRoundNumber = state.RoundNumber;
+        }
+
+        private static void ApplyWildcardSabotage(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            MatchPlayerRuntime target = ResolveNextAlivePlayerOrThrow(state, currentPlayer.UserId);
+
+            target.PendingTimeDeltaSeconds -= GameplayEngineConstants.WILDCARD_TIME_PENALTY_SECONDS;
+
+            GameplayBroadcaster.Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(
+                    state.MatchId,
+                    GameplayEngineConstants.SPECIAL_EVENT_TIME_PENALTY_CODE,
+                    string.Format(
+                        CultureInfo.CurrentCulture,
+                        GameplayEngineConstants.SPECIAL_EVENT_TIME_PENALTY_DESCRIPTION_TEMPLATE,
+                        target.DisplayName,
+                        GameplayEngineConstants.WILDCARD_TIME_PENALTY_SECONDS)),
+                "GameplayEngine.Wildcard.Sabotage");
+        }
+
+        private static void ApplyWildcardExtraTime(MatchRuntimeState state, MatchPlayerRuntime currentPlayer)
+        {
+            currentPlayer.PendingTimeDeltaSeconds += GameplayEngineConstants.WILDCARD_TIME_BONUS_SECONDS;
+
+            GameplayBroadcaster.Broadcast(
+                state,
+                cb => cb.OnSpecialEvent(
+                    state.MatchId,
+                    GameplayEngineConstants.SPECIAL_EVENT_TIME_BONUS_CODE,
+                    string.Format(
+                        CultureInfo.CurrentCulture,
+                        GameplayEngineConstants.SPECIAL_EVENT_TIME_BONUS_DESCRIPTION_TEMPLATE,
+                        currentPlayer.DisplayName,
+                        GameplayEngineConstants.WILDCARD_TIME_BONUS_SECONDS)),
+                "GameplayEngine.Wildcard.ExtraTime");
         }
 
         internal static void BroadcastWildcardUsed(MatchRuntimeState state, MatchPlayerRuntime actor, string wildcardCode)

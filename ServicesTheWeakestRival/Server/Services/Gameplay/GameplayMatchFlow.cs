@@ -23,6 +23,13 @@ namespace ServicesTheWeakestRival.Server.Services
         private const string CTX_START_MATCH_INTERNAL = "GameplayEngine.StartMatchInternal";
         private const string CTX_MATCH_FINISHED = "GameplayEngine.MatchFinished";
 
+        private const string SPECIAL_EVENT_RESULTS_PERSIST_FAILED_CODE = "RESULTS_PERSIST_FAILED";
+        private const string SPECIAL_EVENT_RESULTS_PERSIST_FAILED_DESCRIPTION =
+            "No se pudieron guardar las calificaciones de la partida.";
+
+        private const string CTX_RESULTS_PERSIST_FAILED = "GameplayEngine.ResultsPersistFailed";
+
+
         internal static void JoinMatchInternal(
             MatchRuntimeState state,
             Guid matchId,
@@ -581,6 +588,11 @@ namespace ServicesTheWeakestRival.Server.Services
 
             state.ResetSurpriseExam();
 
+            GameplayBroadcaster.Broadcast(
+                state,
+                cb => cb.OnMatchFinished(state.MatchId, GameplayBroadcaster.BuildPlayerSummary(winner, isOnline: true)),
+                CTX_MATCH_FINISHED);
+
             int matchDbId = state.WildcardMatchId;
 
             if (matchDbId > 0)
@@ -591,21 +603,28 @@ namespace ServicesTheWeakestRival.Server.Services
                     .Distinct()
                     .ToList();
 
-                StatsMatchResultsWriter.TryPersistFinalResults(
+                bool didPersistFinalResults = StatsMatchResultsWriter.TryPersistFinalResults(
                     matchDbId,
                     winner.UserId,
                     state.BankedPoints,
                     participantUserIds);
-            }
 
-            GameplayBroadcaster.Broadcast(
-                state,
-                cb => cb.OnMatchFinished(state.MatchId, GameplayBroadcaster.BuildPlayerSummary(winner, isOnline: true)),
-                CTX_MATCH_FINISHED);
+                if (!didPersistFinalResults)
+                {
+                    GameplayBroadcaster.Broadcast(
+                        state,
+                        cb => cb.OnSpecialEvent(
+                            state.MatchId,
+                            SPECIAL_EVENT_RESULTS_PERSIST_FAILED_CODE,
+                            SPECIAL_EVENT_RESULTS_PERSIST_FAILED_DESCRIPTION),
+                        CTX_RESULTS_PERSIST_FAILED);
+                }
+            }
 
             GameplayDisconnectHub.CleanupMatch(state.MatchId);
             GameplayMatchRegistry.CleanupFinishedMatch(state);
         }
+
 
         private static void EnsureHostPlayerRegistered(MatchRuntimeState state, int userId)
         {
