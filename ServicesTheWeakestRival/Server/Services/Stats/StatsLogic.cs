@@ -89,14 +89,6 @@ namespace ServicesTheWeakestRival.Server.Services.Stats
             {
                 throw;
             }
-            catch (InvalidOperationException ex)
-            {
-                throw GameplayFaults.ThrowTechnicalFault(
-                    GameplayEngineConstants.ERROR_DB,
-                    GameplayEngineConstants.MESSAGE_DB_ERROR,
-                    CTX_GET_LEADERBOARD,
-                    ex);
-            }
             catch (SqlException ex)
             {
                 throw GameplayFaults.ThrowTechnicalFault(
@@ -165,14 +157,6 @@ namespace ServicesTheWeakestRival.Server.Services.Stats
             catch (FaultException<ServiceFault>)
             {
                 throw;
-            }
-            catch (InvalidOperationException ex)
-            {
-                throw GameplayFaults.ThrowTechnicalFault(
-                    GameplayEngineConstants.ERROR_DB,
-                    GameplayEngineConstants.MESSAGE_DB_ERROR,
-                    CTX_GET_PLAYER_STATS,
-                    ex);
             }
             catch (SqlException ex)
             {

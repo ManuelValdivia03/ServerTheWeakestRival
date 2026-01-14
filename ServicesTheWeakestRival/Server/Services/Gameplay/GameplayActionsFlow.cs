@@ -113,6 +113,14 @@ namespace ServicesTheWeakestRival.Server.Services
 
                 GameplayTurnFlow.GetCurrentPlayerOrThrow(state, userId);
 
+                var projected = state.BankedPoints + state.CurrentChain;
+                if (projected > GameplayEngineConstants.MAX_BANKED_POINTS)
+                {
+                    throw GameplayFaults.ThrowFault(
+                        GameplayEngineConstants.ERROR_BANK_LIMIT_REACHED,
+                        GameplayEngineConstants.MESSAGE_BANK_LIMIT_REACHED);
+                }
+
                 state.BankedPoints += state.CurrentChain;
                 state.CurrentChain = 0m;
                 state.CurrentStreak = 0;
@@ -132,6 +140,7 @@ namespace ServicesTheWeakestRival.Server.Services
                 return bankState;
             }
         }
+
 
         internal static bool CastVoteInternal(MatchRuntimeState state, int userId, int? targetUserId)
         {

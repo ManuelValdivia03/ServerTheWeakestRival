@@ -146,6 +146,7 @@
     <Compile Include="Server\Services\Friends\Infrastructure\FriendPresenceRepository.cs" />
     <Compile Include="Server\Services\Friends\Infrastructure\FriendRequestRepository.cs" />
     <Compile Include="Server\Services\Friends\Infrastructure\FriendRequestRow.cs" />
+    <Compile Include="Server\Services\GameplayBankLimitGuard.cs" />
     <Compile Include="Server\Services\GameplayService.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayActionsFlow.cs" />
     <Compile Include="Server\Services\Gameplay\GameplayDataAccess.cs" />
